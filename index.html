@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildCalc — Construction Management Tools</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="logo" onclick="return false"><div class="logo-mark">BC</div>BuildCalc</a>
+    <div class="nav-links">
+      <a href="#" onclick="showPage('estimator');return false" id="nl-estimator" class="active">Project Estimator</a>
+      <a href="#" onclick="showPage('budget');return false" id="nl-budget">Budget Calculator</a>
+      <a href="#" onclick="showPage('schedule');return false" id="nl-schedule">Schedule Estimator</a>
+      <a href="#" onclick="showPage('bids');return false" id="nl-bids">Bid Comparison</a>
+      <a href="#" onclick="showPage('markup');return false" id="nl-markup">Markup &amp; Overhead</a>
+      <a href="#" onclick="showPage('blueprint');return false" id="nl-blueprint">Blueprint Takeoff</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ESTIMATOR -->
+<div class="page active" id="pg-estimator">
+  <div class="est-topbar">
+    <input type="text" id="proj-name" value="New Project" onchange="project.name=this.value;saveProject()">
+    <div class="tb-sep"></div>
+    <label for="proj-region" style="font-size:.74rem;color:var(--muted);white-space:nowrap;font-weight:600">Region:</label>
+    <select id="proj-region" onchange="project.region=this.value;refreshTotals();saveProject()">
+      <option value="new-england">New England</option><option value="new-york">New York Metro</option>
+      <option value="mid-atlantic">Mid-Atlantic</option><option value="southeast">Southeast</option>
+      <option value="florida">Florida</option><option value="appalachian">TN / KY</option>
+      <option value="texas">Texas</option><option value="midwest" selected>Midwest</option>
+      <option value="plains">Plains</option><option value="mountain">Mountain West</option>
+      <option value="pacific-nw">Pacific Northwest</option><option value="california">California</option>
+      <option value="hawaii">Hawaii / Alaska</option>
+    </select>
+    <div class="tb-sep"></div>
+    <div class="tb-right">
+      <span class="tb-label">Bid Price</span>
+      <span class="tb-total" id="top-total">$0</span>
+      <button class="btn btn-ghost" style="font-size:.76rem;padding:.25rem .6rem" onclick="newProject()">New</button>
+      <button class="btn btn-ghost" style="font-size:.76rem;padding:.25rem .6rem" onclick="window.print()">Print</button>
+    </div>
+  </div>
+  <div class="est-body">
+    <div class="div-nav" id="div-nav"></div>
+    <div class="est-center">
+      <div class="est-toolbar">
+        <span class="div-title" id="center-title">Division 03 — Concrete</span>
+        <div class="lib-wrap">
+          <button class="btn btn-orange" onclick="toggleLib()">+ Add from Library</button>
+          <div class="lib-dd" id="lib-dd">
+            <input class="lib-search" type="text" placeholder="Search items…" oninput="filterLib(this.value)" id="lib-search">
+            <div class="lib-list" id="lib-list"></div>
+          </div>
+        </div>
+        <button class="btn btn-ghost" onclick="addCustom()">+ Custom</button>
+      </div>
+      <div class="items-wrap">
+        <table class="items">
+          <thead><tr>
+            <th>Description</th>
+            <th style="width:50px">Unit</th>
+            <th style="width:78px;text-align:right">Qty</th>
+            <th style="width:88px;text-align:right">Unit Cost</th>
+            <th style="width:88px;text-align:right">Extended</th>
+            <th style="width:34px"></th>
+          </tr></thead>
+          <tbody id="items-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="est-sum" id="est-sum"></div>
+  </div>
+</div>
+
+<!-- BUDGET -->
+<div class="page" id="pg-budget">
+  <div class="pg-inner">
+    <div class="pg-head"><h1>Budget Calculator</h1><p>Parametric cost estimate based on square footage, project type, region, and quality level.</p></div>
+    <div class="card">
+      <div class="card-title">Project Type</div>
+      <div class="type-grid" id="b-typeGrid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="q-opt selected" onclick="pickBType(this,'office')"><div class="qo-label">Office</div></div>
+        <div class="q-opt" onclick="pickBType(this,'retail')"><div class="qo-label">Retail</div></div>
+        <div class="q-opt" onclick="pickBType(this,'warehouse')"><div class="qo-label">Warehouse</div></div>
+        <div class="q-opt" onclick="pickBType(this,'multifamily')"><div class="qo-label">Multifamily</div></div>
+        <div class="q-opt" onclick="pickBType(this,'industrial')"><div class="qo-label">Industrial</div></div>
+        <div class="q-opt" onclick="pickBType(this,'medical')"><div class="qo-label">Medical / Lab</div></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem">
+      <div class="card">
+        <div class="card-title">Project Details</div>
+        <div class="form-row cols-2">
+          <div><label class="fl">Square Footage</label><input type="number" id="b-sqft" value="10000" min="500" oninput="calcBudget()"></div>
+          <div><label class="fl">Stories</label><input type="number" id="b-stories" value="1" min="1" max="50" oninput="calcBudget()"></div>
+        </div>
+        <label class="fl">Region</label>
+        <select class="form-sel" id="b-region" onchange="calcBudget()">
+          <option value="new-england">New England</option><option value="new-york">New York Metro</option>
+          <option value="mid-atlantic">Mid-Atlantic</option><option value="southeast">Southeast</option>
+          <option value="florida">Florida</option><option value="appalachian">TN / KY</option>
+          <option value="texas">Texas</option><option value="midwest" selected>Midwest</option>
+          <option value="plains">Plains</option><option value="mountain">Mountain West</option>
+          <option value="pacific-nw">Pacific Northwest</option><option value="california">California</option>
+          <option value="hawaii">Hawaii / Alaska</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-title">Quality Level</div>
+        <div class="type-grid" id="b-qualRow" style="grid-template-columns:repeat(3,1fr)">
+          <div class="q-opt" onclick="pickBQual(this,'economy')"><div class="qo-label">Economy</div><div class="qo-sub">Basic finishes</div></div>
+          <div class="q-opt selected" onclick="pickBQual(this,'standard')"><div class="qo-label">Standard</div><div class="qo-sub">Mid-grade</div></div>
+          <div class="q-opt" onclick="pickBQual(this,'premium')"><div class="qo-label">Premium</div><div class="qo-sub">High-end</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="b-results" style="display:none">
+      <div class="card-title">Estimate Results</div>
+      <div class="res-grid">
+        <div class="res-box accent"><div class="res-label">Total Cost Range</div><div class="res-val" id="b-range">—</div></div>
+        <div class="res-box"><div class="res-label">Cost per SF</div><div class="res-val" id="b-psf">—</div></div>
+        <div class="res-box"><div class="res-label">Stories Adjustment</div><div class="res-val" id="b-sadj">—</div></div>
+      </div>
+      <div style="margin-top:1.1rem">
+        <div class="card-title">Labor / Material Split</div>
+        <div class="split-bar"><div class="split-labor" id="b-lbar"></div></div>
+        <div class="split-legend">
+          <span><span class="swatch" style="background:var(--orange)"></span>Labor <span id="b-lpct">—</span></span>
+          <span><span class="swatch" style="background:var(--border)"></span>Material <span id="b-mpct">—</span></span>
+          <span style="margin-left:auto">Labor: $<span id="b-lamt">—</span>&nbsp;|&nbsp;Material: $<span id="b-mamt">—</span></span>
+        </div>
+      </div>
+      <div style="margin-top:1.1rem"><div class="card-title">CSI Division Breakdown</div><div class="csi-rows" id="b-csi"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCHEDULE -->
+<div class="page" id="pg-schedule">
+  <div class="pg-inner">
+    <div class="pg-head"><h1>Schedule Estimator</h1><p>Generate a phased construction schedule with estimated duration and milestone dates.</p></div>
+    <div style="display:grid;grid-template-columns:1fr 1.65fr;gap:1.2rem">
+      <div>
+        <div class="card">
+          <div class="card-title">Project Type</div>
+          <div class="type-grid" id="s-typeGrid" style="grid-template-columns:repeat(2,1fr)">
+            <div class="q-opt selected" onclick="pickSType(this,'office')"><div class="qo-label">Office</div></div>
+            <div class="q-opt" onclick="pickSType(this,'retail')"><div class="qo-label">Retail</div></div>
+            <div class="q-opt" onclick="pickSType(this,'warehouse')"><div class="qo-label">Warehouse</div></div>
+            <div class="q-opt" onclick="pickSType(this,'multifamily')"><div class="qo-label">Multifamily</div></div>
+            <div class="q-opt" onclick="pickSType(this,'industrial')"><div class="qo-label">Industrial</div></div>
+            <div class="q-opt" onclick="pickSType(this,'medical')"><div class="qo-label">Medical</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Parameters</div>
+          <div class="form-row cols-2">
+            <div><label class="fl">Square Footage</label><input type="number" id="s-sqft" value="10000" min="500" oninput="autoSched()"></div>
+            <div><label class="fl">Stories</label><input type="number" id="s-stories" value="1" min="1" max="50" oninput="autoSched()"></div>
+          </div>
+          <label class="fl">Quality Level</label>
+          <div class="type-grid" id="s-qualRow" style="grid-template-columns:repeat(3,1fr);margin-bottom:.75rem">
+            <div class="q-opt" onclick="pickSQual(this,'economy')"><div class="qo-label">Economy</div></div>
+            <div class="q-opt selected" onclick="pickSQual(this,'standard')"><div class="qo-label">Standard</div></div>
+            <div class="q-opt" onclick="pickSQual(this,'premium')"><div class="qo-label">Premium</div></div>
+          </div>
+          <label class="fl">Construction Start Date</label>
+          <input type="date" id="s-start" oninput="autoSched()" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+        </div>
+        <div class="card" id="s-summary" style="display:none">
+          <div class="card-title">Summary</div>
+          <div class="ba-row"><span class="ba-label">Total Duration</span><span class="ba-val" id="s-dur">—</span></div>
+          <div class="ba-row"><span class="ba-label">Start Date</span><span class="ba-val" id="s-start-lbl">—</span></div>
+          <div class="ba-row"><span class="ba-label">Substantial Completion</span><span class="ba-val" id="s-end">—</span></div>
+          <div class="ba-row"><span class="ba-label">Final Completion</span><span class="ba-val" id="s-final">—</span></div>
+        </div>
+      </div>
+      <div class="card" id="s-gantt-card" style="display:none">
+        <div class="card-title">Phase Schedule</div>
+        <div class="gantt-wrap" id="s-gantt"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BIDS -->
+<div class="page" id="pg-bids">
+  <div class="pg-inner">
+    <div class="pg-head"><h1>Bid Comparison Tool</h1><p>Compare contractor bids side by side, analyze spread, and identify the best value.</p></div>
+    <div class="card">
+      <div class="card-title">Project Info</div>
+      <div class="form-row cols-3">
+        <div><label class="fl">Project Name</label><input type="text" id="bid-proj" value="New Project" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem"></div>
+        <div><label class="fl">Engineer's Estimate ($)</label><input type="number" id="bid-est" value="0" oninput="analyzeBids()" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem"></div>
+        <div><label class="fl">Number of Bidders</label>
+          <select class="form-sel" id="bid-count" onchange="bidCount=+this.value;renderBidCards()">
+            <option value="2">2 Bidders</option><option value="3" selected>3 Bidders</option>
+            <option value="4">4 Bidders</option><option value="5">5 Bidders</option><option value="6">6 Bidders</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="bids-grid" id="bid-cards" style="grid-template-columns:repeat(3,1fr)"></div>
+    <div id="bid-analysis" style="display:none">
+      <div class="card">
+        <div class="card-title">Bid Analysis</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div>
+            <div class="ba-row"><span class="ba-label">Lowest Bid</span><span class="ba-val" id="ba-low">—</span></div>
+            <div class="ba-row"><span class="ba-label">Highest Bid</span><span class="ba-val" id="ba-high">—</span></div>
+            <div class="ba-row"><span class="ba-label">Average Bid</span><span class="ba-val" id="ba-avg">—</span></div>
+            <div class="ba-row"><span class="ba-label">Bid Spread</span><span class="ba-val" id="ba-spread">—</span></div>
+            <div class="ba-row"><span class="ba-label">Spread Assessment</span><span class="ba-val" id="ba-spread-lbl">—</span></div>
+          </div>
+          <div id="ba-est-col">
+            <div class="ba-row"><span class="ba-label">Engineer's Estimate</span><span class="ba-val" id="ba-eng">—</span></div>
+            <div class="ba-row"><span class="ba-label">Low vs. Estimate</span><span class="ba-val" id="ba-vs-est">—</span></div>
+          </div>
+        </div>
+        <div class="rank-grid" id="bid-rank"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MARKUP -->
+<div class="page" id="pg-markup">
+  <div class="pg-inner">
+    <div class="pg-head"><h1>Markup &amp; Overhead Calculator</h1><p>Calculate bid price with overhead and profit markup, and compute fully burdened labor rates.</p></div>
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(this,'mu-project')">Project Markup</button>
+      <button class="tab-btn" onclick="switchTab(this,'mu-burden')">Labor Burden</button>
+    </div>
+    <div class="tab-pane active" id="mu-project">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem">
+        <div class="card">
+          <div class="card-title">Cost Inputs</div>
+          <div class="mu-row"><span class="mu-label">Direct Labor Cost ($)</span><input class="mu-inp" type="number" id="mu-labor" value="0" oninput="calcMarkup()"></div>
+          <div class="mu-row"><span class="mu-label">Direct Material Cost ($)</span><input class="mu-inp" type="number" id="mu-mat" value="0" oninput="calcMarkup()"></div>
+          <div class="mu-row"><span class="mu-label">Subcontractor Cost ($)</span><input class="mu-inp" type="number" id="mu-sub" value="0" oninput="calcMarkup()"></div>
+          <div class="mu-row"><span class="mu-label">Equipment Cost ($)</span><input class="mu-inp" type="number" id="mu-equip" value="0" oninput="calcMarkup()"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Markup Rates</div>
+          <div class="mu-row"><span class="mu-label">Overhead (%)</span><input class="mu-inp" type="number" id="mu-oh" value="15" step="0.5" oninput="calcMarkup()"></div>
+          <div class="mu-row"><span class="mu-label">Profit (%)</span><input class="mu-inp" type="number" id="mu-profit" value="10" step="0.5" oninput="calcMarkup()"></div>
+          <div class="mu-row"><span class="mu-label">Contingency (%)</span><input class="mu-inp" type="number" id="mu-cont" value="5" step="0.5" oninput="calcMarkup()"></div>
+          <div class="mu-row"><span class="mu-label">Bond / Insurance (%)</span><input class="mu-inp" type="number" id="mu-bond" value="2" step="0.1" oninput="calcMarkup()"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Breakdown</div>
+        <div class="mu-row"><span class="mu-label">Direct Cost</span><span class="mu-result" id="mu-r-direct">$0</span></div>
+        <div class="mu-row"><span class="mu-label">Overhead</span><span class="mu-result" id="mu-r-oh">$0</span></div>
+        <div class="mu-row"><span class="mu-label">Profit</span><span class="mu-result" id="mu-r-profit">$0</span></div>
+        <div class="mu-row"><span class="mu-label">Contingency</span><span class="mu-result" id="mu-r-cont">$0</span></div>
+        <div class="mu-row"><span class="mu-label">Bond / Insurance</span><span class="mu-result" id="mu-r-bond">$0</span></div>
+        <div class="mu-total"><span class="mu-total-lbl">BID PRICE</span><span class="mu-total-val" id="mu-r-total">$0</span></div>
+        <div style="margin-top:.65rem;display:flex;gap:1.5rem;font-size:.76rem;color:var(--muted)">
+          <span>Markup on cost: <strong id="mu-r-mu" style="color:var(--navy)">—</strong></span>
+          <span>Margin on price: <strong id="mu-r-mg" style="color:var(--navy)">—</strong></span>
+        </div>
+      </div>
+    </div>
+    <div class="tab-pane" id="mu-burden">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem">
+        <div class="card">
+          <div class="card-title">Base Wage</div>
+          <div class="mu-row"><span class="mu-label">Straight-time Wage ($/hr)</span><input class="mu-inp" type="number" id="lb-wage" value="35" step="0.25" oninput="calcBurden()"></div>
+          <div class="mu-row"><span class="mu-label">Hours / Year</span><input class="mu-inp" type="number" id="lb-hrs" value="2080" oninput="calcBurden()"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Burden Rates</div>
+          <div class="mu-row"><span class="mu-label">FICA (SS + Medicare %)</span><input class="mu-inp" type="number" id="lb-fica" value="7.65" step="0.1" oninput="calcBurden()"></div>
+          <div class="mu-row"><span class="mu-label">FUTA / SUTA (%)</span><input class="mu-inp" type="number" id="lb-futa" value="3.0" step="0.1" oninput="calcBurden()"></div>
+          <div class="mu-row"><span class="mu-label">Workers Comp (%)</span><input class="mu-inp" type="number" id="lb-wc" value="8.0" step="0.1" oninput="calcBurden()"></div>
+          <div class="mu-row"><span class="mu-label">General Liability (%)</span><input class="mu-inp" type="number" id="lb-gl" value="2.5" step="0.1" oninput="calcBurden()"></div>
+          <div class="mu-row"><span class="mu-label">Benefits / Other (%)</span><input class="mu-inp" type="number" id="lb-ben" value="12.0" step="0.1" oninput="calcBurden()"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Labor Burden Summary</div>
+        <div class="mu-row"><span class="mu-label">Base Wage ($/hr)</span><span class="mu-result" id="lb-r-base">$0.00</span></div>
+        <div class="mu-row"><span class="mu-label">Burden Cost ($/hr)</span><span class="mu-result" id="lb-r-burden">$0.00</span></div>
+        <div class="mu-row"><span class="mu-label">Total Burden Rate</span><span class="mu-result" id="lb-r-rate">0.0%</span></div>
+        <div class="mu-total"><span class="mu-total-lbl">FULLY BURDENED RATE</span><span class="mu-total-val" id="lb-r-total">$0.00 / hr</span></div>
+        <div style="margin-top:.65rem;display:flex;gap:1.5rem;font-size:.76rem;color:var(--muted)">
+          <span>Annual burdened cost: <strong id="lb-r-annual" style="color:var(--navy)">$0</strong></span>
+          <span>Base salary: <strong id="lb-r-base-annual" style="color:var(--navy)">$0</strong></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BLUEPRINT -->
+<div class="page" id="pg-blueprint">
+  <div class="bp-topbar">
+    <label class="tool-btn orange" for="bp-file-input" title="Open PDF">&#128194; Open PDF</label>
+    <input type="file" id="bp-file-input" accept="application/pdf,image/*" style="display:none" onchange="bpLoadFile(this)">
+    <div class="tb-sep"></div>
+    <div class="page-ctrl">
+      <button onclick="bpPrevPage()">&#8249;</button>
+      <span id="bp-page-lbl">— / —</span>
+      <button onclick="bpNextPage()">&#8250;</button>
+    </div>
+    <div class="tb-sep"></div>
+    <button class="tool-btn" id="bt-select" onclick="bpSetTool('select')" title="Select / Pan">&#11036; Select</button>
+    <button class="tool-btn" id="bt-scale" onclick="bpSetScale()" title="Set scale">&#128207; Set Scale</button>
+    <button class="tool-btn" id="bt-linear" onclick="bpSetTool('linear')" title="Linear measurement">&#128208; Linear</button>
+    <button class="tool-btn" id="bt-area" onclick="bpSetTool('area')" title="Area measurement">&#11041; Area</button>
+    <button class="tool-btn" id="bt-count" onclick="bpSetTool('count')" title="Count items">&#10022; Count</button>
+    <div class="tb-sep"></div>
+    <span class="scale-badge unset" id="bp-scale-badge">Scale: not set</span>
+    <div class="tb-sep"></div>
+    <input type="range" id="bp-zoom" min="50" max="300" value="100" style="width:90px" oninput="bpZoom(+this.value)" title="Zoom">
+    <span id="bp-zoom-lbl" style="font-size:.76rem;color:var(--muted);min-width:36px">100%</span>
+    <div class="tb-sep"></div>
+    <button class="tool-btn" onclick="bpClearAll()" style="color:#dc2626">&#10005; Clear</button>
+  </div>
+  <div class="bp-body">
+    <div class="bp-canvas-area" id="bp-canvas-area">
+      <div class="bp-upload" id="bp-upload">
+        <div class="bp-upload-icon">&#128208;</div>
+        <p>Upload a PDF or image of your blueprint to start taking off quantities</p>
+        <label for="bp-file-input">Choose File</label>
+      </div>
+      <div class="bp-canvas-wrap" id="bp-canvas-wrap" style="display:none">
+        <canvas id="pdf-canvas"></canvas>
+        <canvas id="markup-canvas"
+          onmousedown="bpMouseDown(event)"
+          onmousemove="bpMouseMove(event)"
+          ondblclick="bpDblClick(event)"
+          onclick="bpClick(event)">
+        </canvas>
+      </div>
+    </div>
+    <div class="bp-panel">
+      <div class="bp-panel-head">Takeoff Items <span id="bp-item-count" style="color:var(--orange)"></span></div>
+      <div class="bp-panel-body" id="bp-panel-body">
+        <div style="color:var(--muted);font-size:.8rem;text-align:center;padding:1rem 0">No takeoff items yet.<br>Use the tools above to measure.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
