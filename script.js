@@ -637,16 +637,45 @@ function bpRenderPanel(){
 
 function bpDelItem(id){bpItems=bpItems.filter(i=>i.id!==id);bpRedraw();bpRenderPanel();}
 
+let bpPendingId=null;
 function bpSendToEst(id){
   const item=bpItems.find(i=>i.id===id);if(!item)return;
-  const desc=prompt('Description for estimator line item:',item.label)||item.label;
-  const unit=item.unit;
-  const qty=item.value;
-  project.items.push({id:project.nextId++,div:activeDiv,desc,unit,qty,unitCost:0,custom:true});
-  saveProject();
-  showPage('estimator');renderAll();
-  alert(`Added "${desc}" (${qty} ${unit}) to Division ${activeDiv}. Set the unit cost in the estimator.`);
+  bpPendingId=id;
+  gid('modal-meas-lbl').textContent=`${item.label} — ${item.value} ${item.unit}`;
+  gid('modal-div').innerHTML=Object.entries(CSI_ITEMS)
+    .map(([d,info])=>`<option value="${d}"${d===activeDiv?' selected':''}>${d} — ${info.name}</option>`)
+    .join('');
+  gid('modal-desc').value=item.label;
+  gid('modal-cost').value='';
+  bpModalPickDiv(activeDiv);
+  gid('send-modal').style.display='flex';
 }
+function bpModalPickDiv(d){
+  const info=CSI_ITEMS[d];
+  gid('modal-lib').innerHTML=info.items.map((li,idx)=>`
+    <div class="modal-lib-item" id="mli-${idx}" onclick="bpModalPickLib('${d}',${idx})">
+      <span class="modal-lib-name">${li.desc}</span>
+      <span class="modal-lib-cost">${li.unit} &mdash; ${fmtC(li.cost)}</span>
+    </div>`).join('');
+  gid('modal-cost').value='';
+  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach(el=>el.classList.remove('selected'));
+}
+function bpModalPickLib(d,idx){
+  const li=CSI_ITEMS[d].items[idx];
+  gid('modal-desc').value=li.desc;
+  gid('modal-cost').value=li.cost;
+  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach((el,i)=>el.classList.toggle('selected',i===idx));
+}
+function bpModalConfirm(){
+  const pending=bpItems.find(i=>i.id===bpPendingId);if(!pending){bpModalClose();return;}
+  const div=gid('modal-div').value;
+  const desc=gid('modal-desc').value.trim()||pending.label;
+  const cost=+(gid('modal-cost').value)||0;
+  project.items.push({id:project.nextId++,div,desc,unit:pending.unit,qty:pending.value,unitCost:cost,custom:true});
+  saveProject();bpModalClose();
+  activeDiv=div;showPage('estimator');renderAll();
+}
+function bpModalClose(){gid('send-modal').style.display='none';bpPendingId=null;}
 
 function bpClearAll(){
   if(bpItems.length&&!confirm('Clear all takeoff items?'))return;
