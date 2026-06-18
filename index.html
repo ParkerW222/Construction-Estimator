@@ -18,6 +18,7 @@
       <a href="#" onclick="showPage('markup');return false" id="nl-markup">Markup &amp; Overhead</a>
       <a href="#" onclick="showPage('blueprint');return false" id="nl-blueprint">Blueprint Takeoff</a>
     </div>
+    <button class="help-btn" onclick="showHelp()" title="How to use BuildCalc">?</button>
   </div>
 </nav>
 
@@ -345,6 +346,104 @@
         <div style="color:var(--muted);font-size:.8rem;text-align:center;padding:1rem 0">No takeoff items yet.<br>Use the tools above to measure.</div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal-overlay" id="help-modal" style="display:none" onclick="if(event.target===this)closeHelp()">
+  <div class="modal-box help-box">
+    <div class="modal-head">
+      <span class="modal-title">How to Use BuildCalc</span>
+      <button class="modal-close" onclick="closeHelp()">&#10005;</button>
+    </div>
+
+    <div class="help-tool">
+      <div class="help-tool-head">
+        <span class="help-num">1</span>
+        <div><div class="help-tool-name">Project Estimator</div><div class="help-tool-sub">Line-item cost estimating by CSI MasterFormat division</div></div>
+      </div>
+      <p class="help-desc">Build a detailed bottom-up estimate organized by construction division. Unit costs are national averages automatically adjusted for your region. Markup is applied on top to produce a final bid price.</p>
+      <ol class="help-steps">
+        <li>Set your <strong>project name</strong> and <strong>region</strong> in the top bar — this adjusts all unit costs.</li>
+        <li>Click a <strong>CSI division</strong> in the left panel (e.g. 03 Concrete) to open it.</li>
+        <li>Click <strong>+ Add from Library</strong> to search and add items, or <strong>+ Custom</strong> for a blank row.</li>
+        <li>Enter <strong>quantities</strong> for each item — extended costs update instantly.</li>
+        <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel to get your bid price.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool">
+      <div class="help-tool-head">
+        <span class="help-num">2</span>
+        <div><div class="help-tool-name">Budget Calculator</div><div class="help-tool-sub">Rough order-of-magnitude estimate based on square footage</div></div>
+      </div>
+      <p class="help-desc">Get a fast ballpark cost range before detailed estimating begins. Useful for owner presentations, feasibility studies, or sanity-checking a bid.</p>
+      <ol class="help-steps">
+        <li>Select a <strong>project type</strong> (Office, Warehouse, Medical, etc.).</li>
+        <li>Enter <strong>square footage</strong>, number of <strong>stories</strong>, and <strong>region</strong>.</li>
+        <li>Choose a <strong>quality level</strong> — Economy, Standard, or Premium.</li>
+        <li>Results appear automatically showing a cost range, $/SF, labor/material split, and a CSI division breakdown.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool">
+      <div class="help-tool-head">
+        <span class="help-num">3</span>
+        <div><div class="help-tool-name">Schedule Estimator</div><div class="help-tool-sub">Phased Gantt chart with milestone dates</div></div>
+      </div>
+      <p class="help-desc">Generate a preliminary construction schedule with phase durations and key dates. Duration is based on project type, size, and complexity.</p>
+      <ol class="help-steps">
+        <li>Select a <strong>project type</strong> and <strong>quality level</strong>.</li>
+        <li>Enter <strong>square footage</strong>, <strong>stories</strong>, and a <strong>construction start date</strong>.</li>
+        <li>A Gantt chart appears showing all 7 phases (Pre-Con through Closeout) with durations.</li>
+        <li>The summary panel shows total duration, substantial completion, and final completion dates.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool">
+      <div class="help-tool-head">
+        <span class="help-num">4</span>
+        <div><div class="help-tool-name">Bid Comparison</div><div class="help-tool-sub">Side-by-side contractor bid analysis</div></div>
+      </div>
+      <p class="help-desc">Compare bids from 2–6 contractors, analyze the spread, rank by price, and compare against an engineer's estimate to evaluate whether bids are in line.</p>
+      <ol class="help-steps">
+        <li>Set the <strong>number of bidders</strong> (2–6) using the dropdown.</li>
+        <li>Enter each contractor's <strong>name, bid amount,</strong> and any <strong>notes or qualifications</strong>.</li>
+        <li>Optionally enter an <strong>Engineer's Estimate</strong> to compare against.</li>
+        <li>Analysis appears automatically — spread assessment, ranking, and variance from estimate.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool">
+      <div class="help-tool-head">
+        <span class="help-num">5</span>
+        <div><div class="help-tool-name">Markup &amp; Overhead</div><div class="help-tool-sub">Bid price and labor burden calculators</div></div>
+      </div>
+      <p class="help-desc">Two calculators in one. Project Markup builds a bid price from direct costs. Labor Burden calculates the true hourly cost of an employee including taxes and benefits.</p>
+      <ol class="help-steps">
+        <li><strong>Project Markup tab:</strong> Enter direct labor, material, subcontractor, and equipment costs. Set overhead, profit, contingency, and bond rates — bid price calculates automatically.</li>
+        <li><strong>Labor Burden tab:</strong> Enter a base wage and burden rates (FICA, FUTA, workers comp, GL, benefits) — shows fully burdened hourly rate and annual cost.</li>
+        <li>Switch between tabs using the buttons at the top of the page.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+      <div class="help-tool-head">
+        <span class="help-num">6</span>
+        <div><div class="help-tool-name">Blueprint Takeoff</div><div class="help-tool-sub">Measure directly on uploaded PDFs and drawings</div></div>
+      </div>
+      <p class="help-desc">Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements flow straight into the Project Estimator.</p>
+      <ol class="help-steps">
+        <li>Click <strong>Open PDF</strong> to upload a drawing (PDF or image file).</li>
+        <li>Click <strong>Set Scale</strong>, then click two known points on the drawing and enter their real-world distance in feet. This calibrates all measurements.</li>
+        <li><strong>Linear tool:</strong> Click to place points along a path. Double-click to finish and record the length in LF.</li>
+        <li><strong>Area tool:</strong> Click to place corner points. Click back near the first point (an orange ring appears) to close and fill the polygon in SF.</li>
+        <li><strong>Count tool:</strong> Click once per item to place a numbered dot. Use for windows, doors, fixtures, etc.</li>
+        <li>Click <strong>→ Send to Estimator</strong> on any measurement to pick a division and unit cost, then add it directly to your estimate.</li>
+        <li>Press <strong>Escape</strong> at any time to cancel an in-progress measurement.</li>
+      </ol>
+    </div>
+
   </div>
 </div>
 

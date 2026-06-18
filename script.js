@@ -18,6 +18,10 @@ function fmtC(n) {
 }
 function fmtN(n) { return Math.round(n).toLocaleString(); }
 
+// ── HELP MODAL ─────────────────────────────────────────────────────
+function showHelp() { gid('help-modal').style.display = 'flex'; }
+function closeHelp() { gid('help-modal').style.display = 'none'; }
+
 // ── SPA NAVIGATION ─────────────────────────────────────────────────
 function showPage(p) {
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));

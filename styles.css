@@ -197,6 +197,20 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .page-ctrl button{border:1px solid var(--border);background:var(--surface);border-radius:4px;padding:.2rem .5rem;cursor:pointer;font-size:.78rem}
 .page-ctrl button:hover{background:var(--bg)}
 .bp-hint{font-size:.74rem;color:rgba(255,255,255,.55);padding:.25rem .5rem;background:rgba(0,0,0,.35);border-radius:5px;pointer-events:none}
+/* HELP BUTTON */
+.help-btn{margin-left:auto;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;border-radius:50%;width:28px;height:28px;font-size:.9rem;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1;transition:.15s}
+.help-btn:hover{background:rgba(255,255,255,.28)}
+/* HELP MODAL */
+.help-box{width:620px;max-width:96vw}
+.help-tool{border-bottom:1px solid var(--border);padding-bottom:1.2rem;margin-bottom:1.2rem}
+.help-tool-head{display:flex;align-items:flex-start;gap:.85rem;margin-bottom:.6rem}
+.help-num{background:var(--orange);color:#fff;font-size:.78rem;font-weight:800;border-radius:50%;width:24px;height:24px;display:grid;place-items:center;flex-shrink:0;margin-top:.1rem}
+.help-tool-name{font-size:.95rem;font-weight:700;color:var(--navy)}
+.help-tool-sub{font-size:.78rem;color:var(--muted);margin-top:.1rem}
+.help-desc{font-size:.82rem;color:var(--text);line-height:1.55;margin-bottom:.65rem}
+.help-steps{padding-left:1.2rem;display:flex;flex-direction:column;gap:.35rem}
+.help-steps li{font-size:.81rem;color:var(--text);line-height:1.5}
+.help-steps strong{color:var(--navy)}
 /* SEND-TO-ESTIMATOR MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:flex;align-items:center;justify-content:center}
 .modal-box{background:var(--surface);border-radius:12px;padding:1.5rem;width:480px;max-width:94vw;max-height:86vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.22)}
