@@ -211,6 +211,13 @@ function buildLibList(q) {
 }
 
 document.addEventListener('click', e => { if (!e.target.closest('.lib-wrap')) closeLib(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && bpCurrentPts.length) {
+    bpCurrentPts = [];
+    bpSetTool('select');
+    bpRedraw();
+  }
+});
 
 function newProject() {
   if (!confirm('Start a new project? Current items will be cleared.')) return;
@@ -588,8 +595,19 @@ function bpClick(e) {
     return;
   }
 
-  if (bpTool === 'linear' || bpTool === 'area') {
+  if (bpTool === 'linear') {
     bpCurrentPts.push(bpCanvasXY(e));
+    bpRedraw();
+  }
+
+  if (bpTool === 'area') {
+    const pt = bpCanvasXY(e);
+    if (bpCurrentPts.length >= 3) {
+      const first = bpCurrentPts[0];
+      const dx = pt.x - first.x, dy = pt.y - first.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 15) { bpFinishShape(); return; }
+    }
+    bpCurrentPts.push(pt);
     bpRedraw();
   }
 }
@@ -620,6 +638,18 @@ function bpMouseMove(e) {
     ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
     ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
     ctx.restore();
+  }
+
+  // Snap indicator: highlight first point when close enough to close the area
+  if (bpTool === 'area' && bpCurrentPts.length >= 3) {
+    const first = bpCurrentPts[0];
+    const dx = pt.x - first.x, dy = pt.y - first.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 15) {
+      ctx.save();
+      ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(first.x, first.y, 9, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   }
 }
 
@@ -682,7 +712,7 @@ function bpRedraw() {
       ctx.fillText(`${item.value} ${item.unit}`, mid.x + 5, mid.y - 5);
 
     } else if (item.type === 'area') {
-      ctx.fillStyle = 'rgba(249,115,22,.18)'; ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+      ctx.fillStyle = 'rgba(249,115,22,.28)'; ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
       ctx.beginPath();
       item.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
       ctx.closePath(); ctx.fill(); ctx.stroke();
