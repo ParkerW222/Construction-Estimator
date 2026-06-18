@@ -599,19 +599,8 @@ function bpClick(e) {
     return;
   }
 
-  if (bpTool === 'linear') {
+  if (bpTool === 'linear' || bpTool === 'area') {
     bpCurrentPts.push(bpCanvasXY(e));
-    bpRedraw();
-  }
-
-  if (bpTool === 'area') {
-    const pt = bpCanvasXY(e);
-    if (bpCurrentPts.length >= 3) {
-      const first = bpCurrentPts[0];
-      const dx = pt.x - first.x, dy = pt.y - first.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 15) { bpFinishShape(); return; }
-    }
-    bpCurrentPts.push(pt);
     bpRedraw();
   }
 }
@@ -644,17 +633,6 @@ function bpMouseMove(e) {
     ctx.restore();
   }
 
-  // Snap indicator: highlight first point when close enough to close the area
-  if (bpTool === 'area' && bpCurrentPts.length >= 3) {
-    const first = bpCurrentPts[0];
-    const dx = pt.x - first.x, dy = pt.y - first.y;
-    if (Math.sqrt(dx * dx + dy * dy) < 15) {
-      ctx.save();
-      ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(first.x, first.y, 9, 0, Math.PI * 2); ctx.stroke();
-      ctx.restore();
-    }
-  }
 }
 
 function bpFinishShape() {
