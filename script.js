@@ -218,7 +218,6 @@ document.addEventListener('click', e => { if (!e.target.closest('.lib-wrap')) cl
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && bpCurrentPts.length) {
     bpCurrentPts = [];
-    bpSetTool('select');
     bpRedraw();
   }
 });
@@ -467,13 +466,255 @@ function calcBurden() {
 }
 
 // ── BLUEPRINT TAKEOFF ──────────────────────────────────────────────
-let bpPdf = null, bpPageNum = 1, bpPageCount = 0, bpScale = 1, bpZoomPct = 100;
-let bpTool = 'select', bpScaleState = null;
-let bpScalePxPerFt = null, bpScalePts = [];
-let bpCurrentPts = [], bpCurrentType = null;
-let bpItems = [], bpNextId = 1;
+let bpConditions = [
+  { id: 1, name: 'Concrete Slab', color: '#f97316', type: 'area',   unit: 'SF' },
+  { id: 2, name: 'Exterior Wall', color: '#1e3a5f', type: 'linear', unit: 'LF' },
+  { id: 3, name: 'Door',          color: '#7c3aed', type: 'count',  unit: 'EA' },
+];
+let bpCondNextId = 4;
+let bpActiveCondId = 1;
+let bpMeasurements = [];
+let bpMeasNextId = 1;
+let bpNewCondType = 'linear';
+let bpNewCondColor = BP_COLORS[0];
+let bpPdf = null, bpPageNum = 1, bpPageCount = 0, bpZoomPct = 100;
+let bpScalePxPerFt = null, bpScalePts = [], bpScaleMode = false;
+let bpCurrentPts = [];
 let bpIsImg = false, bpImg = null;
 
+function bpGetCond(id) { return bpConditions.find(c => c.id === id); }
+function bpGetActiveCond() { return bpGetCond(bpActiveCondId); }
+
+function bpSelectCond(id) {
+  bpActiveCondId = id;
+  bpCurrentPts = [];
+  bpScaleMode = false;
+  bpRenderConditions();
+  bpUpdateActiveIndicator();
+  const c = gid('markup-canvas');
+  if (c) c.style.cursor = 'crosshair';
+  bpRedraw();
+}
+
+function bpRenderConditions() {
+  const list = gid('bp-cond-list');
+  if (!list) return;
+  list.innerHTML = bpConditions.map(c => `
+    <div class="bp-cond-item${c.id === bpActiveCondId ? ' active' : ''}" onclick="bpSelectCond(${c.id})">
+      <span style="width:12px;height:12px;border-radius:3px;background:${c.color};flex-shrink:0;display:inline-block"></span>
+      <span style="flex:1;font-size:.82rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
+      <span style="font-size:.72rem;color:rgba(255,255,255,.5);flex-shrink:0">${c.unit}</span>
+      <button onclick="event.stopPropagation();bpDeleteCond(${c.id})" title="Delete" style="background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.75rem;padding:0 0 0 .3rem;line-height:1">✕</button>
+    </div>`).join('');
+}
+
+function bpUpdateActiveIndicator() {
+  const el = gid('bp-active-cond');
+  if (!el) return;
+  const c = bpGetActiveCond();
+  if (c) {
+    el.textContent = c.name;
+    el.style.borderColor = c.color;
+    el.style.color = c.color;
+  } else {
+    el.textContent = 'No condition selected';
+    el.style.borderColor = 'rgba(255,255,255,.2)';
+    el.style.color = 'rgba(255,255,255,.5)';
+  }
+}
+
+function bpShowAddCond() {
+  const form = gid('bp-add-cond-form');
+  if (form) { form.style.display = 'block'; gid('bpnc-name').focus(); }
+  bpNewCondType = 'linear';
+  bpNewCondColor = BP_COLORS[0];
+  bpSyncTypeButtons();
+  bpRenderColorPicker();
+}
+
+function bpHideAddCond() {
+  const form = gid('bp-add-cond-form');
+  if (form) form.style.display = 'none';
+}
+
+function bpSelectNewType(type) {
+  bpNewCondType = type;
+  bpSyncTypeButtons();
+}
+
+function bpSyncTypeButtons() {
+  ['linear', 'area', 'count'].forEach(t => {
+    const btn = gid('bpnc-' + t);
+    if (btn) btn.classList.toggle('active', t === bpNewCondType);
+  });
+}
+
+function bpSelectNewColor(color) {
+  bpNewCondColor = color;
+  bpRenderColorPicker();
+}
+
+function bpRenderColorPicker() {
+  const el = gid('bpnc-colors');
+  if (!el) return;
+  el.innerHTML = BP_COLORS.map(c => `
+    <div class="bp-color-dot${c === bpNewCondColor ? ' sel' : ''}" style="background:${c}" onclick="bpSelectNewColor('${c}')"></div>`).join('');
+}
+
+function bpConfirmAddCond() {
+  const name = (gid('bpnc-name').value || '').trim();
+  if (!name) { gid('bpnc-name').focus(); return; }
+  const unit = bpNewCondType === 'area' ? 'SF' : bpNewCondType === 'linear' ? 'LF' : 'EA';
+  bpConditions.push({ id: bpCondNextId, name, color: bpNewCondColor, type: bpNewCondType, unit });
+  bpActiveCondId = bpCondNextId;
+  bpCondNextId++;
+  gid('bpnc-name').value = '';
+  bpHideAddCond();
+  bpRenderConditions();
+  bpUpdateActiveIndicator();
+  bpRenderQtyPanel();
+  const c = gid('markup-canvas');
+  if (c) c.style.cursor = 'crosshair';
+}
+
+function bpDeleteCond(id) {
+  if (!confirm('Delete this condition and all its measurements?')) return;
+  bpConditions = bpConditions.filter(c => c.id !== id);
+  bpMeasurements = bpMeasurements.filter(m => m.condId !== id);
+  if (bpActiveCondId === id) bpActiveCondId = bpConditions.length ? bpConditions[0].id : null;
+  bpRenderConditions();
+  bpUpdateActiveIndicator();
+  bpRenderQtyPanel();
+  bpRedraw();
+}
+
+function bpCondMeasurements(condId) { return bpMeasurements.filter(m => m.condId === condId); }
+
+function bpCondTotal(condId) {
+  return bpCondMeasurements(condId).reduce((s, m) => s + m.value, 0);
+}
+
+function bpRenderQtyPanel() {
+  const panel = gid('bp-qty-list');
+  if (!panel) return;
+  if (!bpConditions.length) {
+    panel.innerHTML = '<div class="bp-qty-empty">Add a condition on the left to start measuring.</div>';
+    return;
+  }
+  panel.innerHTML = bpConditions.map(c => {
+    const total = bpCondTotal(c.id);
+    const count = bpCondMeasurements(c.id).length;
+    return `<div class="bp-qty-row">
+      <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem">
+        <span style="width:10px;height:10px;border-radius:2px;background:${c.color};display:inline-block;flex-shrink:0"></span>
+        <span style="font-weight:600;font-size:.82rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name}</span>
+      </div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.35rem">
+        <span style="font-size:1.05rem;font-weight:700;color:var(--navy)">${fmtN(Math.round(total * 10) / 10)} <span style="font-size:.74rem;font-weight:400;color:var(--muted)">${c.unit}</span></span>
+        <span style="font-size:.72rem;color:var(--muted)">${count} item${count !== 1 ? 's' : ''}</span>
+      </div>
+      <button class="to-send-btn" onclick="bpSendCondToEst(${c.id})">→ Send to Estimator</button>
+    </div>`;
+  }).join('<hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0">');
+}
+
+// ── SEND TO ESTIMATOR MODAL ────────────────────────────────────────
+let bpPendingCondId = null;
+
+function bpSendCondToEst(condId) {
+  const cond = bpGetCond(condId);
+  if (!cond) return;
+  bpPendingCondId = condId;
+  const total = bpCondTotal(condId);
+  gid('modal-meas-lbl').textContent = `${cond.name} — ${fmtN(Math.round(total * 10) / 10)} ${cond.unit}`;
+  gid('modal-div').innerHTML = Object.entries(CSI_ITEMS)
+    .map(([d, info]) => `<option value="${d}"${d === activeDiv ? ' selected' : ''}>${d} — ${info.name}</option>`)
+    .join('');
+  gid('modal-desc').value = cond.name;
+  gid('modal-cost').value = '';
+  bpModalPickDiv(activeDiv);
+  gid('send-modal').style.display = 'flex';
+}
+
+function bpModalPickDiv(d) {
+  gid('modal-lib').innerHTML = CSI_ITEMS[d].items.map((li, idx) => `
+    <div class="modal-lib-item" id="mli-${idx}" onclick="bpModalPickLib('${d}',${idx})">
+      <span class="modal-lib-name">${li.desc}</span>
+      <span class="modal-lib-cost">${li.unit} &mdash; ${fmtC(li.cost)}</span>
+    </div>`).join('');
+  gid('modal-cost').value = '';
+  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach(el => el.classList.remove('selected'));
+}
+
+function bpModalPickLib(d, idx) {
+  const li = CSI_ITEMS[d].items[idx];
+  gid('modal-desc').value = li.desc;
+  gid('modal-cost').value = li.cost;
+  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach((el, i) => el.classList.toggle('selected', i === idx));
+}
+
+function bpModalConfirm() {
+  const cond = bpGetCond(bpPendingCondId);
+  if (!cond) { bpModalClose(); return; }
+  const div  = gid('modal-div').value;
+  const desc = gid('modal-desc').value.trim() || cond.name;
+  const cost = +(gid('modal-cost').value) || 0;
+  const total = bpCondTotal(bpPendingCondId);
+  project.items.push({ id: project.nextId++, div, desc, unit: cond.unit, qty: Math.round(total * 10) / 10, unitCost: cost, custom: true });
+  saveProject();
+  bpModalClose();
+  activeDiv = div;
+  showPage('estimator');
+  renderAll();
+}
+
+function bpModalClose() { gid('send-modal').style.display = 'none'; bpPendingCondId = null; }
+
+// ── PUSH ALL TO ESTIMATOR ─────────────────────────────────────────
+let bpPaRows = [];
+
+function bpPushAllToEst() {
+  if (!bpConditions.length) { alert('No conditions to push.'); return; }
+  bpPaRows = bpConditions.map(c => ({ condId: c.id, div: activeDiv, cost: 0 }));
+  const tbody = gid('push-all-rows');
+  const divOpts = Object.entries(CSI_ITEMS).map(([d, info]) => `<option value="${d}"${d === activeDiv ? ' selected' : ''}>${d} — ${info.name}</option>`).join('');
+  tbody.innerHTML = bpConditions.map((c, i) => {
+    const total = bpCondTotal(c.id);
+    return `<tr>
+      <td style="padding:.45rem .5rem">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c.color};vertical-align:middle;margin-right:.35rem"></span>
+        <strong style="font-size:.83rem">${c.name}</strong>
+      </td>
+      <td style="padding:.45rem .5rem;font-size:.83rem;color:var(--muted)">${fmtN(Math.round(total * 10) / 10)} ${c.unit}</td>
+      <td style="padding:.45rem .5rem">
+        <select onchange="bpPaRows[${i}].div=this.value" style="font-size:.79rem;padding:.22rem .35rem;border:1px solid var(--border);border-radius:4px;width:100%">
+          ${divOpts}
+        </select>
+      </td>
+      <td style="padding:.45rem .5rem">
+        <input type="number" min="0" step="0.01" value="0" id="pa-cost-${i}" onchange="bpPaRows[${i}].cost=+this.value" style="width:76px;font-size:.83rem;padding:.22rem .4rem;border:1px solid var(--border);border-radius:4px">
+      </td>
+    </tr>`;
+  }).join('');
+  gid('push-all-modal').style.display = 'flex';
+}
+
+function bpPushAllConfirm() {
+  bpConditions.forEach((c, i) => {
+    const total = bpCondTotal(c.id);
+    if (total <= 0 && c.type !== 'count') return;
+    const row = bpPaRows[i];
+    project.items.push({ id: project.nextId++, div: row.div, desc: c.name, unit: c.unit, qty: Math.round(total * 10) / 10, unitCost: row.cost, custom: true });
+  });
+  saveProject();
+  bpClosePushAll();
+  showPage('estimator');
+  renderAll();
+}
+
+function bpClosePushAll() { gid('push-all-modal').style.display = 'none'; }
+
+// ── BLUEPRINT CANVAS / RENDER ─────────────────────────────────────
 function bpLoadFile(input) {
   const file = input.files[0];
   if (!file) return;
@@ -514,7 +755,6 @@ function bpRenderPage() {
     const pdfC = gid('pdf-canvas'), mkC = gid('markup-canvas');
     pdfC.width = mkC.width = viewport.width;
     pdfC.height = mkC.height = viewport.height;
-    bpScale = viewport.scale;
     page.render({ canvasContext: pdfC.getContext('2d'), viewport }).promise.then(() => bpRedraw());
   });
 }
@@ -541,24 +781,12 @@ function bpNextPage() {
   if (bpPageNum < bpPageCount) { bpPageNum++; gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`; bpRenderPage(); }
 }
 
-function bpSetTool(t) {
-  bpTool = t;
-  bpCurrentPts = [];
-  bpCurrentType = t;
-  ['select', 'linear', 'area', 'count'].forEach(id => {
-    const el = gid('bt-' + id);
-    if (el) el.classList.toggle('active', id === t);
-  });
-  gid('markup-canvas').style.cursor = t === 'select' ? 'default' : 'crosshair';
-  bpRedraw();
-}
-
 function bpSetScale() {
   bpScalePts = [];
-  bpScaleState = 'picking-a';
-  bpTool = 'scale';
-  ['select', 'linear', 'area', 'count'].forEach(id => { const el = gid('bt-' + id); if (el) el.classList.remove('active'); });
-  gid('markup-canvas').style.cursor = 'crosshair';
+  bpScaleMode = true;
+  bpCurrentPts = [];
+  const c = gid('markup-canvas');
+  if (c) c.style.cursor = 'crosshair';
   alert("Click point A on the drawing, then click point B. You'll be asked for the real-world distance.");
 }
 
@@ -568,7 +796,7 @@ function bpCanvasXY(e) {
 }
 
 function bpClick(e) {
-  if (bpTool === 'scale') {
+  if (bpScaleMode) {
     const pt = bpCanvasXY(e);
     bpScalePts.push(pt);
     if (bpScalePts.length === 1) { bpRedraw(); return; }
@@ -584,70 +812,70 @@ function bpClick(e) {
         badge.className = 'scale-badge';
       }
       bpScalePts = [];
-      bpScaleState = null;
-      bpSetTool('select');
+      bpScaleMode = false;
     }
     return;
   }
 
-  if (bpTool === 'count') {
-    const pt = bpCanvasXY(e);
-    bpItems.push({ id: bpNextId++, type: 'count', label: 'Count', pts: [pt], value: 1 });
-    bpRefreshCounts();
+  const cond = bpGetActiveCond();
+  if (!cond) return;
+
+  if (cond.type === 'count') {
+    bpMeasurements.push({ id: bpMeasNextId++, condId: cond.id, type: 'count', pts: [bpCanvasXY(e)], value: 1 });
+    bpRenderQtyPanel();
     bpRedraw();
-    bpRenderPanel();
     return;
   }
 
-  if (bpTool === 'linear' || bpTool === 'area') {
-    bpCurrentPts.push(bpCanvasXY(e));
-    bpRedraw();
-  }
+  bpCurrentPts.push(bpCanvasXY(e));
+  bpRedraw();
 }
 
 function bpDblClick(e) {
-  if (bpTool === 'linear' && bpCurrentPts.length >= 2) bpFinishShape();
-  if (bpTool === 'area'   && bpCurrentPts.length >= 3) bpFinishShape();
+  const cond = bpGetActiveCond();
+  if (!cond) return;
+  if (cond.type === 'linear' && bpCurrentPts.length >= 2) bpFinishShape();
+  if (cond.type === 'area'   && bpCurrentPts.length >= 3) bpFinishShape();
 }
 
-function bpMouseDown(e) {}
-
 function bpMouseMove(e) {
-  if (!bpCurrentPts.length && bpTool !== 'scale') return;
+  if (!bpCurrentPts.length && !bpScaleMode) return;
   bpRedraw();
   const pt = bpCanvasXY(e);
   const ctx = gid('markup-canvas').getContext('2d');
+  const cond = bpGetActiveCond();
+  const color = cond ? cond.color : '#f97316';
 
-  if (bpTool === 'scale' && bpScalePts.length === 1) {
+  if (bpScaleMode && bpScalePts.length === 1) {
     ctx.save();
     ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
     ctx.beginPath(); ctx.moveTo(bpScalePts[0].x, bpScalePts[0].y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
     ctx.restore();
   }
 
-  if ((bpTool === 'linear' || bpTool === 'area') && bpCurrentPts.length) {
+  if (bpCurrentPts.length) {
     const last = bpCurrentPts[bpCurrentPts.length - 1];
     ctx.save();
-    ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
     ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
     ctx.restore();
   }
-
 }
 
 function bpFinishShape() {
   const pts = bpCurrentPts.slice();
   if (!pts.length) return;
-  let value = 0, unit = '', type = bpTool;
+  const cond = bpGetActiveCond();
+  if (!cond) return;
+  let value = 0;
 
-  if (type === 'linear') {
+  if (cond.type === 'linear') {
     let len = 0;
     for (let i = 1; i < pts.length; i++) {
       const dx = pts[i].x - pts[i - 1].x, dy = pts[i].y - pts[i - 1].y;
       len += Math.sqrt(dx * dx + dy * dy);
     }
     value = bpScalePxPerFt ? len / bpScalePxPerFt : len;
-    unit  = bpScalePxPerFt ? 'LF' : 'px';
   } else {
     let area = 0;
     for (let i = 0; i < pts.length; i++) {
@@ -656,20 +884,12 @@ function bpFinishShape() {
     }
     area = Math.abs(area) / 2;
     value = bpScalePxPerFt ? area / (bpScalePxPerFt * bpScalePxPerFt) : area;
-    unit  = bpScalePxPerFt ? 'SF' : 'px²';
   }
 
-  const label = prompt('Label for this measurement:', type === 'linear' ? 'Linear Measurement' : 'Area Measurement') || 'Measurement';
-  bpItems.push({ id: bpNextId++, type, label, pts, value: Math.round(value * 10) / 10, unit });
+  bpMeasurements.push({ id: bpMeasNextId++, condId: cond.id, type: cond.type, pts, value: Math.round(value * 10) / 10 });
   bpCurrentPts = [];
+  bpRenderQtyPanel();
   bpRedraw();
-  bpRenderPanel();
-}
-
-function bpRefreshCounts() {
-  const counts = {};
-  bpItems.filter(i => i.type === 'count').forEach(i => { counts[i.label] = (counts[i.label] || 0) + 1; });
-  bpItems.filter(i => i.type === 'count').forEach(i => { i.value = counts[i.label]; });
 }
 
 function bpRedraw() {
@@ -678,36 +898,41 @@ function bpRedraw() {
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
 
-  bpItems.forEach(item => {
+  bpMeasurements.forEach(m => {
+    const cond = bpGetCond(m.condId);
+    if (!cond) return;
+    const color = cond.color;
+    const unit = m.type === 'linear' ? (bpScalePxPerFt ? 'LF' : 'px') : (bpScalePxPerFt ? 'SF' : 'px²');
     ctx.save();
-    if (item.type === 'linear') {
-      ctx.strokeStyle = '#1e3a5f'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+
+    if (m.type === 'linear') {
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
       ctx.beginPath();
-      item.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      m.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
       ctx.stroke();
-      item.pts.forEach(p => {
-        ctx.fillStyle = '#1e3a5f';
+      m.pts.forEach(p => {
+        ctx.fillStyle = color;
         ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
       });
-      const mid = item.pts[Math.floor(item.pts.length / 2)];
-      ctx.fillStyle = '#1e3a5f'; ctx.font = 'bold 11px sans-serif';
-      ctx.fillText(`${item.value} ${item.unit}`, mid.x + 5, mid.y - 5);
+      const mid = m.pts[Math.floor(m.pts.length / 2)];
+      ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(`${m.value} ${unit}`, mid.x + 5, mid.y - 5);
 
-    } else if (item.type === 'area') {
-      ctx.fillStyle = 'rgba(249,115,22,.28)'; ctx.strokeStyle = '#f97316'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    } else if (m.type === 'area') {
+      ctx.fillStyle = color + '33'; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
       ctx.beginPath();
-      item.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      m.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
       ctx.closePath(); ctx.fill(); ctx.stroke();
-      const cx = item.pts.reduce((s, p) => s + p.x, 0) / item.pts.length;
-      const cy = item.pts.reduce((s, p) => s + p.y, 0) / item.pts.length;
-      ctx.fillStyle = '#c2410c'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(`${item.value} ${item.unit}`, cx, cy);
+      const cx = m.pts.reduce((s, p) => s + p.x, 0) / m.pts.length;
+      const cy = m.pts.reduce((s, p) => s + p.y, 0) / m.pts.length;
+      ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${m.value} ${unit}`, cx, cy);
 
-    } else if (item.type === 'count') {
-      ctx.fillStyle = '#7c3aed'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(item.pts[0].x, item.pts[0].y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else if (m.type === 'count') {
+      ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(m.pts[0].x, m.pts[0].y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(item.value, item.pts[0].x, item.pts[0].y);
+      ctx.fillText('✓', m.pts[0].x, m.pts[0].y);
     }
     ctx.restore();
   });
@@ -720,95 +945,29 @@ function bpRedraw() {
   }
 
   if (bpCurrentPts.length) {
+    const cond = bpGetActiveCond();
+    const color = cond ? cond.color : '#f97316';
     ctx.save();
-    ctx.strokeStyle = 'rgba(30,58,95,.6)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+    ctx.globalAlpha = 0.65;
     ctx.beginPath();
     bpCurrentPts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
     ctx.stroke();
+    ctx.globalAlpha = 1;
     bpCurrentPts.forEach(p => {
-      ctx.fillStyle = '#1e3a5f';
+      ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
     });
     ctx.restore();
   }
 }
 
-function bpRenderPanel() {
-  const body = gid('bp-panel-body');
-  gid('bp-item-count').textContent = bpItems.length ? `(${bpItems.length})` : '';
-  if (!bpItems.length) {
-    body.innerHTML = '<div style="color:var(--muted);font-size:.8rem;text-align:center;padding:1rem 0">No takeoff items yet.<br>Use the tools above to measure.</div>';
-    return;
-  }
-  body.innerHTML = bpItems.map(item => `
-    <div class="to-item">
-      <div class="to-item-top">
-        <span class="to-item-label">${item.label}</span>
-        <button class="to-item-del" onclick="bpDelItem(${item.id})" title="Delete">✕</button>
-      </div>
-      <span class="to-item-val">${item.value}</span><span class="to-item-unit">${item.unit}</span>
-      ${item.type !== 'count' ? `<br><button class="to-send-btn" onclick="bpSendToEst(${item.id})">→ Send to Estimator</button>` : ''}
-    </div>`).join('');
-}
-
-function bpDelItem(id) { bpItems = bpItems.filter(i => i.id !== id); bpRedraw(); bpRenderPanel(); }
-
-// ── SEND TO ESTIMATOR MODAL ────────────────────────────────────────
-let bpPendingId = null;
-
-function bpSendToEst(id) {
-  const item = bpItems.find(i => i.id === id);
-  if (!item) return;
-  bpPendingId = id;
-  gid('modal-meas-lbl').textContent = `${item.label} — ${item.value} ${item.unit}`;
-  gid('modal-div').innerHTML = Object.entries(CSI_ITEMS)
-    .map(([d, info]) => `<option value="${d}"${d === activeDiv ? ' selected' : ''}>${d} — ${info.name}</option>`)
-    .join('');
-  gid('modal-desc').value = item.label;
-  gid('modal-cost').value = '';
-  bpModalPickDiv(activeDiv);
-  gid('send-modal').style.display = 'flex';
-}
-
-function bpModalPickDiv(d) {
-  gid('modal-lib').innerHTML = CSI_ITEMS[d].items.map((li, idx) => `
-    <div class="modal-lib-item" id="mli-${idx}" onclick="bpModalPickLib('${d}',${idx})">
-      <span class="modal-lib-name">${li.desc}</span>
-      <span class="modal-lib-cost">${li.unit} &mdash; ${fmtC(li.cost)}</span>
-    </div>`).join('');
-  gid('modal-cost').value = '';
-  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach(el => el.classList.remove('selected'));
-}
-
-function bpModalPickLib(d, idx) {
-  const li = CSI_ITEMS[d].items[idx];
-  gid('modal-desc').value = li.desc;
-  gid('modal-cost').value = li.cost;
-  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach((el, i) => el.classList.toggle('selected', i === idx));
-}
-
-function bpModalConfirm() {
-  const pending = bpItems.find(i => i.id === bpPendingId);
-  if (!pending) { bpModalClose(); return; }
-  const div  = gid('modal-div').value;
-  const desc = gid('modal-desc').value.trim() || pending.label;
-  const cost = +(gid('modal-cost').value) || 0;
-  project.items.push({ id: project.nextId++, div, desc, unit: pending.unit, qty: pending.value, unitCost: cost, custom: true });
-  saveProject();
-  bpModalClose();
-  activeDiv = div;
-  showPage('estimator');
-  renderAll();
-}
-
-function bpModalClose() { gid('send-modal').style.display = 'none'; bpPendingId = null; }
-
 function bpClearAll() {
-  if (bpItems.length && !confirm('Clear all takeoff items?')) return;
-  bpItems = [];
+  if (bpMeasurements.length && !confirm('Clear all measurements? Conditions will be kept.')) return;
+  bpMeasurements = [];
   bpCurrentPts = [];
   bpRedraw();
-  bpRenderPanel();
+  bpRenderQtyPanel();
 }
 
 // ── INIT ───────────────────────────────────────────────────────────
@@ -822,4 +981,9 @@ function bpClearAll() {
   calcMarkup();
   calcBurden();
   renderBidCards();
+  bpRenderConditions();
+  bpUpdateActiveIndicator();
+  bpRenderQtyPanel();
+  bpRenderColorPicker();
+  bpSyncTypeButtons();
 })();

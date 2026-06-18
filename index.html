@@ -300,50 +300,75 @@
 
 <!-- BLUEPRINT -->
 <div class="page" id="pg-blueprint">
+  <!-- Toolbar -->
   <div class="bp-topbar">
-    <label class="tool-btn orange" for="bp-file-input" title="Open PDF">&#128194; Open PDF</label>
+    <label class="tool-btn orange" for="bp-file-input">&#128194; Open</label>
     <input type="file" id="bp-file-input" accept="application/pdf,image/*" style="display:none" onchange="bpLoadFile(this)">
     <div class="tb-sep"></div>
     <div class="page-ctrl">
       <button onclick="bpPrevPage()">&#8249;</button>
-      <span id="bp-page-lbl">— / —</span>
+      <span id="bp-page-lbl" style="color:rgba(255,255,255,.7);font-size:.8rem">— / —</span>
       <button onclick="bpNextPage()">&#8250;</button>
     </div>
     <div class="tb-sep"></div>
-    <button class="tool-btn" id="bt-select" onclick="bpSetTool('select')" title="Select / Pan">&#11036; Select</button>
-    <button class="tool-btn" id="bt-scale" onclick="bpSetScale()" title="Set scale">&#128207; Set Scale</button>
-    <button class="tool-btn" id="bt-linear" onclick="bpSetTool('linear')" title="Linear measurement">&#128208; Linear</button>
-    <button class="tool-btn" id="bt-area" onclick="bpSetTool('area')" title="Area measurement">&#11041; Area</button>
-    <button class="tool-btn" id="bt-count" onclick="bpSetTool('count')" title="Count items">&#10022; Count</button>
-    <div class="tb-sep"></div>
+    <button class="tool-btn" onclick="bpSetScale()">&#128207; Set Scale</button>
     <span class="scale-badge unset" id="bp-scale-badge">Scale: not set</span>
     <div class="tb-sep"></div>
-    <input type="range" id="bp-zoom" min="50" max="300" value="100" style="width:90px" oninput="bpZoom(+this.value)" title="Zoom">
-    <span id="bp-zoom-lbl" style="font-size:.76rem;color:var(--muted);min-width:36px">100%</span>
+    <div class="bp-active-cond" id="bp-active-cond">Select a condition to draw</div>
     <div class="tb-sep"></div>
-    <button class="tool-btn" onclick="bpClearAll()" style="color:#dc2626">&#10005; Clear</button>
+    <input type="range" id="bp-zoom" min="25" max="300" value="100" style="width:80px;accent-color:var(--orange)" oninput="bpZoom(+this.value)" title="Zoom">
+    <span id="bp-zoom-lbl" style="font-size:.76rem;color:rgba(255,255,255,.6);min-width:36px">100%</span>
+    <div class="tb-sep"></div>
+    <button class="tool-btn" onclick="bpClearAll()" style="color:#f87171">&#10005; Clear</button>
   </div>
+  <!-- 3-column body -->
   <div class="bp-body">
+    <!-- LEFT: Conditions -->
+    <div class="bp-cond-panel">
+      <div class="bp-cond-head">
+        <span class="bp-cond-head-lbl">Conditions</span>
+        <button class="bp-add-cond-btn" onclick="bpShowAddCond()">+ New</button>
+      </div>
+      <!-- Add condition form -->
+      <div class="bp-add-form" id="bp-add-cond-form" style="display:none">
+        <input type="text" id="bpnc-name" class="bp-cond-input" placeholder="Condition name…">
+        <div class="bp-type-row">
+          <button class="bp-type-btn active" id="bpnc-linear" onclick="bpSelectNewType('linear')">Linear</button>
+          <button class="bp-type-btn" id="bpnc-area" onclick="bpSelectNewType('area')">Area</button>
+          <button class="bp-type-btn" id="bpnc-count" onclick="bpSelectNewType('count')">Count</button>
+        </div>
+        <div class="bp-color-row" id="bpnc-colors"></div>
+        <div class="bp-add-form-btns">
+          <button class="btn btn-ghost" style="font-size:.74rem;padding:.22rem .5rem;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)" onclick="bpHideAddCond()">Cancel</button>
+          <button class="btn btn-orange" style="font-size:.74rem;padding:.22rem .5rem" onclick="bpConfirmAddCond()">Add</button>
+        </div>
+      </div>
+      <div class="bp-cond-list" id="bp-cond-list"></div>
+    </div>
+    <!-- CENTER: Canvas -->
     <div class="bp-canvas-area" id="bp-canvas-area">
       <div class="bp-upload" id="bp-upload">
         <div class="bp-upload-icon">&#128208;</div>
-        <p>Upload a PDF or image of your blueprint to start taking off quantities</p>
+        <p>Upload a PDF or image to begin your takeoff</p>
         <label for="bp-file-input">Choose File</label>
       </div>
       <div class="bp-canvas-wrap" id="bp-canvas-wrap" style="display:none">
         <canvas id="pdf-canvas"></canvas>
         <canvas id="markup-canvas"
-          onmousedown="bpMouseDown(event)"
           onmousemove="bpMouseMove(event)"
           ondblclick="bpDblClick(event)"
           onclick="bpClick(event)">
         </canvas>
       </div>
     </div>
-    <div class="bp-panel">
-      <div class="bp-panel-head">Takeoff Items <span id="bp-item-count" style="color:var(--orange)"></span></div>
-      <div class="bp-panel-body" id="bp-panel-body">
-        <div style="color:var(--muted);font-size:.8rem;text-align:center;padding:1rem 0">No takeoff items yet.<br>Use the tools above to measure.</div>
+    <!-- RIGHT: Quantities -->
+    <div class="bp-qty-panel">
+      <div class="bp-panel-head">Quantities</div>
+      <div class="bp-qty-list" id="bp-qty-list">
+        <div class="bp-qty-empty">No measurements yet.<br>Add conditions and draw on the blueprint.</div>
+      </div>
+      <div class="bp-qty-footer">
+        <button class="btn btn-orange" style="width:100%;font-size:.8rem" onclick="bpPushAllToEst()">Push All to Estimator</button>
       </div>
     </div>
   </div>
@@ -434,16 +459,40 @@
       </div>
       <p class="help-desc">Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements flow straight into the Project Estimator.</p>
       <ol class="help-steps">
-        <li>Click <strong>Open PDF</strong> to upload a drawing (PDF or image file).</li>
-        <li>Click <strong>Set Scale</strong>, then click two known points on the drawing and enter their real-world distance in feet. This calibrates all measurements.</li>
-        <li><strong>Linear tool:</strong> Click to place points along a path. Double-click to finish and record the length in LF.</li>
-        <li><strong>Area tool:</strong> Click to place corner points around the shape. Double-click to close and fill the polygon in SF.</li>
-        <li><strong>Count tool:</strong> Click once per item to place a numbered dot. Use for windows, doors, fixtures, etc.</li>
-        <li>Click <strong>→ Send to Estimator</strong> on any measurement to pick a division and unit cost, then add it directly to your estimate.</li>
+        <li>Click <strong>Open</strong> to upload a PDF or image of your drawing.</li>
+        <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet. This calibrates all measurements to real units (LF, SF).</li>
+        <li>In the <strong>Conditions panel</strong> (left), click <strong>+ New</strong> to create a named measurement type — give it a name (e.g. "Concrete Slab"), choose Linear, Area, or Count, and pick a color.</li>
+        <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close and fill. <strong>Count:</strong> single click per item.</li>
+        <li>Draw as many times as you want with the same condition — quantities accumulate automatically in the <strong>Quantities panel</strong> (right).</li>
+        <li>Use <strong>→ Est</strong> on a single condition or <strong>Push All to Estimator</strong> to assign divisions and unit costs, then send everything to the Project Estimator at once.</li>
         <li>Press <strong>Escape</strong> at any time to cancel an in-progress measurement.</li>
       </ol>
     </div>
 
+  </div>
+</div>
+
+<!-- PUSH ALL TO ESTIMATOR MODAL -->
+<div class="modal-overlay" id="push-all-modal" style="display:none" onclick="if(event.target===this)bpClosePushAll()">
+  <div class="modal-box push-all-box">
+    <div class="modal-head">
+      <span class="modal-title">Push Quantities to Estimator</span>
+      <button class="modal-close" onclick="bpClosePushAll()">&#10005;</button>
+    </div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:.85rem">Assign each condition to a CSI division and set a unit cost. All will be added to your estimate at once.</p>
+    <table class="pa-table">
+      <thead><tr>
+        <th>Condition</th>
+        <th>Quantity</th>
+        <th>Division</th>
+        <th>Unit Cost ($)</th>
+      </tr></thead>
+      <tbody id="push-all-rows"></tbody>
+    </table>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="bpClosePushAll()">Cancel</button>
+      <button class="btn btn-orange" onclick="bpPushAllConfirm()">Add All to Estimator</button>
+    </div>
   </div>
 </div>
 
