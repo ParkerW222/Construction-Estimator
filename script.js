@@ -28,6 +28,7 @@ function showPage(p) {
   document.querySelectorAll('.nav-links a').forEach(el => el.classList.remove('active'));
   gid('pg-' + p).classList.add('active');
   gid('nl-' + p).classList.add('active');
+  if (p === 'changes') renderCOPage();
 }
 
 // ── ESTIMATOR ──────────────────────────────────────────────────────
@@ -224,11 +225,14 @@ document.addEventListener('keydown', e => {
 
 function newProject() {
   if (!confirm('Start a new project? Current items will be cleared.')) return;
-  project = { name: 'New Project', region: 'midwest', items: [], nextId: 1 };
+  project = { name: 'New Project', region: 'midwest', items: [], nextId: 1, changeOrders: [], nextCoId: 1, rfis: [], nextRfiId: 1, submittals: [], nextSubId: 1 };
   gid('proj-name').value = 'New Project';
   gid('proj-region').value = 'midwest';
   activeDiv = '03';
   renderAll();
+  renderCOPage();
+  renderRFIPane();
+  renderSubPane();
   saveProject();
 }
 
@@ -245,6 +249,12 @@ function loadProject() {
       gid('proj-region').value = project.region || 'midwest';
     }
   } catch (e) {}
+  project.changeOrders = project.changeOrders || [];
+  project.nextCoId    = project.nextCoId    || 1;
+  project.rfis        = project.rfis        || [];
+  project.nextRfiId   = project.nextRfiId   || 1;
+  project.submittals  = project.submittals  || [];
+  project.nextSubId   = project.nextSubId   || 1;
 }
 
 // ── BUDGET CALCULATOR ──────────────────────────────────────────────
@@ -970,6 +980,252 @@ function bpClearAll() {
   bpRenderQtyPanel();
 }
 
+// ── CHANGE ORDERS ─────────────────────────────────────────────────
+function getBidPrice() {
+  const direct = grandTotal();
+  const oh = direct * estMu.oh / 100;
+  const pr = (direct + oh) * estMu.profit / 100;
+  const co = (direct + oh + pr) * estMu.cont / 100;
+  return direct + oh + pr + co;
+}
+
+function renderCOPage() {
+  const base      = getBidPrice();
+  const approved  = project.changeOrders.filter(c => c.status === 'approved');
+  const pending   = project.changeOrders.filter(c => c.status === 'pending');
+  const appTotal  = approved.reduce((s, c) => s + c.cost, 0);
+  const penTotal  = pending.reduce((s, c) => s + c.cost, 0);
+  const revised   = base + appTotal;
+
+  const bEl = gid('co-base');        if (bEl) bEl.textContent = fmt(base);
+  const aEl = gid('co-approved-amt'); if (aEl) aEl.textContent = (appTotal >= 0 ? '+' : '') + fmt(appTotal);
+  const acEl = gid('co-approved-count'); if (acEl) acEl.textContent = approved.length + ' approved';
+  const rEl = gid('co-revised');      if (rEl) rEl.textContent = fmt(revised);
+  const pEl = gid('co-pending-amt');  if (pEl) pEl.textContent = (penTotal >= 0 ? '+' : '') + fmt(penTotal);
+  const pcEl = gid('co-pending-count'); if (pcEl) pcEl.textContent = pending.length + ' awaiting approval';
+
+  const tbody = gid('co-tbody');
+  if (!tbody) return;
+  if (!project.changeOrders.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No change orders yet. Click <strong>+ Add Change Order</strong> to begin.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = project.changeOrders.map(c => `
+    <tr>
+      <td style="white-space:nowrap;font-weight:700">${c.num}</td>
+      <td style="white-space:nowrap;color:var(--muted)">${c.date}</td>
+      <td>
+        <strong style="font-size:.85rem">${c.desc}</strong>
+        ${c.scope ? `<div style="font-size:.75rem;color:var(--muted);margin-top:.1rem">${c.scope}</div>` : ''}
+      </td>
+      <td style="text-align:right;font-weight:700;font-size:.95rem;color:${c.cost >= 0 ? '#16a34a' : '#dc2626'};white-space:nowrap">
+        ${c.cost >= 0 ? '+' : ''}${fmt(c.cost)}
+      </td>
+      <td><span class="st-badge st-${c.status}">${coLabel(c.status)}</span></td>
+      <td style="white-space:nowrap">
+        <select onchange="updateCOStatus(${c.id},this.value)" style="font-size:.75rem;border:1px solid var(--border);border-radius:4px;padding:.15rem .3rem;margin-right:.25rem">
+          <option value="pending"${c.status==='pending'?' selected':''}>Pending</option>
+          <option value="approved"${c.status==='approved'?' selected':''}>Approved</option>
+          <option value="rejected"${c.status==='rejected'?' selected':''}>Rejected</option>
+        </select>
+        <button onclick="deleteCO(${c.id})" title="Delete" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:.1rem .2rem">✕</button>
+      </td>
+    </tr>`).join('');
+}
+
+function coLabel(s) { return s === 'approved' ? 'Approved' : s === 'rejected' ? 'Rejected' : 'Pending'; }
+
+function showAddCOForm() {
+  gid('co-add-form').style.display = 'block';
+  const t = new Date();
+  gid('co-f-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  gid('co-f-desc').focus();
+}
+function hideAddCOForm() {
+  gid('co-add-form').style.display = 'none';
+  ['co-f-desc','co-f-scope','co-f-cost'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
+}
+function submitCO() {
+  const desc = (gid('co-f-desc').value || '').trim();
+  if (!desc) { gid('co-f-desc').focus(); return; }
+  const id = project.nextCoId++;
+  project.changeOrders.push({
+    id,
+    num:   'CO-' + String(id).padStart(3, '0'),
+    date:  gid('co-f-date').value || '—',
+    desc,
+    scope: (gid('co-f-scope').value || '').trim(),
+    cost:  +(gid('co-f-cost').value) || 0,
+    status: 'pending',
+  });
+  saveProject();
+  hideAddCOForm();
+  renderCOPage();
+}
+function deleteCO(id) {
+  if (!confirm('Delete this change order?')) return;
+  project.changeOrders = project.changeOrders.filter(c => c.id !== id);
+  saveProject();
+  renderCOPage();
+}
+function updateCOStatus(id, status) {
+  const c = project.changeOrders.find(c => c.id === id);
+  if (c) { c.status = status; saveProject(); renderCOPage(); }
+}
+
+// ── PROJECT LOGS ──────────────────────────────────────────────────
+function switchLogsTab(btn, paneId) {
+  gid('pg-logs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  gid('pg-logs').querySelectorAll('.tab-pane').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
+  btn.classList.add('active');
+  const pane = gid(paneId);
+  pane.classList.add('active');
+  pane.style.display = 'block';
+}
+
+// RFI
+function renderRFIPane() {
+  const tbody = gid('rfi-tbody');
+  if (!tbody) return;
+  if (!project.rfis.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No RFIs logged yet. Click <strong>+ Log RFI</strong> to begin.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = project.rfis.map(r => `
+    <tr>
+      <td style="white-space:nowrap;font-weight:700">${r.num}</td>
+      <td style="white-space:nowrap;color:var(--muted)">${r.date}</td>
+      <td><strong style="font-size:.85rem">${r.desc}</strong></td>
+      <td>${r.sentTo || '—'}</td>
+      <td style="white-space:nowrap;color:${r.dueDate ? 'var(--text)' : 'var(--muted)'}">${r.dueDate || '—'}</td>
+      <td><span class="st-badge st-${r.status}">${rfiLabel(r.status)}</span></td>
+      <td style="white-space:nowrap">
+        <select onchange="updateRFIStatus(${r.id},this.value)" style="font-size:.75rem;border:1px solid var(--border);border-radius:4px;padding:.15rem .3rem;margin-right:.25rem">
+          <option value="open"${r.status==='open'?' selected':''}>Open</option>
+          <option value="answered"${r.status==='answered'?' selected':''}>Answered</option>
+          <option value="hold"${r.status==='hold'?' selected':''}>On Hold</option>
+        </select>
+        <button onclick="deleteRFI(${r.id})" title="Delete" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:.1rem .2rem">✕</button>
+      </td>
+    </tr>`).join('');
+}
+function rfiLabel(s) { return s === 'answered' ? 'Answered' : s === 'hold' ? 'On Hold' : 'Open'; }
+
+function showAddRFIForm() {
+  gid('rfi-add-form').style.display = 'block';
+  const t = new Date();
+  gid('rfi-f-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  gid('rfi-f-desc').focus();
+}
+function hideAddRFIForm() {
+  gid('rfi-add-form').style.display = 'none';
+  ['rfi-f-desc','rfi-f-sentto','rfi-f-due'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
+}
+function submitRFI() {
+  const desc = (gid('rfi-f-desc').value || '').trim();
+  if (!desc) { gid('rfi-f-desc').focus(); return; }
+  const id = project.nextRfiId++;
+  project.rfis.push({
+    id,
+    num:     'RFI-' + String(id).padStart(3, '0'),
+    date:    gid('rfi-f-date').value || '—',
+    desc,
+    sentTo:  (gid('rfi-f-sentto').value || '').trim(),
+    dueDate: gid('rfi-f-due').value || '',
+    status:  'open',
+  });
+  saveProject();
+  hideAddRFIForm();
+  renderRFIPane();
+}
+function deleteRFI(id) {
+  if (!confirm('Delete this RFI?')) return;
+  project.rfis = project.rfis.filter(r => r.id !== id);
+  saveProject();
+  renderRFIPane();
+}
+function updateRFIStatus(id, status) {
+  const r = project.rfis.find(r => r.id === id);
+  if (r) { r.status = status; saveProject(); renderRFIPane(); }
+}
+
+// Submittals
+function renderSubPane() {
+  const tbody = gid('sub-tbody');
+  if (!tbody) return;
+  if (!project.submittals.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No submittals logged yet. Click <strong>+ Log Submittal</strong> to begin.</td></tr>`;
+    return;
+  }
+  const subLabel = s => ({'pending':'Pending','approved':'Approved','approved-noted':'Approved as Noted','revise':'Revise & Resubmit','rejected':'Rejected'}[s] || s);
+  tbody.innerHTML = project.submittals.map(s => `
+    <tr>
+      <td style="white-space:nowrap;font-weight:700">${s.num}</td>
+      <td style="font-size:.78rem;color:var(--muted)">${s.spec || '—'}</td>
+      <td><strong style="font-size:.85rem">${s.desc}</strong></td>
+      <td>${s.submittedBy || '—'}</td>
+      <td style="white-space:nowrap;color:var(--muted)">${s.date || '—'}</td>
+      <td><span class="st-badge st-${s.status}">${subLabel(s.status)}</span></td>
+      <td style="white-space:nowrap">
+        <select onchange="updateSubStatus(${s.id},this.value)" style="font-size:.75rem;border:1px solid var(--border);border-radius:4px;padding:.15rem .3rem;margin-right:.25rem">
+          <option value="pending"${s.status==='pending'?' selected':''}>Pending</option>
+          <option value="approved"${s.status==='approved'?' selected':''}>Approved</option>
+          <option value="approved-noted"${s.status==='approved-noted'?' selected':''}>Approved as Noted</option>
+          <option value="revise"${s.status==='revise'?' selected':''}>Revise &amp; Resubmit</option>
+          <option value="rejected"${s.status==='rejected'?' selected':''}>Rejected</option>
+        </select>
+        <button onclick="deleteSub(${s.id})" title="Delete" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:.1rem .2rem">✕</button>
+      </td>
+    </tr>`).join('');
+}
+
+function showAddSubForm() {
+  const specEl = gid('sub-f-spec');
+  if (specEl && specEl.options.length <= 1) {
+    Object.entries(CSI_ITEMS).forEach(([d, info]) => {
+      const opt = document.createElement('option');
+      opt.value = `Div ${d} — ${info.name}`;
+      opt.textContent = `${d} — ${info.name}`;
+      specEl.appendChild(opt);
+    });
+  }
+  gid('sub-add-form').style.display = 'block';
+  const t = new Date();
+  gid('sub-f-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  gid('sub-f-desc').focus();
+}
+function hideAddSubForm() {
+  gid('sub-add-form').style.display = 'none';
+  ['sub-f-desc','sub-f-by'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
+}
+function submitSub() {
+  const desc = (gid('sub-f-desc').value || '').trim();
+  if (!desc) { gid('sub-f-desc').focus(); return; }
+  const id = project.nextSubId++;
+  project.submittals.push({
+    id,
+    num:         'SUB-' + String(id).padStart(3, '0'),
+    spec:        gid('sub-f-spec').value || '',
+    desc,
+    submittedBy: (gid('sub-f-by').value || '').trim(),
+    date:        gid('sub-f-date').value || '—',
+    status:      'pending',
+  });
+  saveProject();
+  hideAddSubForm();
+  renderSubPane();
+}
+function deleteSub(id) {
+  if (!confirm('Delete this submittal?')) return;
+  project.submittals = project.submittals.filter(s => s.id !== id);
+  saveProject();
+  renderSubPane();
+}
+function updateSubStatus(id, status) {
+  const s = project.submittals.find(s => s.id === id);
+  if (s) { s.status = status; saveProject(); renderSubPane(); }
+}
+
 // ── INIT ───────────────────────────────────────────────────────────
 (function init() {
   const t = new Date();
@@ -986,4 +1242,7 @@ function bpClearAll() {
   bpRenderQtyPanel();
   bpRenderColorPicker();
   bpSyncTypeButtons();
+  renderCOPage();
+  renderRFIPane();
+  renderSubPane();
 })();

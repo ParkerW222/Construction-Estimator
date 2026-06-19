@@ -17,6 +17,8 @@
       <a href="#" onclick="showPage('bids');return false" id="nl-bids">Bid Comparison</a>
       <a href="#" onclick="showPage('markup');return false" id="nl-markup">Markup &amp; Overhead</a>
       <a href="#" onclick="showPage('blueprint');return false" id="nl-blueprint">Blueprint Takeoff</a>
+      <a href="#" onclick="showPage('changes');return false" id="nl-changes">Change Orders</a>
+      <a href="#" onclick="showPage('logs');return false" id="nl-logs">Project Logs</a>
     </div>
     <button class="help-btn" onclick="showHelp()" title="How to use BuildCalc">?</button>
   </div>
@@ -374,6 +376,182 @@
   </div>
 </div>
 
+<!-- CHANGE ORDERS -->
+<div class="page" id="pg-changes">
+  <div class="pg-inner">
+    <div class="pg-head">
+      <h1>Change Orders</h1>
+      <p>Track scope and cost changes against the original contract. Both parties must sign before work proceeds on a change.</p>
+    </div>
+    <div class="co-sum-grid">
+      <div class="co-sum-card">
+        <div class="co-sum-lbl">Base Contract</div>
+        <div class="co-sum-val" id="co-base">$0</div>
+        <div class="co-sum-sub">From Project Estimator</div>
+      </div>
+      <div class="co-sum-card accent">
+        <div class="co-sum-lbl">Approved COs</div>
+        <div class="co-sum-val" id="co-approved-amt">+$0</div>
+        <div class="co-sum-sub" id="co-approved-count">0 approved</div>
+      </div>
+      <div class="co-sum-card highlight">
+        <div class="co-sum-lbl">Revised Contract</div>
+        <div class="co-sum-val" id="co-revised">$0</div>
+        <div class="co-sum-sub">Base + approved COs</div>
+      </div>
+      <div class="co-sum-card soft">
+        <div class="co-sum-lbl">Pending</div>
+        <div class="co-sum-val" id="co-pending-amt">$0</div>
+        <div class="co-sum-sub" id="co-pending-count">0 awaiting approval</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        Change Order Log
+        <button class="btn btn-orange" onclick="showAddCOForm()">+ Add Change Order</button>
+      </div>
+      <div id="co-add-form" style="display:none;background:var(--bg);border-radius:8px;padding:1rem;margin-bottom:1rem">
+        <div class="form-row cols-3">
+          <div>
+            <label class="fl">Description</label>
+            <input type="text" id="co-f-desc" placeholder="e.g. Add exterior lighting" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+          </div>
+          <div>
+            <label class="fl">Cost Impact ($)</label>
+            <input type="number" id="co-f-cost" step="0.01" placeholder="0.00" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+          </div>
+          <div>
+            <label class="fl">Date</label>
+            <input type="date" id="co-f-date" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+          </div>
+        </div>
+        <div style="margin-top:.6rem">
+          <label class="fl">Scope Summary <span style="font-weight:400;color:var(--muted)">(optional — brief description of what changed)</span></label>
+          <input type="text" id="co-f-scope" placeholder="e.g. Owner requested 6 LED pole lights along north parking lot perimeter" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem">
+          <button class="btn btn-ghost" onclick="hideAddCOForm()">Cancel</button>
+          <button class="btn btn-orange" onclick="submitCO()">Add Change Order</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="pa-table">
+          <thead><tr>
+            <th>CO #</th><th>Date</th><th>Description / Scope</th><th style="text-align:right">Cost Impact</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="co-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT LOGS -->
+<div class="page" id="pg-logs">
+  <div class="pg-inner">
+    <div class="pg-head">
+      <h1>Project Logs</h1>
+      <p>Track RFIs and submittals throughout the project lifecycle. Both are formal written records — responses become part of the contract.</p>
+    </div>
+    <div class="tab-bar" style="border-bottom:2px solid var(--border);margin-bottom:1.2rem">
+      <button class="tab-btn active" onclick="switchLogsTab(this,'rfi-pane')">RFI Log</button>
+      <button class="tab-btn" onclick="switchLogsTab(this,'sub-pane')">Submittal Log</button>
+    </div>
+
+    <!-- RFI PANE -->
+    <div class="tab-pane active" id="rfi-pane">
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          Request for Information (RFI) Log
+          <button class="btn btn-orange" onclick="showAddRFIForm()">+ Log RFI</button>
+        </div>
+        <div class="co-context-note">
+          An RFI is a formal written question to the architect or engineer when drawings or specs are unclear or conflicting. The written response is part of the contract record and may trigger a change order.
+        </div>
+        <div id="rfi-add-form" style="display:none;background:var(--bg);border-radius:8px;padding:1rem;margin-bottom:1rem">
+          <div class="form-row cols-3">
+            <div>
+              <label class="fl">Description / Question</label>
+              <input type="text" id="rfi-f-desc" placeholder="e.g. Beam elevation conflict at grid B-4" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+            </div>
+            <div>
+              <label class="fl">Sent To</label>
+              <input type="text" id="rfi-f-sentto" placeholder="e.g. Architect" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+            </div>
+            <div>
+              <label class="fl">Date Submitted</label>
+              <input type="date" id="rfi-f-date" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+            </div>
+          </div>
+          <div style="margin-top:.6rem;max-width:280px">
+            <label class="fl">Response Due Date <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <input type="date" id="rfi-f-due" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+          </div>
+          <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem">
+            <button class="btn btn-ghost" onclick="hideAddRFIForm()">Cancel</button>
+            <button class="btn btn-orange" onclick="submitRFI()">Log RFI</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="pa-table">
+            <thead><tr>
+              <th>RFI #</th><th>Date</th><th>Description</th><th>Sent To</th><th>Due Date</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="rfi-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUBMITTAL PANE -->
+    <div class="tab-pane" id="sub-pane" style="display:none">
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          Submittal Log
+          <button class="btn btn-orange" onclick="showAddSubForm()">+ Log Submittal</button>
+        </div>
+        <div class="co-context-note">
+          A submittal is product data, a shop drawing, or a material sample submitted to the design team for approval before ordering or installation. <strong>Revise &amp; Resubmit</strong> means the material doesn't meet spec and must be reselected.
+        </div>
+        <div id="sub-add-form" style="display:none;background:var(--bg);border-radius:8px;padding:1rem;margin-bottom:1rem">
+          <div class="form-row cols-3">
+            <div>
+              <label class="fl">Description</label>
+              <input type="text" id="sub-f-desc" placeholder="e.g. Hollow metal doors, product data" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+            </div>
+            <div>
+              <label class="fl">Spec Section</label>
+              <select id="sub-f-spec" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+                <option value="">— Select division —</option>
+              </select>
+            </div>
+            <div>
+              <label class="fl">Date Submitted</label>
+              <input type="date" id="sub-f-date" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+            </div>
+          </div>
+          <div style="margin-top:.6rem;max-width:340px">
+            <label class="fl">Submitted By <span style="font-weight:400;color:var(--muted)">(optional — e.g. Mechanical Sub)</span></label>
+            <input type="text" id="sub-f-by" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+          </div>
+          <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem">
+            <button class="btn btn-ghost" onclick="hideAddSubForm()">Cancel</button>
+            <button class="btn btn-orange" onclick="submitSub()">Log Submittal</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="pa-table">
+            <thead><tr>
+              <th>Sub #</th><th>Spec Section</th><th>Description</th><th>Submitted By</th><th>Date</th><th>Status</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="sub-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- HELP MODAL -->
 <div class="modal-overlay" id="help-modal" style="display:none" onclick="if(event.target===this)closeHelp()">
   <div class="modal-box help-box">
@@ -452,7 +630,7 @@
       </ol>
     </div>
 
-    <div class="help-tool" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+    <div class="help-tool">
       <div class="help-tool-head">
         <span class="help-num">6</span>
         <div><div class="help-tool-name">Blueprint Takeoff</div><div class="help-tool-sub">Measure directly on uploaded PDFs and drawings</div></div>
@@ -466,6 +644,34 @@
         <li>Draw as many times as you want with the same condition — quantities accumulate automatically in the <strong>Quantities panel</strong> (right).</li>
         <li>Use <strong>→ Est</strong> on a single condition or <strong>Push All to Estimator</strong> to assign divisions and unit costs, then send everything to the Project Estimator at once.</li>
         <li>Press <strong>Escape</strong> at any time to cancel an in-progress measurement.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool">
+      <div class="help-tool-head">
+        <span class="help-num">7</span>
+        <div><div class="help-tool-name">Change Orders</div><div class="help-tool-sub">Track scope and cost changes against the original contract</div></div>
+      </div>
+      <p class="help-desc">Change orders are written amendments to the original contract that document changes in scope, cost, or schedule. Both parties must sign before work on a change proceeds. This tool tracks every CO against your estimator's base contract value and shows the running revised total.</p>
+      <ol class="help-steps">
+        <li>Navigate to <strong>Change Orders</strong> in the nav — the <strong>Base Contract</strong> value pulls automatically from your Project Estimator bid price.</li>
+        <li>Click <strong>+ Add Change Order</strong>, enter a description, cost impact (can be negative), date, and optional scope summary.</li>
+        <li>New COs start as <strong>Pending</strong>. Use the status dropdown on each row to mark them <strong>Approved</strong> or <strong>Rejected</strong>.</li>
+        <li>Only approved COs add to the <strong>Revised Contract</strong> total. Pending amounts are shown separately so you can see your exposure.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+      <div class="help-tool-head">
+        <span class="help-num">8</span>
+        <div><div class="help-tool-name">Project Logs</div><div class="help-tool-sub">RFI and submittal tracking throughout the project lifecycle</div></div>
+      </div>
+      <p class="help-desc">Two formal document logs in one place. RFIs (Requests for Information) document questions sent to the design team when drawings are unclear. Submittals are product data and shop drawings submitted for approval before materials are ordered. Both are written records — responses become part of the contract.</p>
+      <ol class="help-steps">
+        <li><strong>RFI Log:</strong> Click <strong>+ Log RFI</strong>, enter the question, who it was sent to, and the due date. Update status to <strong>Answered</strong> when the written response comes back.</li>
+        <li><strong>Submittal Log:</strong> Click <strong>+ Log Submittal</strong>, enter the item description, select a CSI spec section, and the date submitted. Update to <strong>Approved</strong>, <strong>Approved as Noted</strong>, or <strong>Revise &amp; Resubmit</strong> as the design team responds.</li>
+        <li>Use the tabs at the top to switch between the RFI log and the Submittal log.</li>
+        <li>Both logs share the same project data as the estimator — a <strong>Revise &amp; Resubmit</strong> on a material may trigger a change order worth logging there too.</li>
       </ol>
     </div>
 
