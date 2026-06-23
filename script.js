@@ -35,6 +35,7 @@ function showPage(p) {
   if (toolsPages.includes(p) && toolsBtn) toolsBtn.classList.add('active');
   closeToolsMenu();
   if (p === 'changes') renderCOPage();
+  if (p === 'schedule') autoSched();
   if (p === 'blueprint') {
     const bpn = gid('bp-proj-name');
     if (bpn) bpn.value = project.name || 'New Project';
@@ -367,7 +368,14 @@ function autoSched() {
   function addW(d, w) { const r = new Date(d); r.setDate(r.getDate() + w * 7); return r; }
   function fmtD(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 
-  const end = addW(start, wks);
+  // Pull approved CO schedule days
+  const coDays = project.changeOrders
+    .filter(c => c.status === 'approved')
+    .reduce((s, c) => s + (c.days || 0), 0);
+
+  // Completion dates include CO extension
+  const end = new Date(start);
+  end.setDate(end.getDate() + wks * 7 + coDays);
   const final = addW(end, 2);
 
   gid('s-summary').style.display = 'block';
@@ -377,6 +385,22 @@ function autoSched() {
   gid('s-end').textContent = fmtD(end);
   gid('s-final').textContent = fmtD(final);
 
+  // Show CO extension row in summary
+  const coRow = gid('s-co-row');
+  const coDaysEl = gid('s-co-days');
+  if (coRow) {
+    if (coDays !== 0) {
+      coRow.style.display = '';
+      if (coDaysEl) coDaysEl.textContent = (coDays >= 0 ? '+' : '') + coDays + ' days';
+    } else {
+      coRow.style.display = 'none';
+    }
+  }
+
+  // Build Gantt — scale base phases if CO days extend the timeline
+  const totalDays = wks * 7 + (coDays > 0 ? coDays : 0);
+  const basePct = coDays > 0 ? (wks * 7) / totalDays : 1;
+
   let cum = 0;
   const cols = '200px 1fr 58px';
   let html = `<div class="gantt-hdr" style="grid-template-columns:${cols}"><span>Phase</span><span>Timeline</span><span style="text-align:right">Dur.</span></div>`;
@@ -384,11 +408,21 @@ function autoSched() {
     const phWks = Math.round(wks * ph.pct);
     html += `<div class="gantt-row" style="grid-template-columns:${cols}">
       <span class="gantt-label">${ph.name}</span>
-      <div class="gantt-track"><div class="gantt-bar" style="left:${cum * 100}%;width:${ph.pct * 100}%"></div></div>
+      <div class="gantt-track"><div class="gantt-bar" style="left:${cum * basePct * 100}%;width:${ph.pct * basePct * 100}%"></div></div>
       <span class="gantt-dur">${phWks}w</span>
     </div>`;
     cum += ph.pct;
   });
+
+  if (coDays > 0) {
+    const coPct = 1 - basePct;
+    html += `<div class="gantt-row" style="grid-template-columns:${cols}">
+      <span class="gantt-label" style="color:var(--orange);font-weight:600">CO Extension</span>
+      <div class="gantt-track"><div class="gantt-bar" style="left:${basePct * 100}%;width:${coPct * 100}%;background:rgba(249,115,22,.65)"></div></div>
+      <span class="gantt-dur" style="color:var(--orange)">${coDays}d</span>
+    </div>`;
+  }
+
   gid('s-gantt').innerHTML = html;
 }
 
@@ -1057,10 +1091,22 @@ function renderCOPage() {
   const pEl = gid('co-pending-amt');  if (pEl) pEl.textContent = (penTotal >= 0 ? '+' : '') + fmt(penTotal);
   const pcEl = gid('co-pending-count'); if (pcEl) pcEl.textContent = pending.length + ' awaiting approval';
 
+  const schedDays = approved.reduce((s, c) => s + (c.days || 0), 0);
+  const banner = gid('co-sched-banner');
+  if (banner) {
+    if (schedDays !== 0) {
+      banner.style.display = 'flex';
+      gid('co-sched-days').textContent = (schedDays >= 0 ? '+' : '') + schedDays + ' days';
+      gid('co-sched-count').textContent = approved.filter(c => c.days).length;
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
   const tbody = gid('co-tbody');
   if (!tbody) return;
   if (!project.changeOrders.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No change orders yet. Click <strong>+ Add Change Order</strong> to begin.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No change orders yet. Click <strong>+ Add Change Order</strong> to begin.</td></tr>`;
     return;
   }
   tbody.innerHTML = project.changeOrders.map(c => `
@@ -1073,6 +1119,9 @@ function renderCOPage() {
       </td>
       <td style="text-align:right;font-weight:700;font-size:.95rem;color:${c.cost >= 0 ? '#16a34a' : '#dc2626'};white-space:nowrap">
         ${c.cost >= 0 ? '+' : ''}${fmt(c.cost)}
+      </td>
+      <td style="text-align:right;font-size:.85rem;font-weight:600;white-space:nowrap;color:${c.days > 0 ? 'var(--orange)' : c.days < 0 ? '#16a34a' : 'var(--muted)'}">
+        ${c.days ? (c.days > 0 ? '+' : '') + c.days + 'd' : '—'}
       </td>
       <td><span class="st-badge st-${c.status}">${coLabel(c.status)}</span></td>
       <td style="white-space:nowrap">
@@ -1096,7 +1145,7 @@ function showAddCOForm() {
 }
 function hideAddCOForm() {
   gid('co-add-form').style.display = 'none';
-  ['co-f-desc','co-f-scope','co-f-cost'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
+  ['co-f-desc','co-f-scope','co-f-cost','co-f-days'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
 }
 function submitCO() {
   const desc = (gid('co-f-desc').value || '').trim();
@@ -1109,6 +1158,7 @@ function submitCO() {
     desc,
     scope: (gid('co-f-scope').value || '').trim(),
     cost:  +(gid('co-f-cost').value) || 0,
+    days:  +(gid('co-f-days').value) || 0,
     status: 'pending',
   });
   saveProject();

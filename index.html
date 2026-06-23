@@ -182,7 +182,8 @@
         </div>
         <div class="card" id="s-summary" style="display:none">
           <div class="card-title">Summary</div>
-          <div class="ba-row"><span class="ba-label">Total Duration</span><span class="ba-val" id="s-dur">—</span></div>
+          <div class="ba-row"><span class="ba-label">Base Duration</span><span class="ba-val" id="s-dur">—</span></div>
+          <div class="ba-row" id="s-co-row" style="display:none"><span class="ba-label" style="color:var(--orange)">CO Extension</span><span class="ba-val" id="s-co-days" style="color:var(--orange)">—</span></div>
           <div class="ba-row"><span class="ba-label">Start Date</span><span class="ba-val" id="s-start-lbl">—</span></div>
           <div class="ba-row"><span class="ba-label">Substantial Completion</span><span class="ba-val" id="s-end">—</span></div>
           <div class="ba-row"><span class="ba-label">Final Completion</span><span class="ba-val" id="s-final">—</span></div>
@@ -424,13 +425,21 @@
         <div class="co-sum-sub" id="co-pending-count">0 awaiting approval</div>
       </div>
     </div>
+    <div class="co-sched-banner" id="co-sched-banner" style="display:none">
+      <span class="co-sched-banner-icon">&#128197;</span>
+      <div>
+        <div class="co-sched-banner-val"><span id="co-sched-days">+0 days</span> approved schedule impact</div>
+        <div class="co-sched-banner-sub">from <span id="co-sched-count">0</span> change order(s) &mdash; reflected in Schedule Estimator</div>
+      </div>
+      <button class="btn btn-ghost" onclick="showPage('schedule')" style="margin-left:auto;font-size:.8rem;white-space:nowrap">View Schedule &#8594;</button>
+    </div>
     <div class="card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
         Change Order Log
         <button class="btn btn-orange" onclick="showAddCOForm()">+ Add Change Order</button>
       </div>
       <div id="co-add-form" style="display:none;background:var(--bg);border-radius:8px;padding:1rem;margin-bottom:1rem">
-        <div class="form-row cols-3">
+        <div class="form-row" style="grid-template-columns:2fr 1fr 1fr 1fr;gap:.75rem">
           <div>
             <label class="fl">Description</label>
             <input type="text" id="co-f-desc" placeholder="e.g. Add exterior lighting" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
@@ -438,6 +447,10 @@
           <div>
             <label class="fl">Cost Impact ($)</label>
             <input type="number" id="co-f-cost" step="0.01" placeholder="0.00" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
+          </div>
+          <div>
+            <label class="fl">Schedule Impact <span style="font-weight:400;color:var(--muted)">(days)</span></label>
+            <input type="number" id="co-f-days" step="1" placeholder="0" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
           </div>
           <div>
             <label class="fl">Date</label>
@@ -456,7 +469,7 @@
       <div style="overflow-x:auto">
         <table class="pa-table">
           <thead><tr>
-            <th>CO #</th><th>Date</th><th>Description / Scope</th><th style="text-align:right">Cost Impact</th><th>Status</th><th>Actions</th>
+            <th>CO #</th><th>Date</th><th>Description / Scope</th><th style="text-align:right">Cost Impact</th><th style="text-align:right">Sched. Days</th><th>Status</th><th>Actions</th>
           </tr></thead>
           <tbody id="co-tbody"></tbody>
         </table>
