@@ -1029,6 +1029,8 @@ function bpClearAll() {
   bpCurrentPts = [];
   bpRedraw();
   bpRenderQtyPanel();
+  const fileLbl = gid('bp-file-lbl');
+  if (fileLbl) { fileLbl.style.display = 'none'; fileLbl.textContent = ''; }
 }
 
 // ── CHANGE ORDERS ─────────────────────────────────────────────────
