@@ -11,12 +11,17 @@
   <div class="nav-inner">
     <a href="#" class="logo" onclick="return false"><div class="logo-mark">BC</div>BuildCalc</a>
     <div class="nav-links">
-      <a href="#" onclick="showPage('estimator');return false" id="nl-estimator" class="active">Project Estimator</a>
-      <a href="#" onclick="showPage('budget');return false" id="nl-budget">Budget Calculator</a>
-      <a href="#" onclick="showPage('schedule');return false" id="nl-schedule">Schedule Estimator</a>
-      <a href="#" onclick="showPage('bids');return false" id="nl-bids">Bid Comparison</a>
-      <a href="#" onclick="showPage('markup');return false" id="nl-markup">Markup &amp; Overhead</a>
-      <a href="#" onclick="showPage('blueprint');return false" id="nl-blueprint">Blueprint Takeoff</a>
+      <a href="#" onclick="showPage('blueprint');return false" id="nl-blueprint" class="active">Blueprint Takeoff</a>
+      <a href="#" onclick="showPage('estimator');return false" id="nl-estimator">Project Estimator</a>
+      <div class="nav-dropdown-wrap">
+        <button class="nav-dd-btn" id="nl-tools-btn" onclick="toggleToolsMenu(event)">Tools &#9660;</button>
+        <div class="nav-dd-menu" id="tools-menu">
+          <a href="#" id="nl-budget" onclick="showPage('budget');return false">Budget Calculator</a>
+          <a href="#" id="nl-schedule" onclick="showPage('schedule');return false">Schedule Estimator</a>
+          <a href="#" id="nl-bids" onclick="showPage('bids');return false">Bid Comparison</a>
+          <a href="#" id="nl-markup" onclick="showPage('markup');return false">Markup &amp; Overhead</a>
+        </div>
+      </div>
       <div class="nav-sep"></div>
       <a href="#" onclick="showPage('changes');return false" id="nl-changes">Change Orders</a>
       <a href="#" onclick="showPage('logs');return false" id="nl-logs">Project Logs</a>
@@ -26,9 +31,9 @@
 </nav>
 
 <!-- ESTIMATOR -->
-<div class="page active" id="pg-estimator">
+<div class="page" id="pg-estimator">
   <div class="est-topbar">
-    <input type="text" id="proj-name" value="New Project" onchange="project.name=this.value;saveProject()">
+    <input type="text" id="proj-name" value="New Project" onchange="project.name=this.value;const bpn=gid('bp-proj-name');if(bpn)bpn.value=this.value;saveProject()">
     <div class="tb-sep"></div>
     <label for="proj-region" style="font-size:.74rem;color:var(--muted);white-space:nowrap;font-weight:600">Region:</label>
     <select id="proj-region" onchange="project.region=this.value;refreshTotals();saveProject()">
@@ -302,11 +307,14 @@
 </div>
 
 <!-- BLUEPRINT -->
-<div class="page" id="pg-blueprint">
+<div class="page active" id="pg-blueprint">
   <!-- Toolbar -->
   <div class="bp-topbar">
+    <input type="text" id="bp-proj-name" class="bp-proj-input" value="New Project" placeholder="Project name…" onchange="project.name=this.value;const pn=gid('proj-name');if(pn)pn.value=this.value;saveProject()">
+    <div class="tb-sep"></div>
     <label class="tool-btn orange" for="bp-file-input">&#128194; Open</label>
     <input type="file" id="bp-file-input" accept="application/pdf,image/*" style="display:none" onchange="bpLoadFile(this)">
+    <span class="bp-file-lbl" id="bp-file-lbl" style="display:none"></span>
     <div class="tb-sep"></div>
     <div class="page-ctrl">
       <button onclick="bpPrevPage()">&#8249;</button>
@@ -349,11 +357,21 @@
       <div class="bp-cond-list" id="bp-cond-list"></div>
     </div>
     <!-- CENTER: Canvas -->
-    <div class="bp-canvas-area" id="bp-canvas-area">
+    <div class="bp-canvas-area" id="bp-canvas-area" ondragover="bpDragOver(event)" ondragleave="bpDragLeave(event)" ondrop="bpDrop(event)">
       <div class="bp-upload" id="bp-upload">
-        <div class="bp-upload-icon">&#128208;</div>
-        <p>Upload a PDF or image to begin your takeoff</p>
-        <label for="bp-file-input">Choose File</label>
+        <svg width="66" height="66" viewBox="0 0 66 66" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6" y="3" width="34" height="46" rx="3" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.2)" stroke-width="1.5"/>
+          <line x1="13" y1="15" x2="33" y2="15" stroke="#f97316" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="13" y1="22" x2="27" y2="22" stroke="rgba(255,255,255,.26)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="13" y1="29" x2="31" y2="29" stroke="rgba(255,255,255,.26)" stroke-width="1" stroke-linecap="round"/>
+          <line x1="13" y1="36" x2="23" y2="36" stroke="rgba(255,255,255,.26)" stroke-width="1" stroke-linecap="round"/>
+          <circle cx="47" cy="46" r="15" fill="rgba(249,115,22,.1)" stroke="#f97316" stroke-width="1.5"/>
+          <path d="M47 39v14M41 45l6-6 6 6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h2 class="bp-upload-title">Open a Drawing to Begin</h2>
+        <p class="bp-upload-sub">Drop a PDF or image here, or click to browse</p>
+        <label for="bp-file-input">Browse Files</label>
+        <span class="bp-upload-formats">PDF &middot; PNG &middot; JPG &middot; Multi-page supported</span>
       </div>
       <div class="bp-canvas-wrap" id="bp-canvas-wrap" style="display:none">
         <canvas id="pdf-canvas"></canvas>
@@ -564,6 +582,23 @@
     <div class="help-tool">
       <div class="help-tool-head">
         <span class="help-num">1</span>
+        <div><div class="help-tool-name">Blueprint Takeoff</div><div class="help-tool-sub">Measure directly on uploaded PDFs and drawings</div></div>
+      </div>
+      <p class="help-desc">The core of BuildCalc. Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements flow straight into the Project Estimator.</p>
+      <ol class="help-steps">
+        <li>Click <strong>Open</strong> (or drag &amp; drop a file onto the canvas) to load a PDF or image drawing.</li>
+        <li>Type a <strong>project name</strong> in the top-left field — it stays in sync with the Project Estimator.</li>
+        <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet to calibrate all measurements.</li>
+        <li>In the <strong>Conditions panel</strong> (left), click <strong>+ New</strong> to create a named measurement type (e.g. "Concrete Slab"), choose Linear, Area, or Count, and pick a color.</li>
+        <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item.</li>
+        <li>Quantities accumulate in the <strong>Quantities panel</strong> (right). Press <strong>Ctrl+Z</strong> to undo the last measurement, or <strong>Escape</strong> to cancel in-progress drawing.</li>
+        <li>Use <strong>→ Est</strong> on a single condition or <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs, then send to the Project Estimator.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool">
+      <div class="help-tool-head">
+        <span class="help-num">2</span>
         <div><div class="help-tool-name">Project Estimator</div><div class="help-tool-sub">Line-item cost estimating by CSI MasterFormat division</div></div>
       </div>
       <p class="help-desc">Build a detailed bottom-up estimate organized by construction division. Unit costs are national averages automatically adjusted for your region. Markup is applied on top to produce a final bid price.</p>
@@ -578,7 +613,7 @@
 
     <div class="help-tool">
       <div class="help-tool-head">
-        <span class="help-num">2</span>
+        <span class="help-num">3</span>
         <div><div class="help-tool-name">Budget Calculator</div><div class="help-tool-sub">Rough order-of-magnitude estimate based on square footage</div></div>
       </div>
       <p class="help-desc">Get a fast ballpark cost range before detailed estimating begins. Useful for owner presentations, feasibility studies, or sanity-checking a bid.</p>
@@ -592,7 +627,7 @@
 
     <div class="help-tool">
       <div class="help-tool-head">
-        <span class="help-num">3</span>
+        <span class="help-num">4</span>
         <div><div class="help-tool-name">Schedule Estimator</div><div class="help-tool-sub">Phased Gantt chart with milestone dates</div></div>
       </div>
       <p class="help-desc">Generate a preliminary construction schedule with phase durations and key dates. Duration is based on project type, size, and complexity.</p>
@@ -606,7 +641,7 @@
 
     <div class="help-tool">
       <div class="help-tool-head">
-        <span class="help-num">4</span>
+        <span class="help-num">5</span>
         <div><div class="help-tool-name">Bid Comparison</div><div class="help-tool-sub">Side-by-side contractor bid analysis</div></div>
       </div>
       <p class="help-desc">Compare bids from 2–6 contractors, analyze the spread, rank by price, and compare against an engineer's estimate to evaluate whether bids are in line.</p>
@@ -620,7 +655,7 @@
 
     <div class="help-tool">
       <div class="help-tool-head">
-        <span class="help-num">5</span>
+        <span class="help-num">6</span>
         <div><div class="help-tool-name">Markup &amp; Overhead</div><div class="help-tool-sub">Bid price and labor burden calculators</div></div>
       </div>
       <p class="help-desc">Two calculators in one. Project Markup builds a bid price from direct costs. Labor Burden calculates the true hourly cost of an employee including taxes and benefits.</p>
@@ -628,23 +663,6 @@
         <li><strong>Project Markup tab:</strong> Enter direct labor, material, subcontractor, and equipment costs. Set overhead, profit, contingency, and bond rates — bid price calculates automatically.</li>
         <li><strong>Labor Burden tab:</strong> Enter a base wage and burden rates (FICA, FUTA, workers comp, GL, benefits) — shows fully burdened hourly rate and annual cost.</li>
         <li>Switch between tabs using the buttons at the top of the page.</li>
-      </ol>
-    </div>
-
-    <div class="help-tool">
-      <div class="help-tool-head">
-        <span class="help-num">6</span>
-        <div><div class="help-tool-name">Blueprint Takeoff</div><div class="help-tool-sub">Measure directly on uploaded PDFs and drawings</div></div>
-      </div>
-      <p class="help-desc">Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements flow straight into the Project Estimator.</p>
-      <ol class="help-steps">
-        <li>Click <strong>Open</strong> to upload a PDF or image of your drawing.</li>
-        <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet. This calibrates all measurements to real units (LF, SF).</li>
-        <li>In the <strong>Conditions panel</strong> (left), click <strong>+ New</strong> to create a named measurement type — give it a name (e.g. "Concrete Slab"), choose Linear, Area, or Count, and pick a color.</li>
-        <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close and fill. <strong>Count:</strong> single click per item.</li>
-        <li>Draw as many times as you want with the same condition — quantities accumulate automatically in the <strong>Quantities panel</strong> (right).</li>
-        <li>Use <strong>→ Est</strong> on a single condition or <strong>Push All to Estimator</strong> to assign divisions and unit costs, then send everything to the Project Estimator at once.</li>
-        <li>Press <strong>Escape</strong> at any time to cancel an in-progress measurement.</li>
       </ol>
     </div>
 

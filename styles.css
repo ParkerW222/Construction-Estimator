@@ -19,6 +19,16 @@ nav{background:linear-gradient(to right,var(--navy-d) 0%,var(--navy) 100%);posit
 .nav-links a:hover{color:#fff;background:rgba(255,255,255,.1)}
 .nav-links a.active{color:#fff;background:rgba(255,255,255,.15);font-weight:600}
 .nav-sep{width:1px;height:17px;background:rgba(255,255,255,.2);flex-shrink:0;margin:0 .3rem}
+/* NAV DROPDOWN */
+.nav-dropdown-wrap{position:relative}
+.nav-dd-btn{color:rgba(255,255,255,.68);background:none;border:none;padding:.32rem .6rem;border-radius:6px;font-size:.79rem;font-weight:500;cursor:pointer;transition:.15s;white-space:nowrap;letter-spacing:.01em;font-family:inherit;display:flex;align-items:center;gap:.25rem;line-height:1.4}
+.nav-dd-btn:hover{color:#fff;background:rgba(255,255,255,.1)}
+.nav-dd-btn.active{color:#fff;background:rgba(255,255,255,.15);font-weight:600}
+.nav-dd-menu{position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);background:linear-gradient(175deg,#1e3a5f,#162e4d);border:1px solid rgba(255,255,255,.12);border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.45);min-width:195px;padding:.4rem 0;display:none;z-index:300}
+.nav-dd-menu.open{display:block;animation:pgIn .12s ease both}
+.nav-dd-menu a{display:block;color:rgba(255,255,255,.72);padding:.5rem 1.1rem;font-size:.8rem;font-weight:500;text-decoration:none;transition:.12s;letter-spacing:.01em}
+.nav-dd-menu a:hover{color:#fff;background:rgba(255,255,255,.1)}
+.nav-dd-menu a.active{color:var(--orange);background:rgba(249,115,22,.12);font-weight:600}
 .page{display:none}
 .page.active{display:block;animation:pgIn .17s ease both}
 @keyframes pgIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
@@ -221,11 +231,21 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .bp-qty-empty{color:var(--muted);font-size:.78rem;text-align:center;padding:1.5rem .75rem;line-height:1.6}
 .bp-qty-footer{padding:.65rem .75rem;border-top:1px solid var(--border);flex-shrink:0}
 /* Toolbar elements */
-.bp-upload{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:.75rem;color:rgba(255,255,255,.6)}
-.bp-upload-icon{font-size:2.5rem}
-.bp-upload p{font-size:.84rem;text-align:center;max-width:200px;line-height:1.5;color:rgba(255,255,255,.7)}
-.bp-upload label{cursor:pointer;background:var(--orange);color:#fff;border-radius:7px;padding:.5rem 1.1rem;font-size:.84rem;font-weight:700;transition:.15s}
-.bp-upload label:hover{background:var(--orange-h)}
+.bp-upload{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:.7rem;padding:2rem;text-align:center;transition:.2s;user-select:none}
+.bp-upload-title{font-size:1.1rem;font-weight:700;color:rgba(255,255,255,.85);margin-top:.1rem}
+.bp-upload-sub{font-size:.84rem;color:rgba(255,255,255,.5);max-width:260px;line-height:1.5}
+.bp-upload-formats{font-size:.71rem;color:rgba(255,255,255,.3);letter-spacing:.05em;text-transform:uppercase;margin-top:-.1rem}
+.bp-upload label{cursor:pointer;background:var(--orange);color:#fff;border-radius:7px;padding:.62rem 1.65rem;font-size:.88rem;font-weight:700;transition:.15s;display:inline-block;box-shadow:0 2px 8px rgba(249,115,22,.3)}
+.bp-upload label:hover{background:var(--orange-h);box-shadow:0 3px 12px rgba(249,115,22,.45);transform:translateY(-1px)}
+/* Blueprint project name input in toolbar */
+.bp-proj-input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:5px;padding:.24rem .55rem;font-size:.82rem;font-weight:600;color:rgba(255,255,255,.82);width:168px;font-family:inherit;transition:.15s}
+.bp-proj-input:focus{outline:none;border-color:var(--orange);background:rgba(255,255,255,.13)}
+.bp-proj-input::placeholder{color:rgba(255,255,255,.3)}
+/* Blueprint filename label */
+.bp-file-lbl{font-size:.74rem;color:rgba(255,255,255,.42);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Drag-over state */
+.bp-canvas-area.drag-over{outline:3px dashed var(--orange)!important;outline-offset:-6px}
+.bp-canvas-area.drag-over .bp-upload{opacity:.65}
 .tool-btn{border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:.3rem .6rem;font-size:.76rem;font-weight:600;cursor:pointer;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);transition:.15s}
 .tool-btn:hover{background:rgba(255,255,255,.2)}
 .tool-btn.orange{background:var(--orange);color:#fff;border-color:var(--orange)}

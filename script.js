@@ -25,10 +25,29 @@ function closeHelp() { gid('help-modal').style.display = 'none'; }
 // ── SPA NAVIGATION ─────────────────────────────────────────────────
 function showPage(p) {
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-links a').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-links a, .nav-dd-menu a').forEach(el => el.classList.remove('active'));
+  const toolsBtn = gid('nl-tools-btn');
+  if (toolsBtn) toolsBtn.classList.remove('active');
   gid('pg-' + p).classList.add('active');
-  gid('nl-' + p).classList.add('active');
+  const link = gid('nl-' + p);
+  if (link) link.classList.add('active');
+  const toolsPages = ['budget', 'schedule', 'bids', 'markup'];
+  if (toolsPages.includes(p) && toolsBtn) toolsBtn.classList.add('active');
+  closeToolsMenu();
   if (p === 'changes') renderCOPage();
+  if (p === 'blueprint') {
+    const bpn = gid('bp-proj-name');
+    if (bpn) bpn.value = project.name || 'New Project';
+  }
+}
+
+function toggleToolsMenu(e) {
+  e.stopPropagation();
+  gid('tools-menu').classList.toggle('open');
+}
+function closeToolsMenu() {
+  const m = gid('tools-menu');
+  if (m) m.classList.remove('open');
 }
 
 // ── ESTIMATOR ──────────────────────────────────────────────────────
@@ -215,11 +234,21 @@ function buildLibList(q) {
   gid('lib-list').innerHTML = html || '<div style="padding:.7rem;color:var(--muted);font-size:.8rem">No items found.</div>';
 }
 
-document.addEventListener('click', e => { if (!e.target.closest('.lib-wrap')) closeLib(); });
+document.addEventListener('click', e => {
+  if (!e.target.closest('.lib-wrap')) closeLib();
+  if (!e.target.closest('.nav-dropdown-wrap')) closeToolsMenu();
+});
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && bpCurrentPts.length) {
     bpCurrentPts = [];
     bpRedraw();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    if (bpMeasurements.length) {
+      bpMeasurements.pop();
+      bpRenderQtyPanel();
+      bpRedraw();
+    }
   }
 });
 
@@ -228,6 +257,8 @@ function newProject() {
   project = { name: 'New Project', region: 'midwest', items: [], nextId: 1, changeOrders: [], nextCoId: 1, rfis: [], nextRfiId: 1, submittals: [], nextSubId: 1 };
   gid('proj-name').value = 'New Project';
   gid('proj-region').value = 'midwest';
+  const bpn = gid('bp-proj-name');
+  if (bpn) bpn.value = 'New Project';
   activeDiv = '03';
   renderAll();
   renderCOPage();
@@ -247,6 +278,8 @@ function loadProject() {
       project = JSON.parse(s);
       gid('proj-name').value = project.name || 'New Project';
       gid('proj-region').value = project.region || 'midwest';
+      const bpn = gid('bp-proj-name');
+      if (bpn) bpn.value = project.name || 'New Project';
     }
   } catch (e) {}
   project.changeOrders = project.changeOrders || [];
@@ -726,8 +759,10 @@ function bpClosePushAll() { gid('push-all-modal').style.display = 'none'; }
 
 // ── BLUEPRINT CANVAS / RENDER ─────────────────────────────────────
 function bpLoadFile(input) {
-  const file = input.files[0];
+  const file = input.files ? input.files[0] : input;
   if (!file) return;
+  const fileLbl = gid('bp-file-lbl');
+  if (fileLbl) { fileLbl.textContent = file.name; fileLbl.style.display = 'inline'; }
   bpIsImg = file.type.startsWith('image/');
 
   if (bpIsImg) {
@@ -756,6 +791,22 @@ function bpShowCanvas() {
   gid('bp-upload').style.display = 'none';
   gid('bp-canvas-wrap').style.display = 'inline-block';
   gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`;
+}
+
+function bpDragOver(e) {
+  e.preventDefault();
+  gid('bp-canvas-area').classList.add('drag-over');
+}
+function bpDragLeave(e) {
+  if (!gid('bp-canvas-area').contains(e.relatedTarget)) {
+    gid('bp-canvas-area').classList.remove('drag-over');
+  }
+}
+function bpDrop(e) {
+  e.preventDefault();
+  gid('bp-canvas-area').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) bpLoadFile(file);
 }
 
 function bpRenderPage() {
