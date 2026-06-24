@@ -260,6 +260,7 @@
           <div class="mu-row"><span class="mu-label">Profit (%)</span><input class="mu-inp" type="number" id="mu-profit" value="10" step="0.5" oninput="calcMarkup()"></div>
           <div class="mu-row"><span class="mu-label">Contingency (%)</span><input class="mu-inp" type="number" id="mu-cont" value="5" step="0.5" oninput="calcMarkup()"></div>
           <div class="mu-row"><span class="mu-label">Bond / Insurance (%)</span><input class="mu-inp" type="number" id="mu-bond" value="2" step="0.1" oninput="calcMarkup()"></div>
+          <div class="mu-row"><span class="mu-label">Retainage (%)</span><input class="mu-inp" type="number" id="mu-ret" value="10" step="0.5" oninput="calcMarkup()"></div>
         </div>
       </div>
       <div class="card">
@@ -273,6 +274,12 @@
         <div style="margin-top:.65rem;display:flex;gap:1.5rem;font-size:.76rem;color:var(--muted)">
           <span>Markup on cost: <strong id="mu-r-mu" style="color:var(--navy)">—</strong></span>
           <span>Margin on price: <strong id="mu-r-mg" style="color:var(--navy)">—</strong></span>
+        </div>
+        <div style="margin-top:.85rem;padding-top:.85rem;border-top:1px solid var(--border)">
+          <div style="font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Retainage</div>
+          <div class="mu-row"><span class="mu-label">Amount Withheld</span><span class="mu-result" id="mu-r-ret">$0</span></div>
+          <div class="mu-row"><span class="mu-label" style="font-weight:600">Net at Substantial Completion</span><span class="mu-result" id="mu-r-net" style="font-weight:700;color:var(--navy)">$0</span></div>
+          <p style="font-size:.74rem;color:var(--muted);margin-top:.55rem;line-height:1.55">Retainage is a % of each progress payment the owner withholds until substantial completion as protection against incomplete or defective work. Typical rate is 5–10%. It does not reduce your bid price — it affects when you get paid.</p>
         </div>
       </div>
     </div>
@@ -620,7 +627,7 @@
         <li>Click a <strong>CSI division</strong> in the left panel (e.g. 03 Concrete) to open it.</li>
         <li>Click <strong>+ Add from Library</strong> to search and add items, or <strong>+ Custom</strong> for a blank row.</li>
         <li>Enter <strong>quantities</strong> for each item — extended costs update instantly.</li>
-        <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel to get your bid price.</li>
+        <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel. Also set <strong>Mat. Sales Tax %</strong> for your state and <strong>Permit Fees %</strong> (typically 0.5–2%) — both are included in the final bid price.</li>
       </ol>
     </div>
 
@@ -673,7 +680,7 @@
       </div>
       <p class="help-desc">Two calculators in one. Project Markup builds a bid price from direct costs. Labor Burden calculates the true hourly cost of an employee including taxes and benefits.</p>
       <ol class="help-steps">
-        <li><strong>Project Markup tab:</strong> Enter direct labor, material, subcontractor, and equipment costs. Set overhead, profit, contingency, and bond rates — bid price calculates automatically.</li>
+        <li><strong>Project Markup tab:</strong> Enter direct labor, material, subcontractor, and equipment costs. Set overhead, profit, contingency, bond, and retainage rates — bid price calculates automatically. The <strong>Retainage</strong> section shows how much the owner withholds until substantial completion and your net cash received.</li>
         <li><strong>Labor Burden tab:</strong> Enter a base wage and burden rates (FICA, FUTA, workers comp, GL, benefits) — shows fully burdened hourly rate and annual cost.</li>
         <li>Switch between tabs using the buttons at the top of the page.</li>
       </ol>

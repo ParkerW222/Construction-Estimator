@@ -1,7 +1,7 @@
 // ── STATE ──────────────────────────────────────────────────────────
 let project = { name: 'New Project', region: 'midwest', items: [], nextId: 1 };
 let activeDiv = '03';
-let estMu = { oh: 10, profit: 8, cont: 5 };
+let estMu = { oh: 10, profit: 8, cont: 5, matTax: 0, permit: 1.0 };
 let bType = 'office', bQual = 'standard';
 let sType = 'office', sQual = 'standard';
 let bidCount = 3;
@@ -103,10 +103,12 @@ function renderTable() {
 
 function renderSum() {
   const direct = grandTotal();
-  const ohAmt = direct * estMu.oh / 100;
-  const prAmt = (direct + ohAmt) * estMu.profit / 100;
-  const coAmt = (direct + ohAmt + prAmt) * estMu.cont / 100;
-  const bid = direct + ohAmt + prAmt + coAmt;
+  const ohAmt  = direct * estMu.oh / 100;
+  const prAmt  = (direct + ohAmt) * estMu.profit / 100;
+  const coAmt  = (direct + ohAmt + prAmt) * estMu.cont / 100;
+  const taxAmt = direct * 0.55 * estMu.matTax / 100;
+  const permitAmt = (direct + ohAmt + prAmt + coAmt + taxAmt) * estMu.permit / 100;
+  const bid = direct + ohAmt + prAmt + coAmt + taxAmt + permitAmt;
 
   let html = `<div class="sum-head">Division Subtotals</div>`;
   Object.entries(CSI_ITEMS).forEach(([d, info]) => {
@@ -134,6 +136,18 @@ function renderSum() {
       <input class="sum-pct" type="number" value="${estMu.cont}" min="0" step="0.5" oninput="updMu('cont',this.value)">
       <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-co-amt">${fmt(coAmt)}</span>
     </div>
+    <hr class="sum-sep" style="margin:.55rem 0">
+    <div class="sum-head" style="margin-top:.2rem;font-size:.66rem;letter-spacing:.06em">Taxes &amp; Fees</div>
+    <div class="sum-mu-row">
+      <span class="sum-mu-label" title="Applied to ~55% of direct cost (materials portion)">Mat. Sales Tax %</span>
+      <input class="sum-pct" type="number" value="${estMu.matTax}" min="0" step="0.5" oninput="updMu('matTax',this.value)">
+      <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-tax-amt">${taxAmt > 0 ? fmt(taxAmt) : '—'}</span>
+    </div>
+    <div class="sum-mu-row">
+      <span class="sum-mu-label" title="Applied to total bid; typical range 0.5–2%">Permit Fees %</span>
+      <input class="sum-pct" type="number" value="${estMu.permit}" min="0" step="0.25" oninput="updMu('permit',this.value)">
+      <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-permit-amt">${permitAmt > 0 ? fmt(permitAmt) : '—'}</span>
+    </div>
     <div class="bid-box">
       <div class="bid-box-lbl">Bid Price</div>
       <div class="bid-box-val" id="sum-bid">${fmt(bid)}</div>
@@ -146,16 +160,18 @@ function renderSum() {
 function updMu(field, val) {
   estMu[field] = +val || 0;
   const direct = grandTotal();
-  const oh = direct * estMu.oh / 100;
-  const pr = (direct + oh) * estMu.profit / 100;
-  const co = (direct + oh + pr) * estMu.cont / 100;
-  const bid = direct + oh + pr + co;
-  const ohEl = gid('sum-oh-amt'), prEl = gid('sum-pr-amt');
-  const coEl = gid('sum-co-amt'), bidEl = gid('sum-bid');
-  if (ohEl) ohEl.textContent = fmt(oh);
-  if (prEl) prEl.textContent = fmt(pr);
-  if (coEl) coEl.textContent = fmt(co);
-  if (bidEl) bidEl.textContent = fmt(bid);
+  const oh  = direct * estMu.oh / 100;
+  const pr  = (direct + oh) * estMu.profit / 100;
+  const co  = (direct + oh + pr) * estMu.cont / 100;
+  const tax = direct * 0.55 * estMu.matTax / 100;
+  const permit = (direct + oh + pr + co + tax) * estMu.permit / 100;
+  const bid = direct + oh + pr + co + tax + permit;
+  if (gid('sum-oh-amt'))     gid('sum-oh-amt').textContent     = fmt(oh);
+  if (gid('sum-pr-amt'))     gid('sum-pr-amt').textContent     = fmt(pr);
+  if (gid('sum-co-amt'))     gid('sum-co-amt').textContent     = fmt(co);
+  if (gid('sum-tax-amt'))    gid('sum-tax-amt').textContent    = tax > 0 ? fmt(tax) : '—';
+  if (gid('sum-permit-amt')) gid('sum-permit-amt').textContent = permit > 0 ? fmt(permit) : '—';
+  if (gid('sum-bid'))        gid('sum-bid').textContent        = fmt(bid);
   gid('top-total').textContent = fmt(bid);
 }
 
@@ -510,12 +526,17 @@ function calcMarkup() {
   const boA  = (direct + ohA + prA + coA) * bond / 100;
   const total = direct + ohA + prA + coA + boA;
 
+  const ret  = +(gid('mu-ret').value) || 0;
+  const retA = total * ret / 100;
+
   gid('mu-r-direct').textContent = fmt(direct);
   gid('mu-r-oh').textContent     = fmt(ohA);
   gid('mu-r-profit').textContent = fmt(prA);
   gid('mu-r-cont').textContent   = fmt(coA);
   gid('mu-r-bond').textContent   = fmt(boA);
   gid('mu-r-total').textContent  = fmt(total);
+  if (gid('mu-r-ret')) gid('mu-r-ret').textContent = fmt(retA);
+  if (gid('mu-r-net')) gid('mu-r-net').textContent = fmt(total - retA);
   if (direct > 0) {
     gid('mu-r-mu').textContent = ((total / direct - 1) * 100).toFixed(1) + '%';
     gid('mu-r-mg').textContent = ((1 - direct / total) * 100).toFixed(1) + '%';
@@ -1070,10 +1091,12 @@ function bpClearAll() {
 // ── CHANGE ORDERS ─────────────────────────────────────────────────
 function getBidPrice() {
   const direct = grandTotal();
-  const oh = direct * estMu.oh / 100;
-  const pr = (direct + oh) * estMu.profit / 100;
-  const co = (direct + oh + pr) * estMu.cont / 100;
-  return direct + oh + pr + co;
+  const oh  = direct * estMu.oh / 100;
+  const pr  = (direct + oh) * estMu.profit / 100;
+  const co  = (direct + oh + pr) * estMu.cont / 100;
+  const tax = direct * 0.55 * estMu.matTax / 100;
+  const permit = (direct + oh + pr + co + tax) * estMu.permit / 100;
+  return direct + oh + pr + co + tax + permit;
 }
 
 function renderCOPage() {
