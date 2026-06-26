@@ -266,19 +266,35 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .pa-table td{padding:.45rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle}
 .pa-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:.4rem;vertical-align:middle}
 .pa-qty{font-weight:700;color:var(--navy);white-space:nowrap}
-/* PROJECTS NAV BUTTON */
-.proj-nav-btn{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.9);border-radius:6px;padding:.28rem .7rem;font-size:.78rem;font-weight:600;cursor:pointer;flex-shrink:0;transition:.15s;white-space:nowrap}
-.proj-nav-btn:hover{background:rgba(255,255,255,.22)}
-/* PROJECTS MODAL */
-.projects-box{width:480px;max-width:96vw}
-.proj-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
-.proj-list{display:flex;flex-direction:column;gap:.45rem;max-height:380px;overflow-y:auto}
-.proj-row{display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem;background:var(--bg);border-radius:6px;border:1px solid var(--border)}
-.proj-info{flex:1;min-width:0}
-.proj-row-name{font-weight:600;font-size:.88rem;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.proj-row-date{font-size:.73rem;color:var(--muted);margin-top:.12rem}
-.proj-row-btns{display:flex;gap:.35rem;flex-shrink:0;margin-left:.75rem}
-.proj-empty{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.85rem;line-height:1.7}
+/* PROJECTS DROPDOWN */
+.proj-dd-trigger{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.92);border-radius:6px;padding:.28rem .7rem;font-size:.78rem;font-weight:600;cursor:pointer;flex-shrink:0;transition:.15s;white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:.3rem}
+.proj-dd-trigger:hover,.proj-dd-trigger.saved-flash{background:rgba(255,255,255,.24)}
+.proj-dd-panel{position:absolute;top:calc(100% + 8px);right:0;width:290px;background:linear-gradient(175deg,#1e3a5f,#162e4d);border:1px solid rgba(255,255,255,.14);border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.5);display:none;z-index:400;overflow:hidden}
+.proj-dd-panel.open{display:block;animation:pgIn .12s ease both}
+.proj-dd-section-lbl{font-size:.67rem;font-weight:700;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.08em;padding:.75rem 1rem .3rem}
+.proj-dd-current{font-size:.88rem;font-weight:600;color:#fff;padding:0 1rem .65rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proj-dd-btns{display:flex;gap:.5rem;padding:0 1rem .75rem}
+.proj-dd-act-btn{flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.85);border-radius:6px;padding:.32rem .5rem;font-size:.77rem;font-weight:600;cursor:pointer;transition:.13s;font-family:inherit}
+.proj-dd-act-btn:hover{background:rgba(255,255,255,.2);color:#fff}
+.proj-dd-act-btn.accent{background:rgba(249,115,22,.25);border-color:rgba(249,115,22,.5);color:#fdba74}
+.proj-dd-act-btn.accent:hover{background:rgba(249,115,22,.4);color:#fff}
+.proj-dd-sep{height:1px;background:rgba(255,255,255,.1)}
+.proj-dd-list{max-height:220px;overflow-y:auto;padding:.4rem 0}
+.proj-dd-item{display:flex;align-items:center;gap:.4rem;padding:.45rem 1rem;transition:.12s}
+.proj-dd-item:hover{background:rgba(255,255,255,.07)}
+.proj-dd-item.current{background:rgba(249,115,22,.1)}
+.proj-dd-item-info{flex:1;min-width:0}
+.proj-dd-item-name{font-size:.82rem;font-weight:600;color:rgba(255,255,255,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proj-dd-item-date{font-size:.7rem;color:rgba(255,255,255,.4);margin-top:.1rem}
+.proj-dd-badge{display:inline-block;background:rgba(249,115,22,.3);color:#fdba74;font-size:.62rem;font-weight:700;padding:.05rem .35rem;border-radius:3px;text-transform:uppercase;letter-spacing:.05em;vertical-align:middle;margin-left:.3rem}
+.proj-dd-load-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.8);border-radius:5px;padding:.2rem .5rem;font-size:.73rem;font-weight:600;cursor:pointer;transition:.12s;white-space:nowrap;font-family:inherit;flex-shrink:0}
+.proj-dd-load-btn:hover{background:rgba(255,255,255,.24);color:#fff}
+.proj-dd-del-btn{background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.8rem;padding:.1rem .25rem;border-radius:4px;transition:.12s;flex-shrink:0;line-height:1}
+.proj-dd-del-btn:hover{color:#f87171;background:rgba(248,113,113,.12)}
+.proj-dd-empty-msg{padding:.6rem 1rem .8rem;font-size:.77rem;color:rgba(255,255,255,.45);line-height:1.55}
+.proj-dd-file-row{display:flex;gap:.5rem;padding:.65rem 1rem}
+.proj-dd-file-btn{flex:1;text-align:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);border-radius:6px;padding:.3rem .5rem;font-size:.75rem;font-weight:500;cursor:pointer;transition:.12s;font-family:inherit}
+.proj-dd-file-btn:hover{background:rgba(255,255,255,.15);color:#fff}
 /* HELP BUTTON */
 .help-btn{background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;border-radius:50%;width:28px;height:28px;font-size:.9rem;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1;transition:.15s}
 .help-btn:hover{background:rgba(255,255,255,.28)}

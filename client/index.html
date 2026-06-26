@@ -26,7 +26,28 @@
       <a href="#" onclick="showPage('changes');return false" id="nl-changes">Change Orders</a>
       <a href="#" onclick="showPage('logs');return false" id="nl-logs">Project Logs</a>
     </div>
-    <button class="proj-nav-btn" onclick="showProjectsPanel()" title="Save &amp; load projects">&#128193; Projects</button>
+    <div class="nav-dropdown-wrap" id="proj-dd-wrap">
+      <button class="proj-dd-trigger" id="proj-dd-btn" onclick="toggleProjectsDropdown(event)">
+        &#128193; <span id="proj-nav-name">New Project</span> &#9660;
+      </button>
+      <div class="proj-dd-panel" id="proj-dd-panel">
+        <div class="proj-dd-section-lbl">Current Project</div>
+        <div class="proj-dd-current" id="proj-dd-current-name">New Project</div>
+        <div class="proj-dd-btns">
+          <button class="proj-dd-act-btn accent" onclick="saveCurrentProject()">&#128190; Save</button>
+          <button class="proj-dd-act-btn" onclick="startNewProjectFromDD()">+ New</button>
+        </div>
+        <div class="proj-dd-sep"></div>
+        <div class="proj-dd-section-lbl">Saved Projects</div>
+        <div class="proj-dd-list" id="proj-dd-list"></div>
+        <div class="proj-dd-sep"></div>
+        <div class="proj-dd-file-row">
+          <button class="proj-dd-file-btn" onclick="exportProject()">&#8681; Download</button>
+          <label class="proj-dd-file-btn" for="proj-import-input" style="cursor:pointer">&#8679; Import</label>
+          <input type="file" id="proj-import-input" accept=".buildcalc,.json" style="display:none" onchange="importProject(this)">
+        </div>
+      </div>
+    </div>
     <button class="help-btn" onclick="showHelp()" title="How to use BuildCalc">?</button>
   </div>
 </nav>
@@ -766,22 +787,6 @@
   </div>
 </div>
 
-<!-- PROJECTS MODAL -->
-<div class="modal-overlay" id="projects-modal" style="display:none" onclick="if(event.target===this)closeProjectsPanel()">
-  <div class="modal-box projects-box">
-    <div class="modal-head">
-      <span class="modal-title">My Projects</span>
-      <button class="modal-close" onclick="closeProjectsPanel()">&#10005;</button>
-    </div>
-    <div class="proj-actions">
-      <button class="btn btn-orange" onclick="saveProjectAs()">&#128190; Save As&hellip;</button>
-      <button class="btn btn-ghost" onclick="exportProject()">&#8681; Download File</button>
-      <label class="btn btn-ghost" for="proj-import-input" style="cursor:pointer">&#8679; Import File</label>
-      <input type="file" id="proj-import-input" accept=".buildcalc,.json" style="display:none" onchange="importProject(this)">
-    </div>
-    <div class="proj-list" id="proj-list"></div>
-  </div>
-</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="js/data.js"></script>

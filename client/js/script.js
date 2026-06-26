@@ -253,6 +253,7 @@ function buildLibList(q) {
 
 document.addEventListener('click', e => {
   if (!e.target.closest('.lib-wrap')) closeLib();
+  if (!e.target.closest('#proj-dd-wrap')) closeProjectsDropdown();
   if (!e.target.closest('.nav-dropdown-wrap')) closeToolsMenu();
 });
 document.addEventListener('keydown', e => {
@@ -292,6 +293,7 @@ function newProject() {
 
 function saveProject() {
   try { localStorage.setItem('bc_proj', JSON.stringify(project)); } catch (e) {}
+  updateNavProjectName();
 }
 
 function loadProject() {
@@ -321,32 +323,62 @@ function setSavedProjects(list) {
   try { localStorage.setItem('bc_projects', JSON.stringify(list)); } catch(e) {}
 }
 
-function showProjectsPanel() {
-  renderProjectsList();
-  gid('projects-modal').style.display = 'flex';
-}
-function closeProjectsPanel() {
-  gid('projects-modal').style.display = 'none';
+function updateNavProjectName() {
+  const name = project.name || 'New Project';
+  const navEl = gid('proj-nav-name');
+  const curEl = gid('proj-dd-current-name');
+  if (navEl) navEl.textContent = name;
+  if (curEl) curEl.textContent = name;
 }
 
-function saveProjectAs() {
-  const name = prompt('Save project as:', project.name || 'My Project');
-  if (!name || !name.trim()) return;
-  const list = getSavedProjects();
-  const existing = list.findIndex(p => p.name === name.trim());
-  const entry = { id: 'proj_' + Date.now(), name: name.trim(), savedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(project)) };
-  if (existing >= 0) {
-    if (!confirm(`Replace existing save "${name.trim()}"?`)) return;
-    list[existing] = entry;
+function toggleProjectsDropdown(e) {
+  e.stopPropagation();
+  const panel = gid('proj-dd-panel');
+  const isOpen = panel.classList.contains('open');
+  if (!isOpen) {
+    renderProjectsDropdown();
+    panel.classList.add('open');
   } else {
-    list.unshift(entry);
+    panel.classList.remove('open');
   }
-  setSavedProjects(list);
-  renderProjectsList();
 }
 
-function loadSavedProject(id) {
-  if (!confirm('Load this project? Any unsaved changes to the current project will be lost.')) return;
+function closeProjectsDropdown() {
+  const panel = gid('proj-dd-panel');
+  if (panel) panel.classList.remove('open');
+}
+
+function saveCurrentProject() {
+  const name = project.name && project.name !== 'New Project'
+    ? project.name
+    : prompt('Name this project:', 'My Project');
+  if (!name || !name.trim()) return;
+  project.name = name.trim();
+  gid('proj-name').value = project.name;
+  const bpn = gid('bp-proj-name');
+  if (bpn) bpn.value = project.name;
+  const list = getSavedProjects();
+  const idx = list.findIndex(p => p.name === project.name);
+  const entry = { id: idx >= 0 ? list[idx].id : 'proj_' + Date.now(), name: project.name, savedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(project)) };
+  if (idx >= 0) list[idx] = entry; else list.unshift(entry);
+  setSavedProjects(list);
+  saveProject();
+  renderProjectsDropdown();
+  const btn = gid('proj-dd-btn');
+  if (btn) { btn.classList.add('saved-flash'); setTimeout(() => btn.classList.remove('saved-flash'), 900); }
+}
+
+function autoSaveCurrentToList() {
+  if (!project.name || project.name === 'New Project') return;
+  const list = getSavedProjects();
+  const idx = list.findIndex(p => p.name === project.name);
+  if (idx < 0) return;
+  list[idx] = { ...list[idx], savedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(project)) };
+  setSavedProjects(list);
+}
+
+function switchToProject(id) {
+  autoSaveCurrentToList();
   const list = getSavedProjects();
   const entry = list.find(p => p.id === id);
   if (!entry) return;
@@ -367,13 +399,30 @@ function loadSavedProject(id) {
   renderRFIPane();
   renderSubPane();
   saveProject();
-  closeProjectsPanel();
+  closeProjectsDropdown();
 }
 
-function deleteSavedProject(id) {
+function startNewProjectFromDD() {
+  autoSaveCurrentToList();
+  if (!confirm('Start a new project? Current items will be cleared.')) return;
+  project = { name: 'New Project', region: 'midwest', items: [], nextId: 1, changeOrders: [], nextCoId: 1, rfis: [], nextRfiId: 1, submittals: [], nextSubId: 1 };
+  gid('proj-name').value = 'New Project';
+  gid('proj-region').value = 'midwest';
+  const bpn = gid('bp-proj-name');
+  if (bpn) bpn.value = 'New Project';
+  activeDiv = '03';
+  renderAll();
+  renderCOPage();
+  renderRFIPane();
+  renderSubPane();
+  saveProject();
+  closeProjectsDropdown();
+}
+
+function deleteProjectEntry(id) {
   if (!confirm('Delete this saved project? This cannot be undone.')) return;
   setSavedProjects(getSavedProjects().filter(p => p.id !== id));
-  renderProjectsList();
+  renderProjectsDropdown();
 }
 
 function exportProject() {
@@ -383,6 +432,7 @@ function exportProject() {
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+  closeProjectsDropdown();
 }
 
 function importProject(input) {
@@ -393,8 +443,7 @@ function importProject(input) {
     try {
       const data = JSON.parse(e.target.result);
       if (!confirm('Load "' + (data.name || 'Untitled') + '"? This will replace your current project.')) {
-        input.value = '';
-        return;
+        input.value = ''; return;
       }
       project = data;
       project.changeOrders = project.changeOrders || [];
@@ -413,7 +462,7 @@ function importProject(input) {
       renderRFIPane();
       renderSubPane();
       saveProject();
-      closeProjectsPanel();
+      closeProjectsDropdown();
     } catch(err) {
       alert('Could not read file. Make sure it is a valid .buildcalc file.');
     }
@@ -422,25 +471,27 @@ function importProject(input) {
   reader.readAsText(file);
 }
 
-function renderProjectsList() {
+function renderProjectsDropdown() {
+  updateNavProjectName();
   const list = getSavedProjects();
-  const el = gid('proj-list');
+  const el = gid('proj-dd-list');
+  if (!el) return;
   if (!list.length) {
-    el.innerHTML = '<div class="proj-empty">No saved projects yet.<br>Click <strong>Save As&hellip;</strong> to save your current project.</div>';
+    el.innerHTML = '<div class="proj-dd-empty-msg">No saved projects yet. Click <strong>Save</strong> to save the current project.</div>';
     return;
   }
+  const currentName = project.name || 'New Project';
   el.innerHTML = list.map(p => {
     const d = new Date(p.savedAt);
     const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    return `<div class="proj-row">
-      <div class="proj-info">
-        <div class="proj-row-name">${p.name}</div>
-        <div class="proj-row-date">Saved ${dateStr}</div>
+    const isCurrent = p.name === currentName;
+    return `<div class="proj-dd-item${isCurrent ? ' current' : ''}">
+      <div class="proj-dd-item-info">
+        <div class="proj-dd-item-name">${p.name}${isCurrent ? ' <span class="proj-dd-badge">active</span>' : ''}</div>
+        <div class="proj-dd-item-date">${dateStr}</div>
       </div>
-      <div class="proj-row-btns">
-        <button class="btn btn-ghost" style="font-size:.75rem;padding:.2rem .55rem" onclick="loadSavedProject('${p.id}')">Load</button>
-        <button class="btn btn-ghost" style="font-size:.75rem;padding:.2rem .55rem;color:#f87171;border-color:rgba(248,113,113,.4)" onclick="deleteSavedProject('${p.id}')">Delete</button>
-      </div>
+      ${isCurrent ? '' : `<button class="proj-dd-load-btn" onclick="switchToProject('${p.id}')">Load</button>`}
+      <button class="proj-dd-del-btn" onclick="deleteProjectEntry('${p.id}')" title="Delete">&#10005;</button>
     </div>`;
   }).join('');
 }
@@ -1518,6 +1569,7 @@ function updateSubStatus(id, status) {
   const t = new Date();
   gid('s-start').value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
   loadProject();
+  updateNavProjectName();
   renderAll();
   calcBudget();
   autoSched();
