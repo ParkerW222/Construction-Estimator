@@ -190,4 +190,4 @@ const S_PHASES = [
 const BID_COLORS = ['#1e3a5f', '#f97316', '#0891b2', '#16a34a', '#7c3aed', '#dc2626'];
 
 // ── BLUEPRINT CONDITION COLORS ─────────────────────────────────────
-const BP_COLORS = ['#f97316','#1e3a5f','#0891b2','#16a34a','#7c3aed','#dc2626','#0d9488','#d97706'];
+const BP_COLORS = ['#f97316','#1e3a5f','#0891b2','#16a34a','#7c3aed','#dc2626','#0d9488'];

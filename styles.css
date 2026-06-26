@@ -183,7 +183,7 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .bp-topbar{background:var(--navy-d);border-bottom:1px solid rgba(255,255,255,.1);padding:.45rem .85rem;display:flex;align-items:center;gap:.55rem;flex-shrink:0;flex-wrap:wrap}
 .bp-body{flex:1;display:flex;overflow:hidden;min-height:0}
 /* Left conditions panel */
-.bp-cond-panel{width:230px;flex-shrink:0;background:#1a2d45;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid rgba(255,255,255,.08)}
+.bp-cond-panel{width:230px;flex-shrink:0;background:#1a2d45;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;border-right:1px solid rgba(255,255,255,.08)}
 .bp-cond-head{padding:.6rem .75rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.1);flex-shrink:0}
 .bp-cond-head-lbl{font-size:.68rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.07em}
 .bp-add-cond-btn{background:var(--orange);color:#fff;border:none;border-radius:5px;padding:.2rem .55rem;font-size:.74rem;font-weight:700;cursor:pointer}
@@ -204,12 +204,13 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .bp-cond-input{width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:5px;padding:.38rem .55rem;font-size:.82rem;color:#fff;outline:none}
 .bp-cond-input::placeholder{color:rgba(255,255,255,.35)}
 .bp-cond-input:focus{border-color:var(--orange)}
-.bp-type-row{display:flex;gap:.3rem}
+.bp-type-row{display:flex;gap:.5rem}
 .bp-type-btn{flex:1;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.55);border-radius:5px;padding:.28rem 0;font-size:.73rem;font-weight:600;cursor:pointer;transition:.12s}
 .bp-type-btn.active{background:var(--orange);color:#fff;border-color:var(--orange)}
-.bp-color-row{display:flex;gap:.35rem;flex-wrap:wrap}
+.bp-color-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.35rem}
 .bp-color-dot{width:20px;height:20px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:.12s}
 .bp-color-dot.sel{border-color:#fff;transform:scale(1.15)}
+.bp-color-wheel{background:conic-gradient(red,#ff0,lime,cyan,blue,magenta,red);border-radius:50%}
 .bp-add-form-btns{display:flex;gap:.4rem;justify-content:flex-end}
 /* Center canvas */
 .bp-canvas-area{flex:1;overflow:auto;background:#2d3748;display:flex;align-items:flex-start;justify-content:center;padding:1rem;position:relative}
@@ -265,8 +266,21 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .pa-table td{padding:.45rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle}
 .pa-swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:.4rem;vertical-align:middle}
 .pa-qty{font-weight:700;color:var(--navy);white-space:nowrap}
+/* PROJECTS NAV BUTTON */
+.proj-nav-btn{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.25);color:rgba(255,255,255,.9);border-radius:6px;padding:.28rem .7rem;font-size:.78rem;font-weight:600;cursor:pointer;flex-shrink:0;transition:.15s;white-space:nowrap}
+.proj-nav-btn:hover{background:rgba(255,255,255,.22)}
+/* PROJECTS MODAL */
+.projects-box{width:480px;max-width:96vw}
+.proj-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.proj-list{display:flex;flex-direction:column;gap:.45rem;max-height:380px;overflow-y:auto}
+.proj-row{display:flex;align-items:center;justify-content:space-between;padding:.6rem .75rem;background:var(--bg);border-radius:6px;border:1px solid var(--border)}
+.proj-info{flex:1;min-width:0}
+.proj-row-name{font-weight:600;font-size:.88rem;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proj-row-date{font-size:.73rem;color:var(--muted);margin-top:.12rem}
+.proj-row-btns{display:flex;gap:.35rem;flex-shrink:0;margin-left:.75rem}
+.proj-empty{text-align:center;padding:2rem 1rem;color:var(--muted);font-size:.85rem;line-height:1.7}
 /* HELP BUTTON */
-.help-btn{margin-left:auto;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;border-radius:50%;width:28px;height:28px;font-size:.9rem;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1;transition:.15s}
+.help-btn{background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;border-radius:50%;width:28px;height:28px;font-size:.9rem;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1;transition:.15s}
 .help-btn:hover{background:rgba(255,255,255,.28)}
 /* HELP MODAL */
 .help-box{width:620px;max-width:96vw}

@@ -256,8 +256,14 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.nav-dropdown-wrap')) closeToolsMenu();
 });
 document.addEventListener('keydown', e => {
+  const typing = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
   if (e.key === 'Escape' && bpCurrentPts.length) {
     bpCurrentPts = [];
+    bpRedraw();
+  }
+  if (e.key === 'Backspace' && !typing && bpCurrentPts.length) {
+    e.preventDefault();
+    bpCurrentPts.pop();
     bpRedraw();
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -305,6 +311,138 @@ function loadProject() {
   project.nextRfiId   = project.nextRfiId   || 1;
   project.submittals  = project.submittals  || [];
   project.nextSubId   = project.nextSubId   || 1;
+}
+
+// ── MULTI-PROJECT MANAGEMENT ───────────────────────────────────────
+function getSavedProjects() {
+  try { return JSON.parse(localStorage.getItem('bc_projects') || '[]'); } catch(e) { return []; }
+}
+function setSavedProjects(list) {
+  try { localStorage.setItem('bc_projects', JSON.stringify(list)); } catch(e) {}
+}
+
+function showProjectsPanel() {
+  renderProjectsList();
+  gid('projects-modal').style.display = 'flex';
+}
+function closeProjectsPanel() {
+  gid('projects-modal').style.display = 'none';
+}
+
+function saveProjectAs() {
+  const name = prompt('Save project as:', project.name || 'My Project');
+  if (!name || !name.trim()) return;
+  const list = getSavedProjects();
+  const existing = list.findIndex(p => p.name === name.trim());
+  const entry = { id: 'proj_' + Date.now(), name: name.trim(), savedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(project)) };
+  if (existing >= 0) {
+    if (!confirm(`Replace existing save "${name.trim()}"?`)) return;
+    list[existing] = entry;
+  } else {
+    list.unshift(entry);
+  }
+  setSavedProjects(list);
+  renderProjectsList();
+}
+
+function loadSavedProject(id) {
+  if (!confirm('Load this project? Any unsaved changes to the current project will be lost.')) return;
+  const list = getSavedProjects();
+  const entry = list.find(p => p.id === id);
+  if (!entry) return;
+  project = JSON.parse(JSON.stringify(entry.data));
+  project.changeOrders = project.changeOrders || [];
+  project.nextCoId    = project.nextCoId    || 1;
+  project.rfis        = project.rfis        || [];
+  project.nextRfiId   = project.nextRfiId   || 1;
+  project.submittals  = project.submittals  || [];
+  project.nextSubId   = project.nextSubId   || 1;
+  gid('proj-name').value = project.name || 'New Project';
+  gid('proj-region').value = project.region || 'midwest';
+  const bpn = gid('bp-proj-name');
+  if (bpn) bpn.value = project.name || 'New Project';
+  activeDiv = '03';
+  renderAll();
+  renderCOPage();
+  renderRFIPane();
+  renderSubPane();
+  saveProject();
+  closeProjectsPanel();
+}
+
+function deleteSavedProject(id) {
+  if (!confirm('Delete this saved project? This cannot be undone.')) return;
+  setSavedProjects(getSavedProjects().filter(p => p.id !== id));
+  renderProjectsList();
+}
+
+function exportProject() {
+  const filename = (project.name || 'project').replace(/[^a-z0-9]/gi, '_') + '.buildcalc';
+  const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importProject(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!confirm('Load "' + (data.name || 'Untitled') + '"? This will replace your current project.')) {
+        input.value = '';
+        return;
+      }
+      project = data;
+      project.changeOrders = project.changeOrders || [];
+      project.nextCoId    = project.nextCoId    || 1;
+      project.rfis        = project.rfis        || [];
+      project.nextRfiId   = project.nextRfiId   || 1;
+      project.submittals  = project.submittals  || [];
+      project.nextSubId   = project.nextSubId   || 1;
+      gid('proj-name').value = project.name || 'New Project';
+      gid('proj-region').value = project.region || 'midwest';
+      const bpn = gid('bp-proj-name');
+      if (bpn) bpn.value = project.name || 'New Project';
+      activeDiv = '03';
+      renderAll();
+      renderCOPage();
+      renderRFIPane();
+      renderSubPane();
+      saveProject();
+      closeProjectsPanel();
+    } catch(err) {
+      alert('Could not read file. Make sure it is a valid .buildcalc file.');
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function renderProjectsList() {
+  const list = getSavedProjects();
+  const el = gid('proj-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="proj-empty">No saved projects yet.<br>Click <strong>Save As&hellip;</strong> to save your current project.</div>';
+    return;
+  }
+  el.innerHTML = list.map(p => {
+    const d = new Date(p.savedAt);
+    const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return `<div class="proj-row">
+      <div class="proj-info">
+        <div class="proj-row-name">${p.name}</div>
+        <div class="proj-row-date">Saved ${dateStr}</div>
+      </div>
+      <div class="proj-row-btns">
+        <button class="btn btn-ghost" style="font-size:.75rem;padding:.2rem .55rem" onclick="loadSavedProject('${p.id}')">Load</button>
+        <button class="btn btn-ghost" style="font-size:.75rem;padding:.2rem .55rem;color:#f87171;border-color:rgba(248,113,113,.4)" onclick="deleteSavedProject('${p.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ── BUDGET CALCULATOR ──────────────────────────────────────────────
@@ -655,8 +793,14 @@ function bpSelectNewColor(color) {
 function bpRenderColorPicker() {
   const el = gid('bpnc-colors');
   if (!el) return;
-  el.innerHTML = BP_COLORS.map(c => `
-    <div class="bp-color-dot${c === bpNewCondColor ? ' sel' : ''}" style="background:${c}" onclick="bpSelectNewColor('${c}')"></div>`).join('');
+  const isCustom = !BP_COLORS.includes(bpNewCondColor);
+  const wheel = gid('bpnc-color-wheel');
+  if (wheel) wheel.value = bpNewCondColor;
+  el.innerHTML = BP_COLORS.map(c =>
+    `<div class="bp-color-dot${c === bpNewCondColor ? ' sel' : ''}" style="background:${c}" onclick="bpSelectNewColor('${c}')"></div>`
+  ).join('') +
+  `<label class="bp-color-dot bp-color-wheel${isCustom ? ' sel' : ''}" for="bpnc-color-wheel"
+    title="Custom color" ${isCustom ? `style="background:${bpNewCondColor}"` : ''}></label>`;
 }
 
 function bpConfirmAddCond() {
@@ -816,6 +960,20 @@ function bpClosePushAll() { gid('push-all-modal').style.display = 'none'; }
 function bpLoadFile(input) {
   const file = input.files ? input.files[0] : input;
   if (!file) return;
+
+  const replacing = bpPdf !== null || bpImg !== null;
+  if (replacing && bpMeasurements.length) {
+    if (!confirm('Load new blueprint?\n\nYour current measurements will be cleared. Any estimator items you already pushed are preserved — remove them from the Estimator manually if needed.')) return;
+  }
+  if (replacing) {
+    bpMeasurements = [];
+    bpCurrentPts = [];
+    bpScalePxPerFt = null;
+    bpScalePts = [];
+    bpScaleMode = false;
+    bpRenderQtyPanel();
+  }
+
   const fileLbl = gid('bp-file-lbl');
   if (fileLbl) { fileLbl.textContent = file.name; fileLbl.style.display = 'inline'; }
   bpIsImg = file.type.startsWith('image/');
@@ -908,7 +1066,8 @@ function bpSetScale() {
 
 function bpCanvasXY(e) {
   const r = gid('markup-canvas').getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
+  const z = bpZoomPct / 100;
+  return { x: (e.clientX - r.left) / z, y: (e.clientY - r.top) / z };
 }
 
 function bpClick(e) {
@@ -961,11 +1120,12 @@ function bpMouseMove(e) {
   const ctx = gid('markup-canvas').getContext('2d');
   const cond = bpGetActiveCond();
   const color = cond ? cond.color : '#f97316';
+  const z = bpZoomPct / 100;
 
   if (bpScaleMode && bpScalePts.length === 1) {
     ctx.save();
     ctx.strokeStyle = '#f97316'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(bpScalePts[0].x, bpScalePts[0].y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(bpScalePts[0].x*z, bpScalePts[0].y*z); ctx.lineTo(pt.x*z, pt.y*z); ctx.stroke();
     ctx.restore();
   }
 
@@ -973,7 +1133,7 @@ function bpMouseMove(e) {
     const last = bpCurrentPts[bpCurrentPts.length - 1];
     ctx.save();
     ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(pt.x, pt.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(last.x*z, last.y*z); ctx.lineTo(pt.x*z, pt.y*z); ctx.stroke();
     ctx.restore();
   }
 }
@@ -1013,6 +1173,7 @@ function bpRedraw() {
   if (!c) return;
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
+  const z = bpZoomPct / 100;
 
   bpMeasurements.forEach(m => {
     const cond = bpGetCond(m.condId);
@@ -1024,31 +1185,31 @@ function bpRedraw() {
     if (m.type === 'linear') {
       ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
       ctx.beginPath();
-      m.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      m.pts.forEach((p, i) => i ? ctx.lineTo(p.x*z, p.y*z) : ctx.moveTo(p.x*z, p.y*z));
       ctx.stroke();
       m.pts.forEach(p => {
         ctx.fillStyle = color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x*z, p.y*z, 4, 0, Math.PI * 2); ctx.fill();
       });
       const mid = m.pts[Math.floor(m.pts.length / 2)];
       ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif'; ctx.textBaseline = 'alphabetic';
-      ctx.fillText(`${m.value} ${unit}`, mid.x + 5, mid.y - 5);
+      ctx.fillText(`${m.value} ${unit}`, mid.x*z + 5, mid.y*z - 5);
 
     } else if (m.type === 'area') {
       ctx.fillStyle = color + '33'; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round';
       ctx.beginPath();
-      m.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+      m.pts.forEach((p, i) => i ? ctx.lineTo(p.x*z, p.y*z) : ctx.moveTo(p.x*z, p.y*z));
       ctx.closePath(); ctx.fill(); ctx.stroke();
       const cx = m.pts.reduce((s, p) => s + p.x, 0) / m.pts.length;
       const cy = m.pts.reduce((s, p) => s + p.y, 0) / m.pts.length;
       ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(`${m.value} ${unit}`, cx, cy);
+      ctx.fillText(`${m.value} ${unit}`, cx*z, cy*z);
 
     } else if (m.type === 'count') {
       ctx.fillStyle = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(m.pts[0].x, m.pts[0].y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(m.pts[0].x*z, m.pts[0].y*z, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('✓', m.pts[0].x, m.pts[0].y);
+      ctx.fillText('✓', m.pts[0].x*z, m.pts[0].y*z);
     }
     ctx.restore();
   });
@@ -1056,7 +1217,7 @@ function bpRedraw() {
   if (bpScalePts.length === 1) {
     ctx.save();
     ctx.fillStyle = '#f97316';
-    ctx.beginPath(); ctx.arc(bpScalePts[0].x, bpScalePts[0].y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bpScalePts[0].x*z, bpScalePts[0].y*z, 5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
@@ -1067,12 +1228,12 @@ function bpRedraw() {
     ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
     ctx.globalAlpha = 0.65;
     ctx.beginPath();
-    bpCurrentPts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+    bpCurrentPts.forEach((p, i) => i ? ctx.lineTo(p.x*z, p.y*z) : ctx.moveTo(p.x*z, p.y*z));
     ctx.stroke();
     ctx.globalAlpha = 1;
     bpCurrentPts.forEach(p => {
       ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x*z, p.y*z, 4, 0, Math.PI * 2); ctx.fill();
     });
     ctx.restore();
   }

@@ -26,6 +26,7 @@
       <a href="#" onclick="showPage('changes');return false" id="nl-changes">Change Orders</a>
       <a href="#" onclick="showPage('logs');return false" id="nl-logs">Project Logs</a>
     </div>
+    <button class="proj-nav-btn" onclick="showProjectsPanel()" title="Save &amp; load projects">&#128193; Projects</button>
     <button class="help-btn" onclick="showHelp()" title="How to use BuildCalc">?</button>
   </div>
 </nav>
@@ -357,6 +358,7 @@
           <button class="bp-type-btn" id="bpnc-count" onclick="bpSelectNewType('count')">Count</button>
         </div>
         <div class="bp-color-row" id="bpnc-colors"></div>
+        <input type="color" id="bpnc-color-wheel" onchange="bpSelectNewColor(this.value)" style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none">
         <div class="bp-add-form-btns">
           <button class="btn btn-ghost" style="font-size:.74rem;padding:.22rem .5rem;color:rgba(255,255,255,.7);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)" onclick="bpHideAddCond()">Cancel</button>
           <button class="btn btn-orange" style="font-size:.74rem;padding:.22rem .5rem" onclick="bpConfirmAddCond()">Add</button>
@@ -611,7 +613,7 @@
         <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet to calibrate all measurements.</li>
         <li>In the <strong>Conditions panel</strong> (left), click <strong>+ New</strong> to create a named measurement type (e.g. "Concrete Slab"), choose Linear, Area, or Count, and pick a color.</li>
         <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item.</li>
-        <li>Quantities accumulate in the <strong>Quantities panel</strong> (right). Press <strong>Ctrl+Z</strong> to undo the last measurement, or <strong>Escape</strong> to cancel in-progress drawing.</li>
+        <li>Quantities accumulate in the <strong>Quantities panel</strong> (right). Press <strong>Ctrl+Z</strong> to undo the last completed measurement, <strong>Backspace</strong> to remove the last-placed point while drawing, or <strong>Escape</strong> to cancel in-progress drawing.</li>
         <li>Use <strong>→ Est</strong> on a single condition or <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs, then send to the Project Estimator.</li>
       </ol>
     </div>
@@ -761,6 +763,23 @@
       <button class="btn btn-ghost" onclick="bpModalClose()">Cancel</button>
       <button class="btn btn-orange" onclick="bpModalConfirm()">Add to Estimator</button>
     </div>
+  </div>
+</div>
+
+<!-- PROJECTS MODAL -->
+<div class="modal-overlay" id="projects-modal" style="display:none" onclick="if(event.target===this)closeProjectsPanel()">
+  <div class="modal-box projects-box">
+    <div class="modal-head">
+      <span class="modal-title">My Projects</span>
+      <button class="modal-close" onclick="closeProjectsPanel()">&#10005;</button>
+    </div>
+    <div class="proj-actions">
+      <button class="btn btn-orange" onclick="saveProjectAs()">&#128190; Save As&hellip;</button>
+      <button class="btn btn-ghost" onclick="exportProject()">&#8681; Download File</button>
+      <label class="btn btn-ghost" for="proj-import-input" style="cursor:pointer">&#8679; Import File</label>
+      <input type="file" id="proj-import-input" accept=".buildcalc,.json" style="display:none" onchange="importProject(this)">
+    </div>
+    <div class="proj-list" id="proj-list"></div>
   </div>
 </div>
 
