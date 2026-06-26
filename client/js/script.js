@@ -752,6 +752,27 @@ function calcBurden() {
   gid('lb-r-base-annual').textContent = fmt(wage * hrs);
 }
 
+// ── DIVISION GUESSER ───────────────────────────────────────────────
+function bpGuessDivision(name) {
+  const n = (name || '').toLowerCase();
+  if (/demo|demolit|abate|hazmat|clear|grub/.test(n))                         return '02';
+  if (/concrete|slab|footing|foundation|grade beam|pour|topping/.test(n))     return '03';
+  if (/masonry|brick|cmu|block|stone|veneer/.test(n))                         return '04';
+  if (/steel|metal stud|deck|embed|anchor bolt|struct/.test(n))               return '05';
+  if (/wood|lumber|fram|plywood|sheathing|cabinet|millwork|carpentry|blocking/.test(n)) return '06';
+  if (/roof|insul|waterproof|membrane|tpo|epdm|wrap|foam|moisture|thermal/.test(n))    return '07';
+  if (/door|window|glaz|storefront|curtain wall|overhead|opening|glass/.test(n))       return '08';
+  if (/drywall|paint|tile|carpet|floor|ceiling|finish|gypsum|plaster|vct|epoxy/.test(n)) return '09';
+  if (/toilet|locker|extinguisher|signage|dock|specialt/.test(n))             return '10';
+  if (/plumb|drain|water heat|restroom|bathroom|fixture|grease|sanitary/.test(n)) return '22';
+  if (/hvac|mechanical|duct|rtu|ahu|exhaust|heat|cool|ventil|air handl/.test(n)) return '23';
+  if (/electric|light|panel|wiring|conduit|outlet|switch|alarm/.test(n))      return '26';
+  if (/excavat|grading|fill|soil|earthwork|backfill/.test(n))                 return '31';
+  if (/paving|parking|sidewalk|curb|landscape|asphalt|pavement/.test(n))      return '32';
+  if (/sewer|water main|storm|gas line|duct bank|underground util/.test(n))   return '33';
+  return '03';
+}
+
 // ── BLUEPRINT TAKEOFF ──────────────────────────────────────────────
 let bpConditions = [
   { id: 1, name: 'Concrete Slab', color: '#f97316', type: 'area',   unit: 'SF' },
@@ -920,12 +941,13 @@ function bpSendCondToEst(condId) {
   bpPendingCondId = condId;
   const total = bpCondTotal(condId);
   gid('modal-meas-lbl').textContent = `${cond.name} — ${fmtN(Math.round(total * 10) / 10)} ${cond.unit}`;
+  const guessedDiv = bpGuessDivision(cond.name);
   gid('modal-div').innerHTML = Object.entries(CSI_ITEMS)
-    .map(([d, info]) => `<option value="${d}"${d === activeDiv ? ' selected' : ''}>${d} — ${info.name}</option>`)
+    .map(([d, info]) => `<option value="${d}"${d === guessedDiv ? ' selected' : ''}>${d} — ${info.name}</option>`)
     .join('');
   gid('modal-desc').value = cond.name;
   gid('modal-cost').value = '';
-  bpModalPickDiv(activeDiv);
+  bpModalPickDiv(guessedDiv);
   gid('send-modal').style.display = 'flex';
 }
 
@@ -968,11 +990,12 @@ let bpPaRows = [];
 
 function bpPushAllToEst() {
   if (!bpConditions.length) { alert('No conditions to push.'); return; }
-  bpPaRows = bpConditions.map(c => ({ condId: c.id, div: activeDiv, cost: 0 }));
+  bpPaRows = bpConditions.map(c => ({ condId: c.id, div: bpGuessDivision(c.name), cost: 0 }));
   const tbody = gid('push-all-rows');
-  const divOpts = Object.entries(CSI_ITEMS).map(([d, info]) => `<option value="${d}"${d === activeDiv ? ' selected' : ''}>${d} — ${info.name}</option>`).join('');
   tbody.innerHTML = bpConditions.map((c, i) => {
     const total = bpCondTotal(c.id);
+    const guessed = bpGuessDivision(c.name);
+    const divOpts = Object.entries(CSI_ITEMS).map(([d, info]) => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${info.name}</option>`).join('');
     return `<tr>
       <td style="padding:.45rem .5rem">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c.color};vertical-align:middle;margin-right:.35rem"></span>
