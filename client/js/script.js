@@ -200,6 +200,125 @@ function updateField(id, field, val) {
 }
 
 function refreshTotals() { renderDivNav(); renderSum(); saveProject(); }
+
+function exportEstimatePDF() {
+  const m       = rm();
+  const direct  = grandTotal();
+  const ohAmt   = direct * estMu.oh / 100;
+  const prAmt   = (direct + ohAmt) * estMu.profit / 100;
+  const coAmt   = (direct + ohAmt + prAmt) * estMu.cont / 100;
+  const taxAmt  = direct * 0.55 * estMu.matTax / 100;
+  const permitAmt = (direct + ohAmt + prAmt + coAmt + taxAmt) * estMu.permit / 100;
+  const bid     = direct + ohAmt + prAmt + coAmt + taxAmt + permitAmt;
+  const retAmt  = bid * estMu.ret / 100;
+  const regionLabel = (REGION_MULT[project.region] || {}).label || project.region;
+  const today   = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+
+  let divSections = '';
+  Object.entries(CSI_ITEMS).forEach(([d, info]) => {
+    const items = divItems(d);
+    if (!items.length) return;
+    const rows = items.map(i => {
+      const ext = i.qty * (i.unitCost * m);
+      return `<tr>
+        <td>${i.desc}</td><td class="c">${i.unit}</td>
+        <td class="r">${fmtN(i.qty)}</td><td class="r">$${fmtN(i.unitCost)}</td>
+        <td class="r">${fmt(ext)}</td>
+      </tr>`;
+    }).join('');
+    divSections += `<div class="ds">
+      <div class="dh">Division ${d} — ${info.name}</div>
+      <table><thead><tr><th>Description</th><th class="c">Unit</th><th class="r">Qty</th><th class="r">Unit Cost</th><th class="r">Extended</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4" class="r fw">Division Total</td><td class="r fw">${fmt(divTotal(d))}</td></tr></tfoot>
+      </table></div>`;
+  });
+
+  const approvedCOs = (project.changeOrders || []).filter(c => c.status === 'approved');
+  let coSection = '';
+  if (approvedCOs.length) {
+    const coTotal = approvedCOs.reduce((s, c) => s + (+c.cost || 0), 0);
+    coSection = `<div class="ds">
+      <div class="dh">Approved Change Orders</div>
+      <table><thead><tr><th>CO #</th><th>Date</th><th>Description</th><th class="r">Cost Impact</th></tr></thead>
+      <tbody>${approvedCOs.map(c => `<tr>
+        <td>CO-${String(c.id).padStart(3,'0')}</td><td>${c.date||'—'}</td><td>${c.desc}</td>
+        <td class="r" style="color:${(+c.cost||0)>=0?'#16a34a':'#dc2626'}">${(+c.cost||0)>=0?'+':''}${fmt(Math.abs(+c.cost||0))}</td>
+      </tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3" class="r fw">Total CO Impact</td>
+        <td class="r fw" style="color:${coTotal>=0?'#16a34a':'#dc2626'}">${coTotal>=0?'+':''}${fmt(Math.abs(coTotal))}</td>
+      </tr></tfoot></table></div>`;
+  }
+
+  const summaryRows = [
+    ['Direct Cost', fmt(direct)],
+    [`Overhead (${estMu.oh}%)`, fmt(ohAmt)],
+    [`Profit (${estMu.profit}%)`, fmt(prAmt)],
+    [`Contingency (${estMu.cont}%)`, fmt(coAmt)],
+    ...(estMu.matTax > 0 ? [[`Material Sales Tax (${estMu.matTax}%)`, fmt(taxAmt)]] : []),
+    ...(estMu.permit  > 0 ? [[`Permit Fees (${estMu.permit}%)`, fmt(permitAmt)]]    : []),
+  ].map(([l,v]) => `<tr><td>${l}</td><td class="r">${v}</td></tr>`).join('');
+
+  const ratesRows = [
+    ['Overhead', estMu.oh + '%'],
+    ['Profit', estMu.profit + '%'],
+    ['Contingency', estMu.cont + '%'],
+    ['Bond / Insurance', estMu.bond + '%'],
+    ...(estMu.matTax > 0 ? [['Material Sales Tax', estMu.matTax + '%']] : []),
+    ...(estMu.permit  > 0 ? [['Permit Fees', estMu.permit + '%']]        : []),
+    ['Regional Multiplier', m.toFixed(2) + '×'],
+  ].map(([l,v]) => `<tr><td>${l}</td><td class="r">${v}</td></tr>`).join('');
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>${project.name||'Project'} — Estimate</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:32px 40px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2.5px solid #1e3a5f;margin-bottom:20px}
+.brand{font-size:21px;font-weight:800;color:#1e3a5f;letter-spacing:-.4px}.brand span{color:#f97316}
+.pm{text-align:right}.pn{font-size:15px;font-weight:700;color:#1e3a5f}.ps{font-size:10px;color:#777;margin-top:3px}
+.ds{margin-bottom:18px}.dh{background:#1e3a5f;color:#fff;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:5px 9px;border-radius:4px 4px 0 0}
+table{width:100%;border-collapse:collapse}
+thead th{background:#f0f2f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555;padding:5px 8px;border-bottom:1px solid #dde}
+tbody td{padding:5px 8px;border-bottom:1px solid #eee;font-size:10.5px}
+tbody tr:nth-child(even) td{background:#fafbfc}
+tfoot td{background:#f0f2f6;border-top:1.5px solid #ccc;padding:5px 8px;font-size:10.5px}
+.c{text-align:center}.r{text-align:right;font-variant-numeric:tabular-nums}.fw{font-weight:700;color:#1e3a5f}
+.sw{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:6px}
+.sb .st{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#777;margin-bottom:6px}
+.sb table{border:1px solid #dde;border-radius:4px;overflow:hidden}
+.sb tbody td{padding:5px 10px;font-size:11px}.sb tbody tr:last-child td{border-bottom:none}
+.bid td{background:#1e3a5f!important;color:#fff!important;font-weight:700!important;font-size:13px!important;padding:9px 10px!important;border:none!important}
+.ret td{color:#999;font-size:10px;font-style:italic}
+.foot{margin-top:24px;padding-top:10px;border-top:1px solid #dde;font-size:9px;color:#bbb;display:flex;justify-content:space-between}
+@media print{body{padding:16px 24px}.ds{page-break-inside:avoid}}
+</style></head><body>
+<div class="header">
+  <div><div class="brand">Build<span>Calc</span></div><div style="font-size:10px;color:#999;margin-top:3px">Construction Cost Estimate</div></div>
+  <div class="pm"><div class="pn">${project.name||'New Project'}</div><div class="ps">Region: ${regionLabel} &nbsp;|&nbsp; ${today}</div></div>
+</div>
+${divSections}${coSection}
+<div class="sw">
+  <div class="sb"><div class="st">Cost Summary</div>
+    <table><tbody>${summaryRows}</tbody>
+    <tbody><tr class="bid"><td>BID PRICE</td><td class="r">${fmt(bid)}</td></tr>
+    ${estMu.ret>0?`<tr class="ret"><td>Retainage withheld (${estMu.ret}%)</td><td class="r">(${fmt(retAmt)})</td></tr>
+    <tr class="ret"><td>Net at substantial completion</td><td class="r">${fmt(bid-retAmt)}</td></tr>`:''}</tbody></table>
+  </div>
+  <div class="sb"><div class="st">Markup Rates Applied</div>
+    <table><tbody>${ratesRows}</tbody></table>
+  </div>
+</div>
+<div class="foot"><span>BuildCalc &mdash; Construction Management Tools</span><span>${project.name||'Project'} &mdash; ${today}</span></div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Please allow pop-ups for this site to export PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
 function delItem(id) { project.items = project.items.filter(i => i.id !== id); renderAll(); saveProject(); }
 function setDiv(d) { activeDiv = d; renderAll(); }
 

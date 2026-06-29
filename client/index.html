@@ -72,7 +72,7 @@
       <span class="tb-label">Bid Price</span>
       <span class="tb-total" id="top-total">$0</span>
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.25rem .6rem" onclick="newProject()">New</button>
-      <button class="btn btn-ghost" style="font-size:.76rem;padding:.25rem .6rem" onclick="window.print()">Print</button>
+      <button class="btn btn-ghost" style="font-size:.76rem;padding:.25rem .6rem" onclick="exportEstimatePDF()">Export PDF</button>
     </div>
   </div>
   <div class="est-body">
@@ -787,6 +787,22 @@
   </div>
 </div>
 
+<!-- PROJECTS MODAL -->
+<div class="modal-overlay" id="projects-modal" style="display:none" onclick="if(event.target===this)closeProjectsPanel()">
+  <div class="modal-box projects-box">
+    <div class="modal-head">
+      <span class="modal-title">My Projects</span>
+      <button class="modal-close" onclick="closeProjectsPanel()">&#10005;</button>
+    </div>
+    <div class="proj-actions">
+      <button class="btn btn-orange" onclick="saveProjectAs()">&#128190; Save As&hellip;</button>
+      <button class="btn btn-ghost" onclick="exportProject()">&#8681; Download File</button>
+      <label class="btn btn-ghost" for="proj-import-input" style="cursor:pointer">&#8679; Import File</label>
+      <input type="file" id="proj-import-input" accept=".buildcalc,.json" style="display:none" onchange="importProject(this)">
+    </div>
+    <div class="proj-list" id="proj-list"></div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="js/data.js"></script>
