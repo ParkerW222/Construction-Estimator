@@ -676,6 +676,110 @@ function pickSQual(el, q) {
   autoSched();
 }
 
+// per-run schedule state (set by autoSched, read by renderSchedGantt)
+let schedWks = 0, schedStart = null, schedCoDays = 0;
+
+function getSchedPhases() {
+  if (!project.schedPhases || project.schedPhases.length !== S_PHASES.length) {
+    project.schedPhases = S_PHASES.map(() => ({ status: 'not-started', durationOverride: null, note: '' }));
+  }
+  return project.schedPhases;
+}
+
+function schedSetStatus(idx, val) {
+  getSchedPhases()[idx].status = val;
+  saveProject();
+  renderSchedGantt();
+}
+
+function schedSetDuration(idx, val) {
+  const w = Math.max(0, +(val) || 0);
+  getSchedPhases()[idx].durationOverride = w > 0 ? w : null;
+  saveProject();
+  renderSchedGantt();
+}
+
+function schedSetNote(idx, val) {
+  getSchedPhases()[idx].note = val;
+  saveProject();
+}
+
+function renderSchedGantt() {
+  if (!schedStart) return;
+  const phases = getSchedPhases();
+  function fmtD(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+
+  const phaseWks = S_PHASES.map((ph, i) =>
+    phases[i].durationOverride !== null ? phases[i].durationOverride : Math.round(schedWks * ph.pct)
+  );
+  const actualWks = phaseWks.reduce((s, w) => s + w, 0);
+  const totalDays = actualWks * 7 + (schedCoDays > 0 ? schedCoDays : 0);
+  const basePct   = schedCoDays > 0 ? (actualWks * 7) / totalDays : 1;
+
+  const end = new Date(schedStart);
+  end.setDate(end.getDate() + actualWks * 7 + schedCoDays);
+  const final = new Date(end); final.setDate(final.getDate() + 14);
+
+  const durLabel = actualWks !== schedWks
+    ? `${actualWks} weeks <span style="font-size:.72rem;color:var(--muted)">(est. ${schedWks}w)</span>`
+    : `${actualWks} weeks`;
+  gid('s-dur').innerHTML = durLabel;
+  gid('s-end').textContent   = fmtD(end);
+  gid('s-final').textContent = fmtD(final);
+
+  const BAR   = { 'not-started': 'var(--navy)', 'in-progress': '#f97316', 'complete': '#16a34a' };
+  const SDOT  = { 'not-started': 'g-dot-ns',   'in-progress': 'g-dot-ip', 'complete': 'g-dot-cp' };
+  const SSEL  = { 'not-started': 'gss-ns',      'in-progress': 'gss-ip',  'complete': 'gss-cp' };
+  const cols  = '196px 1fr 74px 118px';
+
+  let cum = 0;
+  let html = `<div class="gantt-hdr" style="grid-template-columns:${cols}">
+    <span>Phase</span><span>Timeline</span><span style="text-align:center">Weeks</span><span>Status</span>
+  </div>`;
+
+  S_PHASES.forEach((ph, i) => {
+    const w       = phaseWks[i];
+    const pct     = w / (actualWks || 1);
+    const st      = phases[i].status || 'not-started';
+    const isOver  = phases[i].durationOverride !== null;
+    const note    = (phases[i].note || '').replace(/"/g, '&quot;');
+
+    html += `<div class="gantt-row" style="grid-template-columns:${cols}">
+      <span class="gantt-label"><span class="g-dot ${SDOT[st]}"></span>${ph.name}</span>
+      <div class="gantt-track">
+        <div class="gantt-bar" style="left:${cum*basePct*100}%;width:${pct*basePct*100}%;background:${BAR[st]}${st==='complete'?';opacity:.7':''}"></div>
+      </div>
+      <div class="gantt-dur-wrap">
+        <input class="gantt-dur-inp${isOver?' ov':''}" type="number" min="0" value="${w}"
+          onchange="schedSetDuration(${i},this.value)" title="${isOver?'Manually overridden':'Auto-calculated — edit to override'}">
+        <span class="gantt-dur-unit">w</span>
+      </div>
+      <select class="gantt-status-sel ${SSEL[st]}" onchange="schedSetStatus(${i},this.value)">
+        <option value="not-started"${st==='not-started'?' selected':''}>Not Started</option>
+        <option value="in-progress"${st==='in-progress'?' selected':''}>In Progress</option>
+        <option value="complete"${st==='complete'?' selected':''}>&#10003; Complete</option>
+      </select>
+    </div>
+    <div class="gantt-note-row">
+      <input class="gantt-note-inp" type="text" placeholder="Add a note for this phase…" value="${note}"
+        onchange="schedSetNote(${i},this.value)" ${note ? 'style="border-color:var(--orange)"' : ''}>
+    </div>`;
+    cum += pct;
+  });
+
+  if (schedCoDays > 0) {
+    const coPct = 1 - basePct;
+    html += `<div class="gantt-row" style="grid-template-columns:${cols}">
+      <span class="gantt-label" style="color:var(--orange)"><span class="g-dot" style="background:var(--orange)"></span>CO Extension</span>
+      <div class="gantt-track"><div class="gantt-bar" style="left:${basePct*100}%;width:${coPct*100}%;background:rgba(249,115,22,.55)"></div></div>
+      <div class="gantt-dur-wrap"><span class="gantt-dur-inp" style="color:var(--orange);border:none;background:none;text-align:center">${schedCoDays}d</span></div>
+      <span></span>
+    </div>`;
+  }
+
+  gid('s-gantt').innerHTML = html;
+}
+
 function autoSched() {
   const sf = +(gid('s-sqft').value) || 0;
   const sdVal = gid('s-start').value;
@@ -683,71 +787,26 @@ function autoSched() {
 
   const stories = Math.min(+(gid('s-stories').value) || 1, 7);
   const base = S_BASE[sType];
-  const qm = S_QUAL[sQual];
-  const sm = S_STORY[Math.min(stories - 1, 6)];
-  const sfm = sf < 5000 ? 0.8 : sf < 20000 ? 1 : sf < 50000 ? 1.15 : sf < 100000 ? 1.3 : 1.45;
-  const wks = Math.round(((base.lo + base.hi) / 2) * qm * sm * sfm);
+  const qm   = S_QUAL[sQual];
+  const sm   = S_STORY[Math.min(stories - 1, 6)];
+  const sfm  = sf < 5000 ? 0.8 : sf < 20000 ? 1 : sf < 50000 ? 1.15 : sf < 100000 ? 1.3 : 1.45;
+  schedWks    = Math.round(((base.lo + base.hi) / 2) * qm * sm * sfm);
+  schedStart  = new Date(sdVal + 'T12:00:00');
+  schedCoDays = project.changeOrders.filter(c => c.status === 'approved').reduce((s, c) => s + (c.days || 0), 0);
 
-  const start = new Date(sdVal + 'T12:00:00');
-  function addW(d, w) { const r = new Date(d); r.setDate(r.getDate() + w * 7); return r; }
   function fmtD(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-
-  // Pull approved CO schedule days
-  const coDays = project.changeOrders
-    .filter(c => c.status === 'approved')
-    .reduce((s, c) => s + (c.days || 0), 0);
-
-  // Completion dates include CO extension
-  const end = new Date(start);
-  end.setDate(end.getDate() + wks * 7 + coDays);
-  const final = addW(end, 2);
-
-  gid('s-summary').style.display = 'block';
+  gid('s-summary').style.display   = 'block';
   gid('s-gantt-card').style.display = 'block';
-  gid('s-dur').textContent = wks + ' weeks';
-  gid('s-start-lbl').textContent = fmtD(start);
-  gid('s-end').textContent = fmtD(end);
-  gid('s-final').textContent = fmtD(final);
+  gid('s-start-lbl').textContent   = fmtD(schedStart);
 
-  // Show CO extension row in summary
   const coRow = gid('s-co-row');
-  const coDaysEl = gid('s-co-days');
   if (coRow) {
-    if (coDays !== 0) {
-      coRow.style.display = '';
-      if (coDaysEl) coDaysEl.textContent = (coDays >= 0 ? '+' : '') + coDays + ' days';
-    } else {
-      coRow.style.display = 'none';
-    }
+    coRow.style.display = schedCoDays !== 0 ? '' : 'none';
+    const coDaysEl = gid('s-co-days');
+    if (coDaysEl && schedCoDays !== 0) coDaysEl.textContent = (schedCoDays >= 0 ? '+' : '') + schedCoDays + ' days';
   }
 
-  // Build Gantt — scale base phases if CO days extend the timeline
-  const totalDays = wks * 7 + (coDays > 0 ? coDays : 0);
-  const basePct = coDays > 0 ? (wks * 7) / totalDays : 1;
-
-  let cum = 0;
-  const cols = '200px 1fr 58px';
-  let html = `<div class="gantt-hdr" style="grid-template-columns:${cols}"><span>Phase</span><span>Timeline</span><span style="text-align:right">Dur.</span></div>`;
-  S_PHASES.forEach(ph => {
-    const phWks = Math.round(wks * ph.pct);
-    html += `<div class="gantt-row" style="grid-template-columns:${cols}">
-      <span class="gantt-label">${ph.name}</span>
-      <div class="gantt-track"><div class="gantt-bar" style="left:${cum * basePct * 100}%;width:${ph.pct * basePct * 100}%"></div></div>
-      <span class="gantt-dur">${phWks}w</span>
-    </div>`;
-    cum += ph.pct;
-  });
-
-  if (coDays > 0) {
-    const coPct = 1 - basePct;
-    html += `<div class="gantt-row" style="grid-template-columns:${cols}">
-      <span class="gantt-label" style="color:var(--orange);font-weight:600">CO Extension</span>
-      <div class="gantt-track"><div class="gantt-bar" style="left:${basePct * 100}%;width:${coPct * 100}%;background:rgba(249,115,22,.65)"></div></div>
-      <span class="gantt-dur" style="color:var(--orange)">${coDays}d</span>
-    </div>`;
-  }
-
-  gid('s-gantt').innerHTML = html;
+  renderSchedGantt();
 }
 
 // ── BID COMPARISON ─────────────────────────────────────────────────
