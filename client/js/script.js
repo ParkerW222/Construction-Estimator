@@ -1,13 +1,17 @@
 // ── STATE ──────────────────────────────────────────────────────────
-let project = { name: 'New Project', region: 'midwest', items: [], nextId: 1 };
+let project = { id: 'proj_' + Date.now(), name: 'New Project', region: 'midwest', items: [], nextId: 1 };
 let activeDiv = '03';
 let estMu = { oh: 10, profit: 8, cont: 5, matTax: 0, permit: 1.0 };
-let bType = 'office', bQual = 'standard';
-let sType = 'office', sQual = 'standard';
-let bidCount = 3;
+let currentUser = null;
+let authMode = 'login';
+let authRole = 'builder';
 
 // ── UTILITIES ──────────────────────────────────────────────────────
 function gid(id) { return document.getElementById(id); }
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 function fmt(n) {
   if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
@@ -25,30 +29,15 @@ function closeHelp() { gid('help-modal').style.display = 'none'; }
 // ── SPA NAVIGATION ─────────────────────────────────────────────────
 function showPage(p) {
   document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-links a, .nav-dd-menu a').forEach(el => el.classList.remove('active'));
-  const toolsBtn = gid('nl-tools-btn');
-  if (toolsBtn) toolsBtn.classList.remove('active');
+  document.querySelectorAll('.nav-links a').forEach(el => el.classList.remove('active'));
   gid('pg-' + p).classList.add('active');
   const link = gid('nl-' + p);
   if (link) link.classList.add('active');
-  const toolsPages = ['budget', 'schedule', 'bids', 'markup'];
-  if (toolsPages.includes(p) && toolsBtn) toolsBtn.classList.add('active');
-  closeToolsMenu();
-  if (p === 'changes') renderCOPage();
-  if (p === 'schedule') autoSched();
+  if (p === 'builder') renderBudgetBuilder();
   if (p === 'blueprint') {
     const bpn = gid('bp-proj-name');
     if (bpn) bpn.value = project.name || 'New Project';
   }
-}
-
-function toggleToolsMenu(e) {
-  e.stopPropagation();
-  gid('tools-menu').classList.toggle('open');
-}
-function closeToolsMenu() {
-  const m = gid('tools-menu');
-  if (m) m.classList.remove('open');
 }
 
 // ── ESTIMATOR ──────────────────────────────────────────────────────
@@ -377,6 +366,14 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   const typing = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+  if (e.key === 'Shift' && !typing) {
+    if (!bpSpaceDown) {
+      bpSpaceDown = true;
+      const area = gid('bp-canvas-area'), mkC = gid('markup-canvas');
+      if (area) area.style.cursor = 'grab';
+      if (mkC) mkC.style.cursor = 'grab';
+    }
+  }
   if (e.key === 'Escape' && bpCurrentPts.length) {
     bpCurrentPts = [];
     bpRedraw();
@@ -394,60 +391,109 @@ document.addEventListener('keydown', e => {
     }
   }
 });
+document.addEventListener('keyup', e => {
+  if (e.key === 'Shift') {
+    bpSpaceDown = false;
+    bpPanActive = false;
+    const area = gid('bp-canvas-area'), mkC = gid('markup-canvas');
+    if (area) area.style.cursor = '';
+    if (mkC) mkC.style.cursor = bpScaleMode ? 'crosshair' : 'default';
+  }
+});
 
 function newProject() {
   if (!confirm('Start a new project? Current items will be cleared.')) return;
-  project = { name: 'New Project', region: 'midwest', items: [], nextId: 1, changeOrders: [], nextCoId: 1, rfis: [], nextRfiId: 1, submittals: [], nextSubId: 1 };
+  project = { id: 'proj_' + Date.now(), name: 'New Project', region: 'midwest', items: [], nextId: 1 };
   gid('proj-name').value = 'New Project';
   gid('proj-region').value = 'midwest';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = 'New Project';
+  const bbn = gid('bld-proj-name');
+  if (bbn) bbn.value = 'New Project';
   activeDiv = '03';
   renderAll();
-  renderCOPage();
-  renderRFIPane();
-  renderSubPane();
+  renderBudgetBuilder();
   saveProject();
 }
 
+function bcProjKey() {
+  return currentUser ? `bc_proj_${currentUser.id}` : 'bc_proj';
+}
+
 function saveProject() {
-  try { localStorage.setItem('bc_proj', JSON.stringify(project)); } catch (e) {}
+  if (bpPdf || bpImg) bpSavePage();
+  project.bpState = {
+    conditions: bpConditions,
+    condNextId: bpCondNextId,
+    activeCondId: bpActiveCondId,
+    pageData: bpPageData,
+    pageNum: bpPageNum,
+    isImg: bpIsImg,
+    zoomPct: bpZoomPct,
+    fileName: gid('bp-file-lbl') ? gid('bp-file-lbl').textContent : '',
+  };
+  try { localStorage.setItem(bcProjKey(), JSON.stringify(project)); } catch (e) {}
+  autoSaveCurrentToList();
   updateNavProjectName();
 }
 
 function loadProject() {
   try {
-    const s = localStorage.getItem('bc_proj');
+    const s = localStorage.getItem(bcProjKey());
     if (s) {
       project = JSON.parse(s);
       gid('proj-name').value = project.name || 'New Project';
       gid('proj-region').value = project.region || 'midwest';
       const bpn = gid('bp-proj-name');
       if (bpn) bpn.value = project.name || 'New Project';
+      const bbn = gid('bld-proj-name');
+      if (bbn) bbn.value = project.name || 'New Project';
     }
   } catch (e) {}
-  project.changeOrders = project.changeOrders || [];
-  project.nextCoId    = project.nextCoId    || 1;
-  project.rfis        = project.rfis        || [];
-  project.nextRfiId   = project.nextRfiId   || 1;
-  project.submittals  = project.submittals  || [];
-  project.nextSubId   = project.nextSubId   || 1;
+  if (!project.id) project.id = 'proj_' + Date.now();
 }
 
-// ── MULTI-PROJECT MANAGEMENT ───────────────────────────────────────
-function getSavedProjects() {
-  try { return JSON.parse(localStorage.getItem('bc_projects') || '[]'); } catch(e) { return []; }
+// ── MULTI-PROJECT MANAGEMENT (server-backed via /api/projects) ──────
+const PROJECTS_API = '/api/projects';
+
+async function getSavedProjects() {
+  try {
+    const res = await fetch(PROJECTS_API);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (e) { return []; }
 }
-function setSavedProjects(list) {
-  try { localStorage.setItem('bc_projects', JSON.stringify(list)); } catch(e) {}
+
+async function apiGetProject(id) {
+  try {
+    const res = await fetch(`${PROJECTS_API}/${id}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) { return null; }
+}
+
+async function apiSaveProject(id, name, data) {
+  try {
+    await fetch(PROJECTS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name, data }),
+    });
+  } catch (e) {}
+}
+
+async function apiDeleteProject(id) {
+  try { await fetch(`${PROJECTS_API}/${id}`, { method: 'DELETE' }); } catch (e) {}
 }
 
 function updateNavProjectName() {
   const name = project.name || 'New Project';
   const navEl = gid('proj-nav-name');
   const curEl = gid('proj-dd-current-name');
+  const bbn   = gid('bld-proj-name');
   if (navEl) navEl.textContent = name;
   if (curEl) curEl.textContent = name;
+  if (bbn)   bbn.value = name;
 }
 
 function toggleProjectsDropdown(e) {
@@ -467,7 +513,7 @@ function closeProjectsDropdown() {
   if (panel) panel.classList.remove('open');
 }
 
-function saveCurrentProject() {
+async function saveCurrentProject() {
   const name = project.name && project.name !== 'New Project'
     ? project.name
     : prompt('Name this project:', 'My Project');
@@ -476,71 +522,69 @@ function saveCurrentProject() {
   gid('proj-name').value = project.name;
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = project.name;
-  const list = getSavedProjects();
-  const idx = list.findIndex(p => p.name === project.name);
-  const entry = { id: idx >= 0 ? list[idx].id : 'proj_' + Date.now(), name: project.name, savedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(project)) };
-  if (idx >= 0) list[idx] = entry; else list.unshift(entry);
-  setSavedProjects(list);
+  const bbn = gid('bld-proj-name');
+  if (bbn) bbn.value = project.name;
+  const list = await getSavedProjects();
+  const dupIdx = list.findIndex(p => p.name === project.name && p.id !== project.id);
+  if (dupIdx >= 0 && !confirm(`A project named "${project.name}" already exists. Save anyway as a separate project?`)) return;
+  if (!project.id) project.id = 'proj_' + Date.now();
+  await apiSaveProject(project.id, project.name, project);
   saveProject();
   renderProjectsDropdown();
   const btn = gid('proj-dd-btn');
   if (btn) { btn.classList.add('saved-flash'); setTimeout(() => btn.classList.remove('saved-flash'), 900); }
 }
 
-function autoSaveCurrentToList() {
+async function autoSaveCurrentToList() {
   if (!project.name || project.name === 'New Project') return;
-  const list = getSavedProjects();
-  const idx = list.findIndex(p => p.name === project.name);
-  if (idx < 0) return;
-  list[idx] = { ...list[idx], savedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(project)) };
-  setSavedProjects(list);
+  if (!project.id) project.id = 'proj_' + Date.now();
+  await apiSaveProject(project.id, project.name, project);
 }
 
-function switchToProject(id) {
-  autoSaveCurrentToList();
-  const list = getSavedProjects();
-  const entry = list.find(p => p.id === id);
+async function switchToProject(id) {
+  saveProject();
+  const entry = await apiGetProject(id);
   if (!entry) return;
-  project = JSON.parse(JSON.stringify(entry.data));
-  project.changeOrders = project.changeOrders || [];
-  project.nextCoId    = project.nextCoId    || 1;
-  project.rfis        = project.rfis        || [];
-  project.nextRfiId   = project.nextRfiId   || 1;
-  project.submittals  = project.submittals  || [];
-  project.nextSubId   = project.nextSubId   || 1;
+  bpResetAll();
+  project = entry.data;
+  project.id = entry.id;
   gid('proj-name').value = project.name || 'New Project';
   gid('proj-region').value = project.region || 'midwest';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = project.name || 'New Project';
+  const bbn = gid('bld-proj-name');
+  if (bbn) bbn.value = project.name || 'New Project';
   activeDiv = '03';
   renderAll();
-  renderCOPage();
-  renderRFIPane();
-  renderSubPane();
-  saveProject();
+  renderBudgetBuilder();
+  try { localStorage.setItem(bcProjKey(), JSON.stringify(project)); } catch(e) {}
+  updateNavProjectName();
+  bpRestoreFromProject();
   closeProjectsDropdown();
 }
 
 function startNewProjectFromDD() {
   autoSaveCurrentToList();
   if (!confirm('Start a new project? Current items will be cleared.')) return;
-  project = { name: 'New Project', region: 'midwest', items: [], nextId: 1, changeOrders: [], nextCoId: 1, rfis: [], nextRfiId: 1, submittals: [], nextSubId: 1 };
+  bpResetAll();
+  project = { id: 'proj_' + Date.now(), name: 'New Project', region: 'midwest', items: [], nextId: 1 };
   gid('proj-name').value = 'New Project';
   gid('proj-region').value = 'midwest';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = 'New Project';
+  const bbn = gid('bld-proj-name');
+  if (bbn) bbn.value = 'New Project';
   activeDiv = '03';
   renderAll();
-  renderCOPage();
-  renderRFIPane();
-  renderSubPane();
+  renderBudgetBuilder();
   saveProject();
   closeProjectsDropdown();
 }
 
-function deleteProjectEntry(id) {
+async function deleteProjectEntry(id) {
   if (!confirm('Delete this saved project? This cannot be undone.')) return;
-  setSavedProjects(getSavedProjects().filter(p => p.id !== id));
+  await apiDeleteProject(id);
+  bpDeleteStoredFile(id);
   renderProjectsDropdown();
 }
 
@@ -565,21 +609,15 @@ function importProject(input) {
         input.value = ''; return;
       }
       project = data;
-      project.changeOrders = project.changeOrders || [];
-      project.nextCoId    = project.nextCoId    || 1;
-      project.rfis        = project.rfis        || [];
-      project.nextRfiId   = project.nextRfiId   || 1;
-      project.submittals  = project.submittals  || [];
-      project.nextSubId   = project.nextSubId   || 1;
       gid('proj-name').value = project.name || 'New Project';
       gid('proj-region').value = project.region || 'midwest';
       const bpn = gid('bp-proj-name');
       if (bpn) bpn.value = project.name || 'New Project';
+      const bbn = gid('bld-proj-name');
+      if (bbn) bbn.value = project.name || 'New Project';
       activeDiv = '03';
       renderAll();
-      renderCOPage();
-      renderRFIPane();
-      renderSubPane();
+      renderBudgetBuilder();
       saveProject();
       closeProjectsDropdown();
     } catch(err) {
@@ -590,23 +628,23 @@ function importProject(input) {
   reader.readAsText(file);
 }
 
-function renderProjectsDropdown() {
+async function renderProjectsDropdown() {
   updateNavProjectName();
-  const list = getSavedProjects();
+  refreshShareStatus();
+  const list = await getSavedProjects();
   const el = gid('proj-dd-list');
   if (!el) return;
   if (!list.length) {
     el.innerHTML = '<div class="proj-dd-empty-msg">No saved projects yet. Click <strong>Save</strong> to save the current project.</div>';
     return;
   }
-  const currentName = project.name || 'New Project';
   el.innerHTML = list.map(p => {
     const d = new Date(p.savedAt);
     const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    const isCurrent = p.name === currentName;
+    const isCurrent = p.id === project.id;
     return `<div class="proj-dd-item${isCurrent ? ' current' : ''}">
       <div class="proj-dd-item-info">
-        <div class="proj-dd-item-name">${p.name}${isCurrent ? ' <span class="proj-dd-badge">active</span>' : ''}</div>
+        <div class="proj-dd-item-name">${esc(p.name)}${isCurrent ? ' <span class="proj-dd-badge">active</span>' : ''}</div>
         <div class="proj-dd-item-date">${dateStr}</div>
       </div>
       ${isCurrent ? '' : `<button class="proj-dd-load-btn" onclick="switchToProject('${p.id}')">Load</button>`}
@@ -615,320 +653,6 @@ function renderProjectsDropdown() {
   }).join('');
 }
 
-// ── BUDGET CALCULATOR ──────────────────────────────────────────────
-function pickBType(el, t) {
-  bType = t;
-  el.closest('.type-grid').querySelectorAll('.q-opt').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  calcBudget();
-}
-
-function pickBQual(el, q) {
-  bQual = q;
-  el.closest('.type-grid').querySelectorAll('.q-opt').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  calcBudget();
-}
-
-function calcBudget() {
-  const sf = +(gid('b-sqft').value) || 0;
-  if (!sf) return;
-  const stories = Math.min(+(gid('b-stories').value) || 1, 7);
-  const rmv = REGION_MULT[gid('b-region').value].mult;
-  const qm = B_QUAL[bQual];
-  const sm = B_STORY[Math.min(stories - 1, 6)];
-  const base = B_BASE[bType];
-  const lo = base.lo * sf * rmv * qm * sm;
-  const hi = base.hi * sf * rmv * qm * sm;
-  const mid = (lo + hi) / 2;
-  const lr = base.lr;
-
-  gid('b-results').style.display = 'block';
-  gid('b-range').textContent = `${fmt(lo)} – ${fmt(hi)}`;
-  gid('b-psf').textContent = `${fmtC((lo / sf + hi / sf) / 2)} / SF`;
-  gid('b-sadj').textContent = `+${((sm - 1) * 100).toFixed(0)}% for ${stories} ${stories === 1 ? 'story' : 'stories'}`;
-  gid('b-lbar').style.width = (lr * 100) + '%';
-  gid('b-lpct').textContent = (lr * 100).toFixed(0) + '%';
-  gid('b-mpct').textContent = ((1 - lr) * 100).toFixed(0) + '%';
-  gid('b-lamt').textContent = fmtN(mid * lr);
-  gid('b-mamt').textContent = fmtN(mid * (1 - lr));
-  gid('b-csi').innerHTML = B_DIV.map(d => `
-    <div class="csi-row">
-      <span class="csi-name">${d.n}</span>
-      <div class="csi-bar-wrap"><div class="csi-bar-fill" style="width:${(d.w / 0.18) * 100}%"></div></div>
-      <span class="csi-pct">${(d.w * 100).toFixed(0)}%</span>
-      <span class="csi-amt">${fmt(mid * d.w)}</span>
-    </div>`).join('');
-}
-
-// ── SCHEDULE ESTIMATOR ─────────────────────────────────────────────
-function pickSType(el, t) {
-  sType = t;
-  el.closest('.type-grid').querySelectorAll('.q-opt').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  autoSched();
-}
-
-function pickSQual(el, q) {
-  sQual = q;
-  el.closest('.type-grid').querySelectorAll('.q-opt').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  autoSched();
-}
-
-// per-run schedule state (set by autoSched, read by renderSchedGantt)
-let schedWks = 0, schedStart = null, schedCoDays = 0;
-
-function getSchedPhases() {
-  if (!project.schedPhases || project.schedPhases.length !== S_PHASES.length) {
-    project.schedPhases = S_PHASES.map(() => ({ status: 'not-started', durationOverride: null, note: '' }));
-  }
-  return project.schedPhases;
-}
-
-function schedSetStatus(idx, val) {
-  getSchedPhases()[idx].status = val;
-  saveProject();
-  renderSchedGantt();
-}
-
-function schedSetDuration(idx, val) {
-  const w = Math.max(0, +(val) || 0);
-  getSchedPhases()[idx].durationOverride = w > 0 ? w : null;
-  saveProject();
-  renderSchedGantt();
-}
-
-function schedSetNote(idx, val) {
-  getSchedPhases()[idx].note = val;
-  saveProject();
-}
-
-function renderSchedGantt() {
-  if (!schedStart) return;
-  const phases = getSchedPhases();
-  function fmtD(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-
-  const phaseWks = S_PHASES.map((ph, i) =>
-    phases[i].durationOverride !== null ? phases[i].durationOverride : Math.round(schedWks * ph.pct)
-  );
-  const actualWks = phaseWks.reduce((s, w) => s + w, 0);
-  const totalDays = actualWks * 7 + (schedCoDays > 0 ? schedCoDays : 0);
-  const basePct   = schedCoDays > 0 ? (actualWks * 7) / totalDays : 1;
-
-  const end = new Date(schedStart);
-  end.setDate(end.getDate() + actualWks * 7 + schedCoDays);
-  const final = new Date(end); final.setDate(final.getDate() + 14);
-
-  const durLabel = actualWks !== schedWks
-    ? `${actualWks} weeks <span style="font-size:.72rem;color:var(--muted)">(est. ${schedWks}w)</span>`
-    : `${actualWks} weeks`;
-  gid('s-dur').innerHTML = durLabel;
-  gid('s-end').textContent   = fmtD(end);
-  gid('s-final').textContent = fmtD(final);
-
-  const BAR   = { 'not-started': 'var(--navy)', 'in-progress': '#f97316', 'complete': '#16a34a' };
-  const SDOT  = { 'not-started': 'g-dot-ns',   'in-progress': 'g-dot-ip', 'complete': 'g-dot-cp' };
-  const SSEL  = { 'not-started': 'gss-ns',      'in-progress': 'gss-ip',  'complete': 'gss-cp' };
-  const cols  = '196px 1fr 74px 118px';
-
-  let cum = 0;
-  let html = `<div class="gantt-hdr" style="grid-template-columns:${cols}">
-    <span>Phase</span><span>Timeline</span><span style="text-align:center">Weeks</span><span>Status</span>
-  </div>`;
-
-  S_PHASES.forEach((ph, i) => {
-    const w       = phaseWks[i];
-    const pct     = w / (actualWks || 1);
-    const st      = phases[i].status || 'not-started';
-    const isOver  = phases[i].durationOverride !== null;
-    const note    = (phases[i].note || '').replace(/"/g, '&quot;');
-
-    html += `<div class="gantt-row" style="grid-template-columns:${cols}">
-      <span class="gantt-label"><span class="g-dot ${SDOT[st]}"></span>${ph.name}</span>
-      <div class="gantt-track">
-        <div class="gantt-bar" style="left:${cum*basePct*100}%;width:${pct*basePct*100}%;background:${BAR[st]}${st==='complete'?';opacity:.7':''}"></div>
-      </div>
-      <div class="gantt-dur-wrap">
-        <input class="gantt-dur-inp${isOver?' ov':''}" type="number" min="0" value="${w}"
-          onchange="schedSetDuration(${i},this.value)" title="${isOver?'Manually overridden':'Auto-calculated — edit to override'}">
-        <span class="gantt-dur-unit">w</span>
-      </div>
-      <select class="gantt-status-sel ${SSEL[st]}" onchange="schedSetStatus(${i},this.value)">
-        <option value="not-started"${st==='not-started'?' selected':''}>Not Started</option>
-        <option value="in-progress"${st==='in-progress'?' selected':''}>In Progress</option>
-        <option value="complete"${st==='complete'?' selected':''}>&#10003; Complete</option>
-      </select>
-    </div>
-    <div class="gantt-note-row">
-      <input class="gantt-note-inp" type="text" placeholder="Add a note for this phase…" value="${note}"
-        onchange="schedSetNote(${i},this.value)" ${note ? 'style="border-color:var(--orange)"' : ''}>
-    </div>`;
-    cum += pct;
-  });
-
-  if (schedCoDays > 0) {
-    const coPct = 1 - basePct;
-    html += `<div class="gantt-row" style="grid-template-columns:${cols}">
-      <span class="gantt-label" style="color:var(--orange)"><span class="g-dot" style="background:var(--orange)"></span>CO Extension</span>
-      <div class="gantt-track"><div class="gantt-bar" style="left:${basePct*100}%;width:${coPct*100}%;background:rgba(249,115,22,.55)"></div></div>
-      <div class="gantt-dur-wrap"><span class="gantt-dur-inp" style="color:var(--orange);border:none;background:none;text-align:center">${schedCoDays}d</span></div>
-      <span></span>
-    </div>`;
-  }
-
-  gid('s-gantt').innerHTML = html;
-}
-
-function autoSched() {
-  const sf = +(gid('s-sqft').value) || 0;
-  const sdVal = gid('s-start').value;
-  if (!sf || !sdVal) return;
-
-  const stories = Math.min(+(gid('s-stories').value) || 1, 7);
-  const base = S_BASE[sType];
-  const qm   = S_QUAL[sQual];
-  const sm   = S_STORY[Math.min(stories - 1, 6)];
-  const sfm  = sf < 5000 ? 0.8 : sf < 20000 ? 1 : sf < 50000 ? 1.15 : sf < 100000 ? 1.3 : 1.45;
-  schedWks    = Math.round(((base.lo + base.hi) / 2) * qm * sm * sfm);
-  schedStart  = new Date(sdVal + 'T12:00:00');
-  schedCoDays = project.changeOrders.filter(c => c.status === 'approved').reduce((s, c) => s + (c.days || 0), 0);
-
-  function fmtD(d) { return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-  gid('s-summary').style.display   = 'block';
-  gid('s-gantt-card').style.display = 'block';
-  gid('s-start-lbl').textContent   = fmtD(schedStart);
-
-  const coRow = gid('s-co-row');
-  if (coRow) {
-    coRow.style.display = schedCoDays !== 0 ? '' : 'none';
-    const coDaysEl = gid('s-co-days');
-    if (coDaysEl && schedCoDays !== 0) coDaysEl.textContent = (schedCoDays >= 0 ? '+' : '') + schedCoDays + ' days';
-  }
-
-  renderSchedGantt();
-}
-
-// ── BID COMPARISON ─────────────────────────────────────────────────
-function renderBidCards() {
-  const n = bidCount;
-  gid('bid-cards').style.gridTemplateColumns = n <= 3 ? `repeat(${n},1fr)` : 'repeat(3,1fr)';
-  gid('bid-cards').innerHTML = Array.from({ length: n }, (_, i) => `
-    <div class="bid-card" style="border-top-color:${BID_COLORS[i]}">
-      <h3 style="color:${BID_COLORS[i]}">Bidder ${i + 1}</h3>
-      <label class="fl">Company Name</label>
-      <input type="text" id="bn-${i}" placeholder="Contractor name" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.45rem .6rem;font-size:.84rem;margin-bottom:.6rem">
-      <label class="fl">Bid Amount ($)</label>
-      <input type="number" id="ba-${i}" placeholder="0" oninput="analyzeBids()" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.45rem .6rem;font-size:.84rem;margin-bottom:.6rem">
-      <label class="fl">Notes</label>
-      <input type="text" id="bnote-${i}" placeholder="Exceptions, qualifications…" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.45rem .6rem;font-size:.84rem">
-    </div>`).join('');
-  gid('bid-analysis').style.display = 'none';
-}
-
-function analyzeBids() {
-  const bids = [];
-  for (let i = 0; i < bidCount; i++) {
-    const a = +(gid('ba-' + i).value) || 0;
-    const n = gid('bn-' + i).value || `Bidder ${i + 1}`;
-    if (a > 0) bids.push({ i, name: n, amt: a });
-  }
-  if (bids.length < 2) { gid('bid-analysis').style.display = 'none'; return; }
-
-  bids.sort((a, b) => a.amt - b.amt);
-  const lo = bids[0].amt, hi = bids[bids.length - 1].amt;
-  const avg = bids.reduce((s, b) => s + b.amt, 0) / bids.length;
-  const spread = (hi - lo) / lo * 100;
-  const spreadLbl = spread < 5 ? 'Tight (<5%)' : spread < 15 ? 'Normal (5–15%)' : spread < 30 ? 'Wide (15–30%)' : 'Very Wide (>30%)';
-
-  gid('bid-analysis').style.display = 'block';
-  gid('ba-low').textContent = fmt(lo);
-  gid('ba-high').textContent = fmt(hi);
-  gid('ba-avg').textContent = fmt(Math.round(avg));
-  gid('ba-spread').textContent = spread.toFixed(1) + '%';
-  gid('ba-spread-lbl').textContent = spreadLbl;
-
-  const eng = +(gid('bid-est').value) || 0;
-  if (eng > 0) {
-    gid('ba-est-col').style.display = 'block';
-    gid('ba-eng').textContent = fmt(eng);
-    const diff = (lo - eng) / eng * 100;
-    gid('ba-vs-est').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '% vs. estimate';
-  } else {
-    gid('ba-est-col').style.display = 'none';
-  }
-
-  gid('bid-rank').innerHTML = bids.map((b, r) => `
-    <div class="rank-card${r === 0 ? ' r1' : ''}">
-      <div class="rank-num">#${r + 1}${r === 0 ? ' — LOW BID' : ''}</div>
-      <div class="rank-name">${b.name}</div>
-      <div class="rank-price">${fmt(b.amt)}</div>
-      ${r > 0 ? `<div class="rank-diff">+${fmt(b.amt - lo)} above low</div>` : ''}
-    </div>`).join('');
-}
-
-// ── MARKUP & OVERHEAD ──────────────────────────────────────────────
-function switchTab(btn, paneId) {
-  gid('pg-markup').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  gid('pg-markup').querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  gid(paneId).classList.add('active');
-}
-
-function calcMarkup() {
-  const labor = +(gid('mu-labor').value) || 0;
-  const mat   = +(gid('mu-mat').value)   || 0;
-  const sub   = +(gid('mu-sub').value)   || 0;
-  const equip = +(gid('mu-equip').value) || 0;
-  const direct = labor + mat + sub + equip;
-
-  const oh     = +(gid('mu-oh').value)     || 0;
-  const profit = +(gid('mu-profit').value) || 0;
-  const cont   = +(gid('mu-cont').value)   || 0;
-  const bond   = +(gid('mu-bond').value)   || 0;
-
-  const ohA  = direct * oh / 100;
-  const prA  = (direct + ohA) * profit / 100;
-  const coA  = (direct + ohA + prA) * cont / 100;
-  const boA  = (direct + ohA + prA + coA) * bond / 100;
-  const total = direct + ohA + prA + coA + boA;
-
-  const ret  = +(gid('mu-ret').value) || 0;
-  const retA = total * ret / 100;
-
-  gid('mu-r-direct').textContent = fmt(direct);
-  gid('mu-r-oh').textContent     = fmt(ohA);
-  gid('mu-r-profit').textContent = fmt(prA);
-  gid('mu-r-cont').textContent   = fmt(coA);
-  gid('mu-r-bond').textContent   = fmt(boA);
-  gid('mu-r-total').textContent  = fmt(total);
-  if (gid('mu-r-ret')) gid('mu-r-ret').textContent = fmt(retA);
-  if (gid('mu-r-net')) gid('mu-r-net').textContent = fmt(total - retA);
-  if (direct > 0) {
-    gid('mu-r-mu').textContent = ((total / direct - 1) * 100).toFixed(1) + '%';
-    gid('mu-r-mg').textContent = ((1 - direct / total) * 100).toFixed(1) + '%';
-  }
-}
-
-function calcBurden() {
-  const wage = +(gid('lb-wage').value) || 0;
-  const hrs  = +(gid('lb-hrs').value)  || 2080;
-  const r = (
-    parseFloat(gid('lb-fica').value || 0) +
-    parseFloat(gid('lb-futa').value || 0) +
-    parseFloat(gid('lb-wc').value   || 0) +
-    parseFloat(gid('lb-gl').value   || 0) +
-    parseFloat(gid('lb-ben').value  || 0)
-  ) / 100;
-  const burdened = wage * (1 + r);
-
-  gid('lb-r-base').textContent        = fmtC(wage) + '/hr';
-  gid('lb-r-burden').textContent      = fmtC(wage * r) + '/hr';
-  gid('lb-r-rate').textContent        = (r * 100).toFixed(1) + '%';
-  gid('lb-r-total').textContent       = fmtC(burdened) + ' / hr';
-  gid('lb-r-annual').textContent      = fmt(burdened * hrs);
-  gid('lb-r-base-annual').textContent = fmt(wage * hrs);
-}
 
 // ── DIVISION GUESSER ───────────────────────────────────────────────
 function bpGuessDivision(name) {
@@ -937,13 +661,13 @@ function bpGuessDivision(name) {
   if (/concrete|slab|footing|foundation|grade beam|pour|topping/.test(n))     return '03';
   if (/masonry|brick|cmu|block|stone|veneer/.test(n))                         return '04';
   if (/steel|metal stud|deck|embed|anchor bolt|struct/.test(n))               return '05';
-  if (/wood|lumber|fram|plywood|sheathing|cabinet|millwork|carpentry|blocking/.test(n)) return '06';
+  if (/wood|lumber|fram|plywood|sheathing|cabinet|millwork|carpentry|blocking|cornice|trim|counter/.test(n)) return '06';
   if (/roof|insul|waterproof|membrane|tpo|epdm|wrap|foam|moisture|thermal/.test(n))    return '07';
-  if (/door|window|glaz|storefront|curtain wall|overhead|opening|glass/.test(n))       return '08';
-  if (/drywall|paint|tile|carpet|floor|ceiling|finish|gypsum|plaster|vct|epoxy/.test(n)) return '09';
+  if (/door|window|glaz|storefront|curtain wall|overhead|opening|glass|doorknob|hardware/.test(n)) return '08';
+  if (/drywall|sheetrock|paint|tile|carpet|floor|ceiling|finish|gypsum|plaster|vct|epoxy/.test(n)) return '09';
   if (/toilet|locker|extinguisher|signage|dock|specialt/.test(n))             return '10';
-  if (/plumb|drain|water heat|restroom|bathroom|fixture|grease|sanitary/.test(n)) return '22';
-  if (/hvac|mechanical|duct|rtu|ahu|exhaust|heat|cool|ventil|air handl/.test(n)) return '23';
+  if (/plumb|drain|water heat|restroom|bathroom|fixture|grease|sanitary|faucet/.test(n)) return '22';
+  if (/hvac|mechanical|duct|rtu|ahu|exhaust|heat|cool|ventil|air handl|fan/.test(n)) return '23';
   if (/electric|light|panel|wiring|conduit|outlet|switch|alarm/.test(n))      return '26';
   if (/excavat|grading|fill|soil|earthwork|backfill/.test(n))                 return '31';
   if (/paving|parking|sidewalk|curb|landscape|asphalt|pavement/.test(n))      return '32';
@@ -952,21 +676,166 @@ function bpGuessDivision(name) {
 }
 
 // ── BLUEPRINT TAKEOFF ──────────────────────────────────────────────
-let bpConditions = [
-  { id: 1, name: 'Concrete Slab', color: '#f97316', type: 'area',   unit: 'SF' },
-  { id: 2, name: 'Exterior Wall', color: '#1e3a5f', type: 'linear', unit: 'LF' },
-  { id: 3, name: 'Door',          color: '#7c3aed', type: 'count',  unit: 'EA' },
+const BP_DEFAULT_CONDITIONS = [
+  { id:  1, name: 'Slab',                  color: '#94a3b8', type: 'area',   unit: 'SF' },
+  { id:  2, name: 'Framing & Cornice',     color: '#d97706', type: 'area',   unit: 'SF' },
+  { id:  3, name: 'Windows',               color: '#0ea5e9', type: 'count',  unit: 'EA' },
+  { id:  4, name: 'Exterior Doors',        color: '#0d9488', type: 'count',  unit: 'EA' },
+  { id:  5, name: 'Roofing',               color: '#dc2626', type: 'area',   unit: 'SF' },
+  { id:  6, name: 'Plumbing (Rough)',       color: '#3b82f6', type: 'linear', unit: 'LF' },
+  { id:  7, name: 'Electrical (Rough)',     color: '#eab308', type: 'linear', unit: 'LF' },
+  { id:  8, name: 'HVAC (Rough)',           color: '#22d3ee', type: 'linear', unit: 'LF' },
+  { id:  9, name: 'Alarm System (Rough)',   color: '#fb923c', type: 'linear', unit: 'LF' },
+  { id: 10, name: 'Insulation',            color: '#f472b6', type: 'area',   unit: 'SF' },
+  { id: 11, name: 'Sheetrock',             color: '#e2e8f0', type: 'area',   unit: 'SF' },
+  { id: 12, name: 'Trim',                  color: '#c2975f', type: 'linear', unit: 'LF' },
+  { id: 13, name: 'Paint Interior',        color: '#a78bfa', type: 'area',   unit: 'SF' },
+  { id: 14, name: 'Paint Exterior',        color: '#f87171', type: 'area',   unit: 'SF' },
+  { id: 15, name: 'Tile',                  color: '#10b981', type: 'area',   unit: 'SF' },
+  { id: 16, name: 'Cabinets',              color: '#f97316', type: 'linear', unit: 'LF' },
+  { id: 17, name: 'Counters',              color: '#6366f1', type: 'linear', unit: 'LF' },
+  { id: 18, name: 'Plumbing (Trim Out)',   color: '#1d4ed8', type: 'count',  unit: 'EA' },
+  { id: 19, name: 'Electrical (Trim Out)', color: '#ca8a04', type: 'count',  unit: 'EA' },
+  { id: 20, name: 'HVAC (Trim Out)',       color: '#0e7490', type: 'count',  unit: 'EA' },
+  { id: 21, name: 'Alarm System (Trim Out)', color: '#ea580c', type: 'count', unit: 'EA' },
+  { id: 22, name: 'Hardwood Floors',       color: '#92400e', type: 'area',   unit: 'SF' },
+  { id: 23, name: 'Shower Glass',          color: '#67e8f9', type: 'linear', unit: 'LF' },
+  { id: 24, name: 'Garage Door',           color: '#7c3aed', type: 'count',  unit: 'EA' },
+  { id: 25, name: 'Appliances',            color: '#64748b', type: 'count',  unit: 'EA' },
+  { id: 26, name: 'Landscape',             color: '#16a34a', type: 'area',   unit: 'SF' },
+  { id: 27, name: 'Fence',                 color: '#713f12', type: 'linear', unit: 'LF' },
+  { id: 28, name: 'Doorknobs',             color: '#fbbf24', type: 'count',  unit: 'EA' },
+  { id: 29, name: 'Cabinet Hardware',      color: '#9ca3af', type: 'count',  unit: 'EA' },
+  { id: 30, name: 'Light Fixtures',        color: '#fde047', type: 'count',  unit: 'EA' },
+  { id: 31, name: 'Fans',                  color: '#4ade80', type: 'count',  unit: 'EA' },
+  { id: 32, name: 'Faucets',               color: '#c084fc', type: 'count',  unit: 'EA' },
 ];
-let bpCondNextId = 4;
+let bpConditions = BP_DEFAULT_CONDITIONS.map(c => ({ ...c }));
+let bpCondNextId = 33;
 let bpActiveCondId = 1;
 let bpMeasurements = [];
 let bpMeasNextId = 1;
 let bpNewCondType = 'linear';
 let bpNewCondColor = BP_COLORS[0];
+let bpEditingCondId = null;
 let bpPdf = null, bpPageNum = 1, bpPageCount = 0, bpZoomPct = 100;
-let bpScalePxPerFt = null, bpScalePts = [], bpScaleMode = false;
+let bpRenderToken = 0, bpRenderTask = null;
+let bpPageData = {}; // per-page { measurements, scalePxPerFt }
+let bpSpaceDown = false, bpPanActive = false, bpPanMouseStart = null, bpPanScrollStart = null;
+let bpScalePxPerFt = null, bpScalePts = [], bpScaleMode = false, bpTrashMode = false;
 let bpCurrentPts = [];
 let bpIsImg = false, bpImg = null;
+
+// ── BLUEPRINT INDEXEDDB PERSISTENCE ────────────────────────────────
+const BP_DB_NAME = 'buildcalc_bp', BP_DB_VERSION = 1, BP_STORE = 'files';
+
+function bpGetDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(BP_DB_NAME, BP_DB_VERSION);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(BP_STORE);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+function bpStoreFile(projId, payload) {
+  if (!projId) return;
+  bpGetDB().then(db => {
+    const tx = db.transaction(BP_STORE, 'readwrite');
+    tx.objectStore(BP_STORE).put(payload, projId);
+  }).catch(() => {});
+}
+
+function bpLoadStoredFile(projId) {
+  return bpGetDB().then(db => new Promise((resolve, reject) => {
+    const req = db.transaction(BP_STORE, 'readonly').objectStore(BP_STORE).get(projId);
+    req.onsuccess = e => resolve(e.target.result || null);
+    req.onerror = e => reject(e.target.error);
+  }));
+}
+
+function bpDeleteStoredFile(projId) {
+  if (!projId) return;
+  bpGetDB().then(db => {
+    db.transaction(BP_STORE, 'readwrite').objectStore(BP_STORE).delete(projId);
+  }).catch(() => {});
+}
+
+function bpRestoreFromProject() {
+  const state = project.bpState;
+  // Restore conditions immediately — don't gate on file existence
+  if (state) {
+    if (state.conditions)   bpConditions   = state.conditions;
+    if (state.condNextId)   bpCondNextId   = state.condNextId;
+    if (state.activeCondId) bpActiveCondId = state.activeCondId;
+  }
+  bpRenderConditions();
+  bpUpdateActiveIndicator();
+  if (!state || !project.id) return;
+  bpLoadStoredFile(project.id).then(stored => {
+    if (!stored) return;
+    bpPageData = state.pageData || {};
+    bpZoomPct  = state.zoomPct  || 100;
+    bpIsImg    = state.isImg    || false;
+    bpPageNum  = state.pageNum  || 1;
+    const zSlider = gid('bp-zoom'), zInp = gid('bp-zoom-inp');
+    if (zSlider) zSlider.value = bpZoomPct;
+    if (zInp) zInp.value = bpZoomPct;
+    if (stored.type === 'image') {
+      bpImg = new Image();
+      bpImg.onload = () => {
+        bpPageCount = 1;
+        bpLoadPage();
+        bpShowCanvas();
+        const fileLbl = gid('bp-file-lbl');
+        if (fileLbl) { fileLbl.textContent = stored.fileName || ''; fileLbl.style.display = stored.fileName ? '' : 'none'; }
+        bpRenderImg();
+      };
+      bpImg.src = stored.dataUrl;
+    } else if (stored.type === 'pdf') {
+      if (typeof pdfjsLib === 'undefined') return;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      pdfjsLib.getDocument({ data: stored.data }).promise.then(pdf => {
+        bpPdf = pdf;
+        bpPageCount = pdf.numPages;
+        bpPageNum = Math.min(bpPageNum, bpPageCount);
+        bpLoadPage();
+        bpShowCanvas();
+        const fileLbl = gid('bp-file-lbl');
+        if (fileLbl) { fileLbl.textContent = stored.fileName || ''; fileLbl.style.display = stored.fileName ? '' : 'none'; }
+        const pageLbl = gid('bp-page-lbl');
+        if (pageLbl) pageLbl.textContent = `${bpPageNum} / ${bpPageCount}`;
+        bpRenderPage();
+      }).catch(() => {});
+    }
+  }).catch(() => {});
+}
+
+function bpResetAll() {
+  if (bpRenderTask) { try { bpRenderTask.cancel(); } catch(e) {} bpRenderTask = null; }
+  bpRenderToken++;
+  bpPdf = null; bpImg = null; bpIsImg = false;
+  bpPageNum = 1; bpPageCount = 0; bpZoomPct = 100;
+  bpMeasurements = []; bpMeasNextId = 1; bpCurrentPts = [];
+  bpScalePxPerFt = null; bpScalePts = []; bpScaleMode = false;
+  bpPageData = {}; bpPanActive = false;
+  bpConditions = BP_DEFAULT_CONDITIONS.map(c => ({ ...c }));
+  bpCondNextId = 33; bpActiveCondId = 1;
+  const upload = gid('bp-upload'), wrap = gid('bp-canvas-wrap');
+  if (upload) upload.style.display = '';
+  if (wrap) wrap.style.display = 'none';
+  const fileLbl = gid('bp-file-lbl');
+  if (fileLbl) { fileLbl.style.display = 'none'; fileLbl.textContent = ''; }
+  const fileInput = gid('bp-file-input');
+  if (fileInput) fileInput.value = '';
+  const zSlider = gid('bp-zoom'), zInp = gid('bp-zoom-inp');
+  if (zSlider) zSlider.value = 100;
+  if (zInp) zInp.value = 100;
+  bpUpdateScaleBadge();
+  bpRenderConditions();
+  bpRenderQtyPanel();
+  bpUpdateActiveIndicator();
+}
 
 function bpGetCond(id) { return bpConditions.find(c => c.id === id); }
 function bpGetActiveCond() { return bpGetCond(bpActiveCondId); }
@@ -975,6 +844,9 @@ function bpSelectCond(id) {
   bpActiveCondId = id;
   bpCurrentPts = [];
   bpScaleMode = false;
+  bpTrashMode = false;
+  const trashBtn = gid('bp-trash-btn');
+  if (trashBtn) trashBtn.classList.remove('active');
   bpRenderConditions();
   bpUpdateActiveIndicator();
   const c = gid('markup-canvas');
@@ -986,11 +858,13 @@ function bpRenderConditions() {
   const list = gid('bp-cond-list');
   if (!list) return;
   list.innerHTML = bpConditions.map(c => `
-    <div class="bp-cond-item${c.id === bpActiveCondId ? ' active' : ''}" onclick="bpSelectCond(${c.id})">
+    <div class="bp-cond-item${c.id === bpActiveCondId ? ' active' : ''}${c.hidden ? ' bp-cond-hidden' : ''}" onclick="bpSelectCond(${c.id})">
       <span style="width:12px;height:12px;border-radius:3px;background:${c.color};flex-shrink:0;display:inline-block"></span>
       <span style="flex:1;font-size:.82rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
       <span style="font-size:.72rem;color:rgba(255,255,255,.5);flex-shrink:0">${c.unit}</span>
-      <button onclick="event.stopPropagation();bpDeleteCond(${c.id})" title="Delete" style="background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.75rem;padding:0 0 0 .3rem;line-height:1">✕</button>
+      <button onclick="event.stopPropagation();bpToggleCondVis(${c.id})" title="${c.hidden ? 'Show layer' : 'Hide layer'}" style="background:none;border:none;color:${c.hidden ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.4)'};cursor:pointer;font-size:.7rem;padding:0 0 0 .3rem;line-height:1">${c.hidden ? '○' : '●'}</button>
+      <button onclick="event.stopPropagation();bpEditCond(${c.id})" title="Edit" style="background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.72rem;padding:0 0 0 .25rem;line-height:1">✏</button>
+      <button onclick="event.stopPropagation();bpDeleteCond(${c.id})" title="Delete" style="background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.75rem;padding:0 0 0 .25rem;line-height:1">✕</button>
     </div>`).join('');
 }
 
@@ -1010,17 +884,47 @@ function bpUpdateActiveIndicator() {
 }
 
 function bpShowAddCond() {
-  const form = gid('bp-add-cond-form');
-  if (form) { form.style.display = 'block'; gid('bpnc-name').focus(); }
+  bpEditingCondId = null;
   bpNewCondType = 'linear';
   bpNewCondColor = BP_COLORS[0];
+  const form = gid('bp-add-cond-form');
+  if (form) {
+    form.style.display = 'block';
+    const btn = form.querySelector('.btn-orange');
+    if (btn) btn.textContent = 'Add';
+    gid('bpnc-name').value = '';
+    gid('bpnc-name').focus();
+  }
   bpSyncTypeButtons();
   bpRenderColorPicker();
 }
 
 function bpHideAddCond() {
+  bpEditingCondId = null;
   const form = gid('bp-add-cond-form');
-  if (form) form.style.display = 'none';
+  if (form) {
+    form.style.display = 'none';
+    const btn = form.querySelector('.btn-orange');
+    if (btn) btn.textContent = 'Add';
+  }
+}
+
+function bpEditCond(id) {
+  const c = bpGetCond(id);
+  if (!c) return;
+  bpEditingCondId = id;
+  bpNewCondType = c.type;
+  bpNewCondColor = c.color;
+  const form = gid('bp-add-cond-form');
+  if (form) {
+    form.style.display = 'block';
+    const btn = form.querySelector('.btn-orange');
+    if (btn) btn.textContent = 'Save';
+    const nameInp = gid('bpnc-name');
+    if (nameInp) { nameInp.value = c.name; nameInp.focus(); nameInp.select(); }
+  }
+  bpSyncTypeButtons();
+  bpRenderColorPicker();
 }
 
 function bpSelectNewType(type) {
@@ -1057,14 +961,21 @@ function bpConfirmAddCond() {
   const name = (gid('bpnc-name').value || '').trim();
   if (!name) { gid('bpnc-name').focus(); return; }
   const unit = bpNewCondType === 'area' ? 'SF' : bpNewCondType === 'linear' ? 'LF' : 'EA';
-  bpConditions.push({ id: bpCondNextId, name, color: bpNewCondColor, type: bpNewCondType, unit });
-  bpActiveCondId = bpCondNextId;
-  bpCondNextId++;
-  gid('bpnc-name').value = '';
+  if (bpEditingCondId !== null) {
+    const c = bpGetCond(bpEditingCondId);
+    if (c) { c.name = name; c.color = bpNewCondColor; c.type = bpNewCondType; c.unit = unit; }
+    bpCurrentPts = [];
+  } else {
+    bpConditions.push({ id: bpCondNextId, name, color: bpNewCondColor, type: bpNewCondType, unit });
+    bpActiveCondId = bpCondNextId;
+    bpCondNextId++;
+  }
   bpHideAddCond();
   bpRenderConditions();
   bpUpdateActiveIndicator();
   bpRenderQtyPanel();
+  bpRedraw();
+  saveProject();
   const c = gid('markup-canvas');
   if (c) c.style.cursor = 'crosshair';
 }
@@ -1078,6 +989,15 @@ function bpDeleteCond(id) {
   bpUpdateActiveIndicator();
   bpRenderQtyPanel();
   bpRedraw();
+}
+
+function bpToggleCondVis(id) {
+  const c = bpGetCond(id);
+  if (!c) return;
+  c.hidden = !c.hidden;
+  bpRenderConditions();
+  bpRedraw();
+  saveProject();
 }
 
 function bpCondMeasurements(condId) { return bpMeasurements.filter(m => m.condId === condId); }
@@ -1112,6 +1032,7 @@ function bpRenderQtyPanel() {
 
 // ── SEND TO ESTIMATOR MODAL ────────────────────────────────────────
 let bpPendingCondId = null;
+let bpPaRows = [];
 
 function bpSendCondToEst(condId) {
   const cond = bpGetCond(condId);
@@ -1164,13 +1085,10 @@ function bpModalConfirm() {
 function bpModalClose() { gid('send-modal').style.display = 'none'; bpPendingCondId = null; }
 
 // ── PUSH ALL TO ESTIMATOR ─────────────────────────────────────────
-let bpPaRows = [];
-
 function bpPushAllToEst() {
   if (!bpConditions.length) { alert('No conditions to push.'); return; }
   bpPaRows = bpConditions.map(c => ({ condId: c.id, div: bpGuessDivision(c.name), cost: 0 }));
-  const tbody = gid('push-all-rows');
-  tbody.innerHTML = bpConditions.map((c, i) => {
+  gid('push-all-rows').innerHTML = bpConditions.map((c, i) => {
     const total = bpCondTotal(c.id);
     const guessed = bpGuessDivision(c.name);
     const divOpts = Object.entries(CSI_ITEMS).map(([d, info]) => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${info.name}</option>`).join('');
@@ -1223,6 +1141,7 @@ function bpLoadFile(input) {
     bpScalePxPerFt = null;
     bpScalePts = [];
     bpScaleMode = false;
+    bpPageData = {};
     bpRenderQtyPanel();
   }
 
@@ -1231,16 +1150,23 @@ function bpLoadFile(input) {
   bpIsImg = file.type.startsWith('image/');
 
   if (bpIsImg) {
-    const url = URL.createObjectURL(file);
-    bpImg = new Image();
-    bpImg.onload = () => { bpPageCount = 1; bpPageNum = 1; bpShowCanvas(); bpRenderImg(); };
-    bpImg.src = url;
+    const imgReader = new FileReader();
+    imgReader.onload = ie => {
+      const dataUrl = ie.target.result;
+      bpStoreFile(project.id, { type: 'image', dataUrl, fileName: file.name });
+      bpImg = new Image();
+      bpImg.onload = () => { bpPageCount = 1; bpPageNum = 1; bpShowCanvas(); bpRenderImg(); };
+      bpImg.src = dataUrl;
+    };
+    imgReader.readAsDataURL(file);
   } else {
     if (typeof pdfjsLib === 'undefined') { alert('PDF.js failed to load. Check your internet connection.'); return; }
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const reader = new FileReader();
     reader.onload = e => {
-      pdfjsLib.getDocument({ data: e.target.result }).promise.then(pdf => {
+      const ab = e.target.result;
+      bpStoreFile(project.id, { type: 'pdf', data: ab.slice(0), fileName: file.name });
+      pdfjsLib.getDocument({ data: ab }).promise.then(pdf => {
         bpPdf = pdf;
         bpPageCount = pdf.numPages;
         bpPageNum = 1;
@@ -1274,14 +1200,52 @@ function bpDrop(e) {
   if (file) bpLoadFile(file);
 }
 
+function bpUpdateScaleBadge() {
+  const badge = gid('bp-scale-badge');
+  if (!badge) return;
+  if (bpScaleMode) {
+    badge.textContent = bpScalePts.length === 0 ? 'Click point A…' : 'Now click point B…';
+    badge.className = 'scale-badge setting';
+  } else if (bpScalePxPerFt) {
+    badge.textContent = `Scale: 1 ft = ${bpScalePxPerFt.toFixed(1)} px`;
+    badge.className = 'scale-badge';
+  } else {
+    badge.textContent = 'Scale: not set';
+    badge.className = 'scale-badge unset';
+  }
+}
+
+function bpSavePage() {
+  bpPageData[bpPageNum] = { measurements: bpMeasurements, scalePxPerFt: bpScalePxPerFt };
+}
+
+function bpLoadPage() {
+  const d = bpPageData[bpPageNum];
+  bpMeasurements = d ? d.measurements : [];
+  bpScalePxPerFt = d ? d.scalePxPerFt : null;
+  bpCurrentPts = [];
+  bpScalePts = [];
+  bpScaleMode = false;
+  bpUpdateScaleBadge();
+  bpRenderQtyPanel();
+}
+
 function bpRenderPage() {
   if (!bpPdf) return;
+  const token = ++bpRenderToken;
+  if (bpRenderTask) { try { bpRenderTask.cancel(); } catch(e) {} bpRenderTask = null; }
   bpPdf.getPage(bpPageNum).then(page => {
+    if (token !== bpRenderToken) return;
     const viewport = page.getViewport({ scale: bpZoomPct / 100 * 1.5 });
     const pdfC = gid('pdf-canvas'), mkC = gid('markup-canvas');
     pdfC.width = mkC.width = viewport.width;
     pdfC.height = mkC.height = viewport.height;
-    page.render({ canvasContext: pdfC.getContext('2d'), viewport }).promise.then(() => bpRedraw());
+    bpRenderTask = page.render({ canvasContext: pdfC.getContext('2d'), viewport });
+    bpRenderTask.promise.then(() => {
+      if (token !== bpRenderToken) return;
+      bpRenderTask = null;
+      bpRedraw();
+    }).catch(() => {});
   });
 }
 
@@ -1294,26 +1258,45 @@ function bpRenderImg() {
   bpRedraw();
 }
 
-function bpZoom(pct) {
+function bpSetZoom(pct) {
+  pct = Math.min(300, Math.max(25, Math.round(+pct) || 100));
   bpZoomPct = pct;
-  gid('bp-zoom-lbl').textContent = pct + '%';
+  const slider = gid('bp-zoom'); if (slider) slider.value = pct;
+  const inp = gid('bp-zoom-inp'); if (inp) inp.value = pct;
   if (bpIsImg && bpImg) bpRenderImg(); else bpRenderPage();
 }
+function bpZoom(pct) { bpSetZoom(pct); }
 
 function bpPrevPage() {
-  if (bpPageNum > 1) { bpPageNum--; gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`; bpRenderPage(); }
+  if (bpPageNum <= 1) return;
+  bpSavePage();
+  bpPageNum--;
+  gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`;
+  bpLoadPage();
+  bpRenderPage();
 }
 function bpNextPage() {
-  if (bpPageNum < bpPageCount) { bpPageNum++; gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`; bpRenderPage(); }
+  if (bpPageNum >= bpPageCount) return;
+  bpSavePage();
+  bpPageNum++;
+  gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`;
+  bpLoadPage();
+  bpRenderPage();
 }
 
 function bpSetScale() {
+  if (bpScaleMode) {
+    bpScaleMode = false;
+    bpScalePts = [];
+    bpUpdateScaleBadge();
+    return;
+  }
   bpScalePts = [];
   bpScaleMode = true;
   bpCurrentPts = [];
   const c = gid('markup-canvas');
   if (c) c.style.cursor = 'crosshair';
-  alert("Click point A on the drawing, then click point B. You'll be asked for the real-world distance.");
+  bpUpdateScaleBadge();
 }
 
 function bpCanvasXY(e) {
@@ -1322,11 +1305,52 @@ function bpCanvasXY(e) {
   return { x: (e.clientX - r.left) / z, y: (e.clientY - r.top) / z };
 }
 
+function bpPointerDown(e) {
+  if (!bpSpaceDown || e.button !== 0) return;
+  e.preventDefault();
+  bpPanActive = true;
+  bpPanMouseStart = { x: e.clientX, y: e.clientY };
+  e.currentTarget.setPointerCapture(e.pointerId);
+  const area = gid('bp-canvas-area');
+  area.style.cursor = 'grabbing';
+  e.currentTarget.style.cursor = 'grabbing';
+}
+
+function bpPointerMove(e) {
+  if (!bpPanActive) return;
+  const area = gid('bp-canvas-area');
+  area.scrollLeft -= e.clientX - bpPanMouseStart.x;
+  area.scrollTop  -= e.clientY - bpPanMouseStart.y;
+  bpPanMouseStart = { x: e.clientX, y: e.clientY };
+}
+
+function bpPointerUp(e) {
+  if (!bpPanActive) return;
+  bpPanActive = false;
+  const area = gid('bp-canvas-area');
+  if (bpSpaceDown) {
+    area.style.cursor = 'grab';
+    e.currentTarget.style.cursor = 'grab';
+  } else {
+    area.style.cursor = '';
+    e.currentTarget.style.cursor = bpScaleMode ? 'crosshair' : 'default';
+  }
+}
+
+function bpWheel(e) {
+  if (!bpSpaceDown) return;
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -10 : 10;
+  bpSetZoom(bpZoomPct + delta);
+}
+
 function bpClick(e) {
+  if (bpSpaceDown) return;
+  if (bpTrashMode) { bpDeleteMeasurementAt(bpCanvasXY(e)); return; }
   if (bpScaleMode) {
     const pt = bpCanvasXY(e);
     bpScalePts.push(pt);
-    if (bpScalePts.length === 1) { bpRedraw(); return; }
+    if (bpScalePts.length === 1) { bpUpdateScaleBadge(); bpRedraw(); return; }
     if (bpScalePts.length === 2) {
       const dx = bpScalePts[1].x - bpScalePts[0].x;
       const dy = bpScalePts[1].y - bpScalePts[0].y;
@@ -1334,12 +1358,12 @@ function bpClick(e) {
       const ans = prompt('Distance between the two points (in feet):');
       if (ans && +ans > 0) {
         bpScalePxPerFt = px / +ans;
-        const badge = gid('bp-scale-badge');
-        badge.textContent = `Scale: 1 ft = ${bpScalePxPerFt.toFixed(1)} px`;
-        badge.className = 'scale-badge';
       }
       bpScalePts = [];
       bpScaleMode = false;
+      bpUpdateScaleBadge();
+      const c = gid('markup-canvas');
+      if (c) c.style.cursor = 'crosshair';
     }
     return;
   }
@@ -1366,6 +1390,7 @@ function bpDblClick(e) {
 }
 
 function bpMouseMove(e) {
+  if (bpSpaceDown) return;
   if (!bpCurrentPts.length && !bpScaleMode) return;
   bpRedraw();
   const pt = bpCanvasXY(e);
@@ -1388,6 +1413,62 @@ function bpMouseMove(e) {
     ctx.beginPath(); ctx.moveTo(last.x*z, last.y*z); ctx.lineTo(pt.x*z, pt.y*z); ctx.stroke();
     ctx.restore();
   }
+}
+
+function bpToggleTrash() {
+  bpTrashMode = !bpTrashMode;
+  if (bpTrashMode) { bpScaleMode = false; bpCurrentPts = []; bpRedraw(); }
+  const btn = gid('bp-trash-btn');
+  if (btn) btn.classList.toggle('active', bpTrashMode);
+  const c = gid('markup-canvas');
+  if (c) c.style.cursor = bpTrashMode ? 'pointer' : 'crosshair';
+}
+
+function bpDeleteMeasurementAt(pt) {
+  const z = bpZoomPct / 100;
+  const HIT_DOT  = 12 / z;
+  const HIT_LINE = 8  / z;
+  for (let i = bpMeasurements.length - 1; i >= 0; i--) {
+    const m = bpMeasurements[i];
+    const cond = bpGetCond(m.condId);
+    if (!cond || cond.hidden) continue;
+    let hit = false;
+    if (m.type === 'count') {
+      const dx = pt.x - m.pts[0].x, dy = pt.y - m.pts[0].y;
+      hit = Math.sqrt(dx*dx + dy*dy) <= HIT_DOT;
+    } else if (m.type === 'linear') {
+      for (let j = 1; j < m.pts.length; j++) {
+        if (bpDistToSeg(pt, m.pts[j-1], m.pts[j]) <= HIT_LINE) { hit = true; break; }
+      }
+    } else if (m.type === 'area') {
+      hit = bpPointInPoly(pt, m.pts);
+    }
+    if (hit) {
+      bpMeasurements.splice(i, 1);
+      bpRenderQtyPanel();
+      bpRedraw();
+      saveProject();
+      return;
+    }
+  }
+}
+
+function bpDistToSeg(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const lenSq = dx*dx + dy*dy;
+  if (lenSq === 0) return Math.hypot(p.x - a.x, p.y - a.y);
+  const t = Math.max(0, Math.min(1, ((p.x-a.x)*dx + (p.y-a.y)*dy) / lenSq));
+  return Math.hypot(p.x - (a.x + t*dx), p.y - (a.y + t*dy));
+}
+
+function bpPointInPoly(pt, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    if ((yi > pt.y) !== (yj > pt.y) && pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi)
+      inside = !inside;
+  }
+  return inside;
 }
 
 function bpFinishShape() {
@@ -1429,7 +1510,7 @@ function bpRedraw() {
 
   bpMeasurements.forEach(m => {
     const cond = bpGetCond(m.condId);
-    if (!cond) return;
+    if (!cond || cond.hidden) return;
     const color = cond.color;
     const unit = m.type === 'linear' ? (bpScalePxPerFt ? 'LF' : 'px') : (bpScalePxPerFt ? 'SF' : 'px²');
     ctx.save();
@@ -1492,7 +1573,7 @@ function bpRedraw() {
 }
 
 function bpClearAll() {
-  if (bpMeasurements.length && !confirm('Clear all measurements? Conditions will be kept.')) return;
+  if (bpMeasurements.length && !confirm('Clear all measurements on this page? Conditions will be kept.')) return;
   bpMeasurements = [];
   bpCurrentPts = [];
   bpRedraw();
@@ -1501,288 +1582,670 @@ function bpClearAll() {
   if (fileLbl) { fileLbl.style.display = 'none'; fileLbl.textContent = ''; }
 }
 
-// ── CHANGE ORDERS ─────────────────────────────────────────────────
-function getBidPrice() {
-  const direct = grandTotal();
-  const oh  = direct * estMu.oh / 100;
-  const pr  = (direct + oh) * estMu.profit / 100;
-  const co  = (direct + oh + pr) * estMu.cont / 100;
-  const tax = direct * 0.55 * estMu.matTax / 100;
-  const permit = (direct + oh + pr + co + tax) * estMu.permit / 100;
-  return direct + oh + pr + co + tax + permit;
+// ── BUDGET BUILDER ─────────────────────────────────────────────────
+const BLD_PHASES = [
+  { id: 'demo',       label: 'Demo / Site Prep' },
+  { id: 'excavation', label: 'Excavation & Earthwork' },
+  { id: 'foundation', label: 'Foundation & Concrete' },
+  { id: 'framing',    label: 'Framing' },
+  { id: 'roofing',    label: 'Roofing' },
+  { id: 'envelope',   label: 'Windows, Doors & Exterior' },
+  { id: 'plumbing_r', label: 'Rough Plumbing' },
+  { id: 'hvac_r',     label: 'Rough HVAC / Mechanical' },
+  { id: 'elec_r',     label: 'Rough Electrical' },
+  { id: 'insulation', label: 'Insulation' },
+  { id: 'drywall',    label: 'Drywall' },
+  { id: 'tile_paint', label: 'Tile & Paint' },
+  { id: 'millwork',   label: 'Millwork & Cabinets' },
+  { id: 'plumbing_f', label: 'Finish Plumbing & Fixtures' },
+  { id: 'hvac_f',     label: 'Finish HVAC & Controls' },
+  { id: 'elec_f',     label: 'Finish Electrical & Lighting' },
+  { id: 'flooring',   label: 'Flooring' },
+  { id: 'appliances', label: 'Appliances & Equipment' },
+  { id: 'exterior',   label: 'Exterior & Flatwork' },
+];
+
+const BLD_OVERHEAD = [
+  { id: 'taxes',       label: 'Taxes' },
+  { id: 'loan',        label: 'Bank Loan Interest' },
+  { id: 'insurance',   label: 'Insurance' },
+  { id: 'contingency', label: 'Contingency' },
+];
+
+const BLD_SOFT = [
+  { id: 'permits',    label: 'Permits & Fees' },
+  { id: 'architect',  label: 'Architect / Designer' },
+  { id: 'geotech',    label: 'Geotech / Survey' },
+  { id: 'struct',     label: 'Structural Engineer' },
+  { id: 'consultant', label: 'Project Consultant' },
+];
+
+const BLD_OTHER = [
+  { id: 'tips',        label: 'Tips / Gratuity' },
+  { id: 'trash',       label: 'Trash / Dumpster' },
+  { id: 'maids',       label: 'Final Cleaning' },
+  { id: 'pole',        label: 'Electrical Pole / Temp Power' },
+  { id: 'fence',       label: 'Temporary Fence' },
+  { id: 'toilet',      label: 'Portable Toilet' },
+  { id: 'inspections', label: 'Third Party Inspections' },
+];
+
+const BLD_STATUSES = ['Not Started', 'Bid Needed', 'In Progress', 'Complete'];
+const BLD_STATUS_CLASS = { 'Not Started': 'bs-ns', 'Bid Needed': 'bs-bid', 'In Progress': 'bs-ip', 'Complete': 'bs-cp' };
+
+function getBudgetSheet() {
+  if (!project.budgetSheet) {
+    project.budgetSheet = {
+      buildType: 'custom',
+      stories: '1',
+      phases: {},
+      overhead: {},
+      soft: {},
+      other: {},
+    };
+  }
+  return project.budgetSheet;
 }
 
-function renderCOPage() {
-  const base      = getBidPrice();
-  const approved  = project.changeOrders.filter(c => c.status === 'approved');
-  const pending   = project.changeOrders.filter(c => c.status === 'pending');
-  const appTotal  = approved.reduce((s, c) => s + c.cost, 0);
-  const penTotal  = pending.reduce((s, c) => s + c.cost, 0);
-  const revised   = base + appTotal;
+function bldGetRow(section, id) {
+  const bs = getBudgetSheet();
+  if (!bs[section][id]) bs[section][id] = { mat: '', labor: '', combined: '', startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '' };
+  return bs[section][id];
+}
 
-  const bEl = gid('co-base');        if (bEl) bEl.textContent = fmt(base);
-  const aEl = gid('co-approved-amt'); if (aEl) aEl.textContent = (appTotal >= 0 ? '+' : '') + fmt(appTotal);
-  const acEl = gid('co-approved-count'); if (acEl) acEl.textContent = approved.length + ' approved';
-  const rEl = gid('co-revised');      if (rEl) rEl.textContent = fmt(revised);
-  const pEl = gid('co-pending-amt');  if (pEl) pEl.textContent = (penTotal >= 0 ? '+' : '') + fmt(penTotal);
-  const pcEl = gid('co-pending-count'); if (pcEl) pcEl.textContent = pending.length + ' awaiting approval';
+function bldCalcTotals() {
+  const bs = getBudgetSheet();
+  const sections = ['phases', 'overhead', 'soft', 'other'];
+  let grand = 0, byOthersTotal = 0;
+  const sectionTotals = {};
+  sections.forEach(sec => {
+    let t = 0;
+    Object.values(bs[sec] || {}).forEach(row => {
+      const mat = parseFloat(row.mat) || 0;
+      const labor = parseFloat(row.labor) || 0;
+      const combined = parseFloat(row.combined) || (mat + labor);
+      if (row.byOthers) { byOthersTotal += combined; } else { t += combined; grand += combined; }
+    });
+    sectionTotals[sec] = t;
+  });
+  let projectStart = null, projectEnd = null;
+  BLD_PHASES.forEach(ph => {
+    const row = bldGetRow('phases', ph.id);
+    if (row.startDate) { const d = new Date(row.startDate + 'T12:00:00'); if (!projectStart || d < projectStart) projectStart = d; }
+    if (row.endDate)   { const d = new Date(row.endDate   + 'T12:00:00'); if (!projectEnd   || d > projectEnd)   projectEnd   = d; }
+  });
+  return { grand, byOthersTotal, sectionTotals, projectStart, projectEnd };
+}
 
-  const schedDays = approved.reduce((s, c) => s + (c.days || 0), 0);
-  const banner = gid('co-sched-banner');
-  if (banner) {
-    if (schedDays !== 0) {
-      banner.style.display = 'flex';
-      gid('co-sched-days').textContent = (schedDays >= 0 ? '+' : '') + schedDays + ' days';
-      gid('co-sched-count').textContent = approved.filter(c => c.days).length;
-    } else {
-      banner.style.display = 'none';
+function renderBudgetBuilder() {
+  const bs = getBudgetSheet();
+  bldRenderTable();
+  bldRenderSummary();
+  // Restore build type toggle
+  const bt = bs.buildType || 'custom';
+  document.querySelectorAll('[data-bt]').forEach(b => b.classList.toggle('active', b.dataset.bt === bt));
+  // Restore stories toggle
+  const stories = String(bs.stories || '1');
+  ['bld-s1','bld-s2','bld-s3'].forEach((id, i) => {
+    const btn = gid(id);
+    if (btn) btn.classList.toggle('active', String(i + 1) === stories);
+  });
+  const projNameEl = gid('bld-proj-name');
+  if (projNameEl) projNameEl.value = project.name || 'New Project';
+  // Restore project type select
+  const ptEl = gid('bld-proj-type');
+  if (ptEl) ptEl.value = bs.projectType || 'residential';
+  bldUpdatePrintHeader();
+}
+
+function bldRenderTable() {
+  const bs = getBudgetSheet();
+  let html = '';
+
+  const renderSection = (title, sectionKey, items, startNum, hasDuration) => {
+    html += `<tr class="bld-section-hdr"><td colspan="9">${title}</td></tr>`;
+    items.forEach((item, i) => {
+      const row = bldGetRow(sectionKey, item.id);
+      const num = startNum !== null ? (startNum + i) : '';
+      const matV  = row.mat      || '';
+      const labV  = row.labor    || '';
+      const combV = row.combined || '';
+      const stCls = BLD_STATUS_CLASS[row.status] || 'bs-ns';
+      const byOCls = row.byOthers ? ' by-others' : '';
+      const durCell = hasDuration
+        ? `<td class="bld-dur-cell">
+            <input type="date" class="bld-date-inp" value="${row.startDate||''}" title="Start date"
+              onchange="bldUpdateItem('${sectionKey}','${item.id}','startDate',this.value)">
+            <input type="date" class="bld-date-inp" value="${row.endDate||''}" title="End date"
+              onchange="bldUpdateItem('${sectionKey}','${item.id}','endDate',this.value)">
+           </td>`
+        : `<td class="bld-dur-cell"></td>`;
+      html += `<tr class="bld-row${byOCls}" data-section="${sectionKey}" data-id="${item.id}">
+        <td class="bld-num">${num}</td>
+        <td class="bld-label">${item.label}</td>
+        <td class="bld-cell"><input type="number" min="0" step="100" placeholder="—"
+          value="${matV}"
+          onchange="bldUpdateItem('${sectionKey}','${item.id}','mat',this.value)"
+          class="bld-inp"></td>
+        <td class="bld-cell"><input type="number" min="0" step="100" placeholder="—"
+          value="${labV}"
+          onchange="bldUpdateItem('${sectionKey}','${item.id}','labor',this.value)"
+          class="bld-inp"></td>
+        <td class="bld-cell"><input type="number" min="0" step="100" placeholder="—"
+          value="${combV}"
+          onchange="bldUpdateItem('${sectionKey}','${item.id}','combined',this.value)"
+          class="bld-inp bld-combined-inp"></td>
+        <td class="bld-status-cell">
+          <select class="bld-status-sel ${stCls}" onchange="bldSetStatus('${sectionKey}','${item.id}',this.value)">
+            ${BLD_STATUSES.map(s => `<option value="${s}"${row.status===s?' selected':''}>${s}</option>`).join('')}
+          </select>
+        </td>
+        ${durCell}
+        <td class="bld-bo-cell">
+          <label class="bld-bo-tgl" title="By Others — tracked but excluded from your total">
+            <input type="checkbox" onchange="bldToggleByOthers('${sectionKey}','${item.id}',this.checked)"${row.byOthers?' checked':''}>
+            <span class="bld-bo-chk"></span>
+          </label>
+        </td>
+        <td class="bld-note-cell">
+          <input type="text" class="bld-note-inp" placeholder="Note…"
+            value="${(row.note||'').replace(/"/g,'&quot;')}"
+            onchange="bldUpdateItem('${sectionKey}','${item.id}','note',this.value)">
+        </td>
+      </tr>`;
+    });
+  };
+
+  renderSection('Construction Phases', 'phases', BLD_PHASES, 1, true);
+  renderSection('Overhead', 'overhead', BLD_OVERHEAD, null, false);
+  renderSection('Soft Costs', 'soft', BLD_SOFT, null, false);
+  renderSection('Other', 'other', BLD_OTHER, null, false);
+
+  gid('bld-tbody').innerHTML = html;
+  bldRenderSummary();
+}
+
+function bldSchedBars() {
+  const COLOR = { 'Not Started': '#cbd5e1', 'Bid Needed': '#7c3aed', 'In Progress': '#f97316', 'Complete': '#16a34a' };
+  const phases = BLD_PHASES.map(ph => {
+    const row = bldGetRow('phases', ph.id);
+    if (!row.startDate || !row.endDate) return null;
+    const s = new Date(row.startDate + 'T12:00:00');
+    const e = new Date(row.endDate   + 'T12:00:00');
+    if (e <= s) return null;
+    return { label: ph.label, status: row.status, s, e };
+  }).filter(Boolean);
+  if (!phases.length) return '';
+  const min = Math.min(...phases.map(p => p.s));
+  const max = Math.max(...phases.map(p => p.e));
+  const span = max - min;
+  if (span <= 0) return '';
+  const bars = phases.map(p => {
+    const left  = (p.s - min) / span * 100;
+    const width = Math.max((p.e - p.s) / span * 100, 1);
+    return `<div class="bld-seg" style="left:${left}%;width:${width}%;background:${COLOR[p.status]||'#cbd5e1'}" title="${p.label}"></div>`;
+  }).join('');
+  return `<div class="bld-seg-track">${bars}</div>`;
+}
+
+function bldRenderGantt() {
+  const el = gid('bld-gantt');
+  if (!el) return;
+  const COLOR = { 'Not Started': '#cbd5e1', 'Bid Needed': '#7c3aed', 'In Progress': '#f97316', 'Complete': '#16a34a' };
+
+  const phases = BLD_PHASES.map(ph => {
+    const row = bldGetRow('phases', ph.id);
+    if (!row.startDate || !row.endDate) return null;
+    const s = new Date(row.startDate + 'T12:00:00');
+    const e = new Date(row.endDate   + 'T12:00:00');
+    if (e <= s) return null;
+    return { label: ph.label, status: row.status, s, e };
+  }).filter(Boolean);
+
+  if (!phases.length) { el.classList.remove('has-data', 'open'); return; }
+  const wasOpen = el.classList.contains('open');
+  el.classList.add('has-data');
+
+  const minT = Math.min(...phases.map(p => p.s.getTime()));
+  const maxT = Math.max(...phases.map(p => p.e.getTime()));
+  const span = maxT - minT;
+  if (span <= 0) { el.classList.remove('has-data', 'open'); return; }
+
+  const fmtShort = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmtMo    = d => d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+
+  const tickDate = new Date(minT);
+  tickDate.setDate(1);
+  const ticks = [];
+  while (tickDate.getTime() <= maxT) {
+    const pct = Math.max(0, Math.min(100, (tickDate.getTime() - minT) / span * 100));
+    ticks.push({ pct, label: fmtMo(tickDate) });
+    tickDate.setMonth(tickDate.getMonth() + 1);
+  }
+
+  const tickHtml = `
+    <div class="bld-gantt-tick-row">
+      <div></div>
+      <div class="bld-gantt-tick-track">
+        ${ticks.map(t => `<div class="bld-gantt-tick" style="left:${t.pct}%">${t.label}</div>`).join('')}
+      </div>
+    </div>`;
+
+  const rowsHtml = phases.map(p => {
+    const left  = ((p.s.getTime() - minT) / span * 100).toFixed(2);
+    const width = Math.max((p.e.getTime() - p.s.getTime()) / span * 100, 1).toFixed(2);
+    const color = COLOR[p.status] || '#cbd5e1';
+    return `
+      <div class="bld-gantt-row">
+        <div class="bld-gantt-lbl" title="${p.label}">${p.label}</div>
+        <div class="bld-gantt-trk">
+          <div class="bld-gantt-bar" style="left:${left}%;width:${width}%;background:${color}"
+               title="${p.label} · ${fmtShort(p.s)} – ${fmtShort(p.e)}"></div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const legendHtml = Object.entries(COLOR).map(([k, v]) =>
+    `<div class="bld-gantt-leg-item"><div class="bld-gantt-leg-dot" style="background:${v}"></div>${k}</div>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="bld-gantt-hdr" onclick="bldToggleGantt()">
+      <div class="bld-gantt-hdr-left">
+        <span class="bld-gantt-hdr-title">Schedule</span>
+        <span class="bld-gantt-chevron">▾</span>
+      </div>
+      <div class="bld-gantt-legend">${legendHtml}</div>
+    </div>
+    <div class="bld-gantt-area">
+      ${tickHtml}
+      ${rowsHtml}
+    </div>`;
+  if (wasOpen) el.classList.add('open');
+}
+
+function bldToggleGantt() {
+  const el = gid('bld-gantt');
+  if (el) el.classList.toggle('open');
+}
+
+function bldRenderSummary() {
+  const { grand, byOthersTotal, sectionTotals, projectStart, projectEnd } = bldCalcTotals();
+  const el = gid('bld-summary');
+  if (!el) return;
+
+  let schedHtml = '';
+  if (projectStart && projectEnd) {
+    const fmtD = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const weeks = Math.round((projectEnd - projectStart) / (7 * 24 * 60 * 60 * 1000));
+    schedHtml = `
+      <div class="bld-sum-divider"></div>
+      <div class="bld-sum-sched-lbl">Schedule</div>
+      <div class="bld-sum-row"><span>Start</span><span>${fmtD(projectStart)}</span></div>
+      <div class="bld-sum-row"><span>Completion</span><span>${fmtD(projectEnd)}</span></div>
+      <div class="bld-sum-row"><span>Total Span</span><span>~${weeks} wks</span></div>
+      ${bldSchedBars()}`;
+  }
+
+  el.innerHTML = `
+    <div class="bld-sum-block">
+      <div class="bld-sum-row"><span>Construction</span><span>${fmt(sectionTotals.phases||0)}</span></div>
+      <div class="bld-sum-row"><span>Overhead</span><span>${fmt(sectionTotals.overhead||0)}</span></div>
+      <div class="bld-sum-row"><span>Soft Costs</span><span>${fmt(sectionTotals.soft||0)}</span></div>
+      <div class="bld-sum-row"><span>Other</span><span>${fmt(sectionTotals.other||0)}</span></div>
+      <div class="bld-sum-divider"></div>
+      <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(grand)}</span></div>
+      ${byOthersTotal ? `<div class="bld-sum-row bld-sum-bo"><span>By Others</span><span>${fmt(byOthersTotal)}</span></div>` : ''}
+      ${schedHtml}
+    </div>`;
+  bldRenderGantt();
+}
+
+function bldUpdateItem(section, id, field, val) {
+  const row = bldGetRow(section, id);
+  row[field] = val;
+  const tr = document.querySelector(`.bld-row[data-section="${section}"][data-id="${id}"]`);
+  if (field === 'mat' || field === 'labor') {
+    const row2 = bldGetRow(section, id);
+    if (!row2.combined) {
+      const sum = (parseFloat(row2.mat) || 0) + (parseFloat(row2.labor) || 0);
+      if (sum > 0) {
+        row2.combined = String(sum);
+        const combInp = tr && tr.querySelector('.bld-combined-inp');
+        if (combInp) combInp.value = sum;
+      }
     }
   }
-
-  const tbody = gid('co-tbody');
-  if (!tbody) return;
-  if (!project.changeOrders.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No change orders yet. Click <strong>+ Add Change Order</strong> to begin.</td></tr>`;
-    return;
+  if (field === 'mat' || field === 'labor' || field === 'combined' || field === 'startDate' || field === 'endDate') {
+    bldRenderSummary();
   }
-  tbody.innerHTML = project.changeOrders.map(c => `
-    <tr>
-      <td style="white-space:nowrap;font-weight:700">${c.num}</td>
-      <td style="white-space:nowrap;color:var(--muted)">${c.date}</td>
-      <td>
-        <strong style="font-size:.85rem">${c.desc}</strong>
-        ${c.scope ? `<div style="font-size:.75rem;color:var(--muted);margin-top:.1rem">${c.scope}</div>` : ''}
-      </td>
-      <td style="text-align:right;font-weight:700;font-size:.95rem;color:${c.cost >= 0 ? '#16a34a' : '#dc2626'};white-space:nowrap">
-        ${c.cost >= 0 ? '+' : ''}${fmt(c.cost)}
-      </td>
-      <td style="text-align:right;font-size:.85rem;font-weight:600;white-space:nowrap;color:${c.days > 0 ? 'var(--orange)' : c.days < 0 ? '#16a34a' : 'var(--muted)'}">
-        ${c.days ? (c.days > 0 ? '+' : '') + c.days + 'd' : '—'}
-      </td>
-      <td><span class="st-badge st-${c.status}">${coLabel(c.status)}</span></td>
-      <td style="white-space:nowrap">
-        <select onchange="updateCOStatus(${c.id},this.value)" style="font-size:.75rem;border:1px solid var(--border);border-radius:4px;padding:.15rem .3rem;margin-right:.25rem">
-          <option value="pending"${c.status==='pending'?' selected':''}>Pending</option>
-          <option value="approved"${c.status==='approved'?' selected':''}>Approved</option>
-          <option value="rejected"${c.status==='rejected'?' selected':''}>Rejected</option>
-        </select>
-        <button onclick="deleteCO(${c.id})" title="Delete" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:.1rem .2rem">✕</button>
-      </td>
-    </tr>`).join('');
+  saveProject();
 }
 
-function coLabel(s) { return s === 'approved' ? 'Approved' : s === 'rejected' ? 'Rejected' : 'Pending'; }
+function bldSetStatus(section, id, val) {
+  const row = bldGetRow(section, id);
+  row.status = val;
+  const sel = document.querySelector(`.bld-row[data-section="${section}"][data-id="${id}"] .bld-status-sel`);
+  if (sel) sel.className = 'bld-status-sel ' + (BLD_STATUS_CLASS[val] || 'bs-ns');
+  bldRenderSummary();
+  saveProject();
+}
 
-function showAddCOForm() {
-  gid('co-add-form').style.display = 'block';
-  const t = new Date();
-  gid('co-f-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
-  gid('co-f-desc').focus();
+function bldToggleByOthers(section, id, checked) {
+  const row = bldGetRow(section, id);
+  row.byOthers = checked;
+  const tr = document.querySelector(`.bld-row[data-section="${section}"][data-id="${id}"]`);
+  if (tr) tr.classList.toggle('by-others', checked);
+  bldRenderSummary();
+  saveProject();
 }
-function hideAddCOForm() {
-  gid('co-add-form').style.display = 'none';
-  ['co-f-desc','co-f-scope','co-f-cost','co-f-days'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
+
+function bldSetProjName(val) {
+  project.name = val.trim() || 'New Project';
+  updateNavProjectName();
+  saveProject();
 }
-function submitCO() {
-  const desc = (gid('co-f-desc').value || '').trim();
-  if (!desc) { gid('co-f-desc').focus(); return; }
-  const id = project.nextCoId++;
-  project.changeOrders.push({
-    id,
-    num:   'CO-' + String(id).padStart(3, '0'),
-    date:  gid('co-f-date').value || '—',
-    desc,
-    scope: (gid('co-f-scope').value || '').trim(),
-    cost:  +(gid('co-f-cost').value) || 0,
-    days:  +(gid('co-f-days').value) || 0,
-    status: 'pending',
+
+function bldSetBuildType(val) {
+  getBudgetSheet().buildType = val;
+  document.querySelectorAll('[data-bt]').forEach(b => b.classList.toggle('active', b.dataset.bt === val));
+  bldUpdatePrintHeader();
+  saveProject();
+}
+
+function bldSetStories(val) {
+  getBudgetSheet().stories = String(val);
+  ['bld-s1','bld-s2','bld-s3'].forEach((id, i) => {
+    const btn = gid(id);
+    if (btn) btn.classList.toggle('active', (i + 1) === +val);
   });
+  bldUpdatePrintHeader();
   saveProject();
-  hideAddCOForm();
-  renderCOPage();
-}
-function deleteCO(id) {
-  if (!confirm('Delete this change order?')) return;
-  project.changeOrders = project.changeOrders.filter(c => c.id !== id);
-  saveProject();
-  renderCOPage();
-}
-function updateCOStatus(id, status) {
-  const c = project.changeOrders.find(c => c.id === id);
-  if (c) { c.status = status; saveProject(); renderCOPage(); }
 }
 
-// ── PROJECT LOGS ──────────────────────────────────────────────────
-function switchLogsTab(btn, paneId) {
-  gid('pg-logs').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  gid('pg-logs').querySelectorAll('.tab-pane').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
-  btn.classList.add('active');
-  const pane = gid(paneId);
-  pane.classList.add('active');
-  pane.style.display = 'block';
-}
-
-// RFI
-function renderRFIPane() {
-  const tbody = gid('rfi-tbody');
-  if (!tbody) return;
-  if (!project.rfis.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No RFIs logged yet. Click <strong>+ Log RFI</strong> to begin.</td></tr>`;
-    return;
+function bldUpdatePrintHeader() {
+  const bs = getBudgetSheet();
+  const typeLabels = { residential: 'Residential', commercial: 'Commercial', industrial: 'Industrial', multifamily: 'Multifamily' };
+  const titleEl = gid('bld-ph-title');
+  const metaEl  = gid('bld-ph-meta');
+  if (titleEl) titleEl.textContent = project.name || 'New Project';
+  if (metaEl) {
+    const parts = [];
+    if (bs.projectType) parts.push(typeLabels[bs.projectType] || bs.projectType);
+    if (bs.buildType)   parts.push(bs.buildType.charAt(0).toUpperCase() + bs.buildType.slice(1));
+    if (bs.stories)     parts.push(bs.stories === '3' ? '3+ Stories' : bs.stories + (bs.stories === '1' ? ' Story' : ' Stories'));
+    const { projectStart, projectEnd } = bldCalcTotals();
+    if (projectStart) parts.push('Start: ' + projectStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    if (projectEnd)   parts.push('Est. Completion: ' + projectEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    metaEl.textContent = parts.join('  ·  ');
   }
-  tbody.innerHTML = project.rfis.map(r => `
-    <tr>
-      <td style="white-space:nowrap;font-weight:700">${r.num}</td>
-      <td style="white-space:nowrap;color:var(--muted)">${r.date}</td>
-      <td><strong style="font-size:.85rem">${r.desc}</strong></td>
-      <td>${r.sentTo || '—'}</td>
-      <td style="white-space:nowrap;color:${r.dueDate ? 'var(--text)' : 'var(--muted)'}">${r.dueDate || '—'}</td>
-      <td><span class="st-badge st-${r.status}">${rfiLabel(r.status)}</span></td>
-      <td style="white-space:nowrap">
-        <select onchange="updateRFIStatus(${r.id},this.value)" style="font-size:.75rem;border:1px solid var(--border);border-radius:4px;padding:.15rem .3rem;margin-right:.25rem">
-          <option value="open"${r.status==='open'?' selected':''}>Open</option>
-          <option value="answered"${r.status==='answered'?' selected':''}>Answered</option>
-          <option value="hold"${r.status==='hold'?' selected':''}>On Hold</option>
-        </select>
-        <button onclick="deleteRFI(${r.id})" title="Delete" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:.1rem .2rem">✕</button>
-      </td>
-    </tr>`).join('');
-}
-function rfiLabel(s) { return s === 'answered' ? 'Answered' : s === 'hold' ? 'On Hold' : 'Open'; }
-
-function showAddRFIForm() {
-  gid('rfi-add-form').style.display = 'block';
-  const t = new Date();
-  gid('rfi-f-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
-  gid('rfi-f-desc').focus();
-}
-function hideAddRFIForm() {
-  gid('rfi-add-form').style.display = 'none';
-  ['rfi-f-desc','rfi-f-sentto','rfi-f-due'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
-}
-function submitRFI() {
-  const desc = (gid('rfi-f-desc').value || '').trim();
-  if (!desc) { gid('rfi-f-desc').focus(); return; }
-  const id = project.nextRfiId++;
-  project.rfis.push({
-    id,
-    num:     'RFI-' + String(id).padStart(3, '0'),
-    date:    gid('rfi-f-date').value || '—',
-    desc,
-    sentTo:  (gid('rfi-f-sentto').value || '').trim(),
-    dueDate: gid('rfi-f-due').value || '',
-    status:  'open',
-  });
-  saveProject();
-  hideAddRFIForm();
-  renderRFIPane();
-}
-function deleteRFI(id) {
-  if (!confirm('Delete this RFI?')) return;
-  project.rfis = project.rfis.filter(r => r.id !== id);
-  saveProject();
-  renderRFIPane();
-}
-function updateRFIStatus(id, status) {
-  const r = project.rfis.find(r => r.id === id);
-  if (r) { r.status = status; saveProject(); renderRFIPane(); }
 }
 
-// Submittals
-function renderSubPane() {
-  const tbody = gid('sub-tbody');
-  if (!tbody) return;
-  if (!project.submittals.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem;font-size:.83rem">No submittals logged yet. Click <strong>+ Log Submittal</strong> to begin.</td></tr>`;
-    return;
-  }
-  const subLabel = s => ({'pending':'Pending','approved':'Approved','approved-noted':'Approved as Noted','revise':'Revise & Resubmit','rejected':'Rejected'}[s] || s);
-  tbody.innerHTML = project.submittals.map(s => `
-    <tr>
-      <td style="white-space:nowrap;font-weight:700">${s.num}</td>
-      <td style="font-size:.78rem;color:var(--muted)">${s.spec || '—'}</td>
-      <td><strong style="font-size:.85rem">${s.desc}</strong></td>
-      <td>${s.submittedBy || '—'}</td>
-      <td style="white-space:nowrap;color:var(--muted)">${s.date || '—'}</td>
-      <td><span class="st-badge st-${s.status}">${subLabel(s.status)}</span></td>
-      <td style="white-space:nowrap">
-        <select onchange="updateSubStatus(${s.id},this.value)" style="font-size:.75rem;border:1px solid var(--border);border-radius:4px;padding:.15rem .3rem;margin-right:.25rem">
-          <option value="pending"${s.status==='pending'?' selected':''}>Pending</option>
-          <option value="approved"${s.status==='approved'?' selected':''}>Approved</option>
-          <option value="approved-noted"${s.status==='approved-noted'?' selected':''}>Approved as Noted</option>
-          <option value="revise"${s.status==='revise'?' selected':''}>Revise &amp; Resubmit</option>
-          <option value="rejected"${s.status==='rejected'?' selected':''}>Rejected</option>
-        </select>
-        <button onclick="deleteSub(${s.id})" title="Delete" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;line-height:1;padding:.1rem .2rem">✕</button>
-      </td>
-    </tr>`).join('');
+
+// ── AUTH ───────────────────────────────────────────────────────────
+function showAuthGate() {
+  gid('auth-gate').style.display = 'flex';
+  gid('auth-user-wrap').style.display = 'none';
 }
 
-function showAddSubForm() {
-  const specEl = gid('sub-f-spec');
-  if (specEl && specEl.options.length <= 1) {
-    Object.entries(CSI_ITEMS).forEach(([d, info]) => {
-      const opt = document.createElement('option');
-      opt.value = `Div ${d} — ${info.name}`;
-      opt.textContent = `${d} — ${info.name}`;
-      specEl.appendChild(opt);
+function hideAuthGate() {
+  gid('auth-gate').style.display = 'none';
+  gid('auth-user-wrap').style.display = 'flex';
+  gid('auth-user-email').textContent = currentUser.email;
+}
+
+function setAuthRole(role) {
+  authRole = role;
+  gid('auth-role-builder').classList.toggle('active', role === 'builder');
+  gid('auth-role-client').classList.toggle('active', role === 'client');
+}
+
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'signup' : 'login';
+  const isLogin = authMode === 'login';
+  gid('auth-title').textContent = isLogin ? 'Log In' : 'Sign Up';
+  gid('auth-submit-btn').textContent = isLogin ? 'Log In' : 'Sign Up';
+  gid('auth-switch-text').textContent = isLogin ? "Don't have an account?" : 'Already have an account?';
+  gid('auth-switch-link').textContent = isLogin ? 'Sign up' : 'Log in';
+  gid('auth-err').style.display = 'none';
+  gid('auth-role-toggle').style.display = isLogin ? 'none' : 'flex';
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const email = gid('auth-email').value.trim();
+  const password = gid('auth-password').value;
+  const errEl = gid('auth-err');
+  errEl.style.display = 'none';
+  try {
+    const res = await fetch(`/api/auth/${authMode}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, role: authMode === 'signup' ? authRole : undefined }),
     });
+    const body = await res.json();
+    if (!res.ok) { errEl.textContent = body.error || 'Something went wrong'; errEl.style.display = 'block'; return; }
+    currentUser = body;
+    hideAuthGate();
+    enterApp();
+  } catch (err) {
+    errEl.textContent = 'Could not reach the server. Please try again.';
+    errEl.style.display = 'block';
   }
-  gid('sub-add-form').style.display = 'block';
-  const t = new Date();
-  gid('sub-f-date').value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
-  gid('sub-f-desc').focus();
 }
-function hideAddSubForm() {
-  gid('sub-add-form').style.display = 'none';
-  ['sub-f-desc','sub-f-by'].forEach(id => { const el = gid(id); if (el) el.value = ''; });
+
+async function handleLogout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  location.reload();
 }
-function submitSub() {
-  const desc = (gid('sub-f-desc').value || '').trim();
-  if (!desc) { gid('sub-f-desc').focus(); return; }
-  const id = project.nextSubId++;
-  project.submittals.push({
-    id,
-    num:         'SUB-' + String(id).padStart(3, '0'),
-    spec:        gid('sub-f-spec').value || '',
-    desc,
-    submittedBy: (gid('sub-f-by').value || '').trim(),
-    date:        gid('sub-f-date').value || '—',
-    status:      'pending',
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) { showAuthGate(); return; }
+    currentUser = await res.json();
+    hideAuthGate();
+    enterApp();
+  } catch (err) {
+    showAuthGate();
+  }
+}
+
+function enterApp() {
+  document.body.classList.remove('client-mode', 'admin-mode');
+  if (currentUser.role === 'admin') {
+    document.body.classList.add('admin-mode');
+    gid('admin-user-email').textContent = currentUser.email;
+    renderAdminDashboard();
+  } else if (currentUser.role === 'client') {
+    document.body.classList.add('client-mode');
+    gid('client-user-email').textContent = currentUser.email;
+    renderClientList();
+  } else {
+    init();
+  }
+}
+
+// ── CLIENT DASHBOARD (read-only) ─────────────────────────────────────
+async function renderClientList() {
+  gid('client-detail-view').style.display = 'none';
+  gid('client-list-view').style.display = 'block';
+  const list = await fetch('/api/client/projects').then(r => r.ok ? r.json() : []);
+  const el = gid('client-project-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="client-empty">No projects have been shared with you yet. Ask your builder to share one.</div>';
+    return;
+  }
+  el.innerHTML = list.map(p => `
+    <div class="client-project-card" onclick="clientShowProject('${p.id}')">
+      <div class="client-project-name">${esc(p.name)}</div>
+      <div class="client-project-date">Updated ${new Date(p.savedAt).toLocaleDateString()}</div>
+    </div>
+  `).join('');
+}
+
+function clientShowList() {
+  renderClientList();
+}
+
+async function clientShowProject(id) {
+  const res = await fetch(`/api/client/projects/${id}`);
+  if (!res.ok) { alert('Could not load this project.'); return; }
+  const entry = await res.json();
+  const data = entry.data;
+
+  gid('client-list-view').style.display = 'none';
+  gid('client-detail-view').style.display = 'block';
+  gid('client-detail-name').textContent = data.name || 'Project';
+
+  const bs = data.budgetSheet || {};
+  const sections = ['phases', 'overhead', 'soft', 'other'];
+  const sectionLabels = { phases: 'Construction', overhead: 'Overhead', soft: 'Soft Costs', other: 'Other' };
+  let grand = 0;
+  const sectionTotals = {};
+  sections.forEach(sec => {
+    let t = 0;
+    Object.values(bs[sec] || {}).forEach(row => {
+      const mat = parseFloat(row.mat) || 0;
+      const labor = parseFloat(row.labor) || 0;
+      const combined = parseFloat(row.combined) || (mat + labor);
+      if (!row.byOthers) { t += combined; grand += combined; }
+    });
+    sectionTotals[sec] = t;
   });
-  saveProject();
-  hideAddSubForm();
-  renderSubPane();
+
+  gid('client-summary-grid').innerHTML = `
+    <div class="client-summary-card client-summary-total">
+      <div class="client-summary-lbl">Total Budget</div>
+      <div class="client-summary-val">${fmt(grand)}</div>
+    </div>
+    ${sections.map(sec => `
+      <div class="client-summary-card">
+        <div class="client-summary-lbl">${sectionLabels[sec]}</div>
+        <div class="client-summary-val">${fmt(sectionTotals[sec])}</div>
+      </div>
+    `).join('')}
+  `;
 }
-function deleteSub(id) {
-  if (!confirm('Delete this submittal?')) return;
-  project.submittals = project.submittals.filter(s => s.id !== id);
-  saveProject();
-  renderSubPane();
+
+// ── ADMIN DASHBOARD ───────────────────────────────────────────────────
+async function renderAdminDashboard() {
+  const [stats, users, projects] = await Promise.all([
+    fetch('/api/admin/stats').then(r => r.json()),
+    fetch('/api/admin/users').then(r => r.json()),
+    fetch('/api/admin/projects').then(r => r.json()),
+  ]);
+
+  gid('admin-stats-grid').innerHTML = `
+    <div class="client-summary-card client-summary-total">
+      <div class="client-summary-lbl">Total Users</div>
+      <div class="client-summary-val">${stats.totalUsers}</div>
+    </div>
+    <div class="client-summary-card">
+      <div class="client-summary-lbl">Builders</div>
+      <div class="client-summary-val">${stats.builders}</div>
+    </div>
+    <div class="client-summary-card">
+      <div class="client-summary-lbl">Clients</div>
+      <div class="client-summary-val">${stats.clients}</div>
+    </div>
+    <div class="client-summary-card">
+      <div class="client-summary-lbl">Total Projects</div>
+      <div class="client-summary-val">${stats.totalProjects}</div>
+    </div>
+    <div class="client-summary-card">
+      <div class="client-summary-lbl">Shared Projects</div>
+      <div class="client-summary-val">${stats.sharedProjects}</div>
+    </div>
+  `;
+
+  const usersBody = gid('admin-users-tbody');
+  usersBody.innerHTML = !users.length ? '<tr class="admin-empty-row"><td colspan="5">No users yet.</td></tr>' : users.map(u => `
+    <tr>
+      <td>${esc(u.email)}</td>
+      <td><span class="admin-role-pill ${esc(u.role)}">${esc(u.role)}</span></td>
+      <td>${u.projectCount}</td>
+      <td>${new Date(u.createdAt).toLocaleDateString()}</td>
+      <td>${u.id === currentUser.id ? '' : `<button class="admin-del-btn" onclick="adminDeleteUser('${u.id}')">Delete</button>`}</td>
+    </tr>
+  `).join('');
+
+  const projectsBody = gid('admin-projects-tbody');
+  projectsBody.innerHTML = !projects.length ? '<tr class="admin-empty-row"><td colspan="5">No projects yet.</td></tr>' : projects.map(p => `
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.ownerEmail || '—')}</td>
+      <td>${p.clientEmail ? esc(p.clientEmail) : '—'}</td>
+      <td>${new Date(p.savedAt).toLocaleDateString()}</td>
+      <td><button class="admin-del-btn" onclick="adminDeleteProject('${p.id}')">Delete</button></td>
+    </tr>
+  `).join('');
 }
-function updateSubStatus(id, status) {
-  const s = project.submittals.find(s => s.id === id);
-  if (s) { s.status = status; saveProject(); renderSubPane(); }
+
+async function adminDeleteUser(id) {
+  if (!confirm('Delete this user and all of their projects? This cannot be undone.')) return;
+  const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+  if (!res.ok) { const body = await res.json().catch(() => ({})); alert(body.error || 'Could not delete user.'); return; }
+  renderAdminDashboard();
+}
+
+async function adminDeleteProject(id) {
+  if (!confirm('Delete this project? This cannot be undone.')) return;
+  await fetch(`/api/admin/projects/${id}`, { method: 'DELETE' });
+  renderAdminDashboard();
+}
+
+// ── BUILDER: SHARE PROJECT WITH A CLIENT ──────────────────────────────
+async function refreshShareStatus() {
+  const statusEl = gid('proj-dd-share-status');
+  if (!statusEl) return;
+  if (!project.id || !project.name || project.name === 'New Project') {
+    statusEl.textContent = 'Save this project to enable sharing';
+    return;
+  }
+  const entry = await apiGetProject(project.id);
+  statusEl.textContent = (entry && entry.clientEmail) ? `Shared with ${entry.clientEmail}` : 'Not shared with a client';
+}
+
+async function shareCurrentProject() {
+  if (!project.id || !project.name || project.name === 'New Project') {
+    alert('Save this project first, then you can share it with a client.');
+    return;
+  }
+  const email = prompt('Client email to share this project with (leave blank to unshare):', '');
+  if (email === null) return;
+  const trimmed = email.trim();
+  try {
+    if (!trimmed) {
+      await fetch(`${PROJECTS_API}/${project.id}/share`, { method: 'DELETE' });
+    } else {
+      const res = await fetch(`${PROJECTS_API}/${project.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      if (!res.ok) { const body = await res.json(); alert(body.error || 'Could not share project.'); return; }
+    }
+    refreshShareStatus();
+  } catch (e) {
+    alert('Could not reach the server.');
+  }
 }
 
 // ── INIT ───────────────────────────────────────────────────────────
-(function init() {
-  const t = new Date();
-  gid('s-start').value = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+function init() {
   loadProject();
-  updateNavProjectName();
   renderAll();
-  calcBudget();
-  autoSched();
-  calcMarkup();
-  calcBurden();
-  renderBidCards();
-  bpRenderConditions();
-  bpUpdateActiveIndicator();
-  bpRenderQtyPanel();
-  bpRenderColorPicker();
-  bpSyncTypeButtons();
-  renderCOPage();
-  renderRFIPane();
-  renderSubPane();
-})();
+  renderBudgetBuilder();
+  bpRestoreFromProject();
+  showPage('blueprint');
+  updateNavProjectName();
+}
+
+document.addEventListener('DOMContentLoaded', checkAuth);
+window.addEventListener('afterprint', () => {
+  // Force the browser to re-apply screen styles cleanly after the print dialog closes
+  document.body.style.display = 'none';
+  void document.body.offsetHeight;
+  document.body.style.display = '';
+});

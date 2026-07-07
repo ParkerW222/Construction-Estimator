@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: buildcalc
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: buildcalc-data
+      mountPath: /var/data
+      sizeGB: 1

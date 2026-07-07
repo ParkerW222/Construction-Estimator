@@ -139,55 +139,5 @@ const CSI_ITEMS = {
   ]},
 };
 
-// ── BUDGET CALCULATOR DATA ─────────────────────────────────────────
-// lo/hi = $/SF range, lr = labor ratio
-const B_BASE = {
-  office:      { lo: 180, hi: 280, lr: 0.42 },
-  retail:      { lo: 140, hi: 210, lr: 0.38 },
-  warehouse:   { lo: 60,  hi: 110, lr: 0.35 },
-  multifamily: { lo: 160, hi: 240, lr: 0.45 },
-  industrial:  { lo: 80,  hi: 140, lr: 0.36 },
-  medical:     { lo: 350, hi: 600, lr: 0.48 },
-};
-const B_QUAL  = { economy: 0.82, standard: 1.0, premium: 1.28 };
-const B_STORY = [1, 1.02, 1.05, 1.08, 1.12, 1.18, 1.25]; // index = stories - 1
-const B_DIV = [
-  { n: 'Concrete / Structure',   w: 0.18 },
-  { n: 'Masonry',                w: 0.05 },
-  { n: 'Metals',                 w: 0.08 },
-  { n: 'Wood & Finishes',        w: 0.12 },
-  { n: 'Thermal / Envelope',     w: 0.08 },
-  { n: 'Openings',               w: 0.06 },
-  { n: 'Finishes',               w: 0.12 },
-  { n: 'Mechanical / Plumbing',  w: 0.12 },
-  { n: 'Electrical',             w: 0.10 },
-  { n: 'Site Work',              w: 0.09 },
-];
-
-// ── SCHEDULE ESTIMATOR DATA ────────────────────────────────────────
-// Duration ranges in weeks by project type
-const S_BASE = {
-  office:      { lo: 8,  hi: 14 },
-  retail:      { lo: 6,  hi: 10 },
-  warehouse:   { lo: 5,  hi: 8  },
-  multifamily: { lo: 10, hi: 18 },
-  industrial:  { lo: 6,  hi: 12 },
-  medical:     { lo: 16, hi: 28 },
-};
-const S_QUAL  = { economy: 0.88, standard: 1.0, premium: 1.18 };
-const S_STORY = [1, 1.08, 1.16, 1.25, 1.35, 1.45, 1.58];
-const S_PHASES = [
-  { name: 'Pre-Construction',          pct: 0.08 },
-  { name: 'Site Work & Foundation',    pct: 0.18 },
-  { name: 'Structure',                 pct: 0.22 },
-  { name: 'Envelope',                  pct: 0.15 },
-  { name: 'MEP Rough-In',              pct: 0.15 },
-  { name: 'Interior Finishes',         pct: 0.14 },
-  { name: 'Closeout & Commissioning',  pct: 0.08 },
-];
-
-// ── BID COMPARISON ─────────────────────────────────────────────────
-const BID_COLORS = ['#1e3a5f', '#f97316', '#0891b2', '#16a34a', '#7c3aed', '#dc2626'];
-
 // ── BLUEPRINT CONDITION COLORS ─────────────────────────────────────
 const BP_COLORS = ['#f97316','#1e3a5f','#0891b2','#16a34a','#7c3aed','#dc2626','#0d9488'];

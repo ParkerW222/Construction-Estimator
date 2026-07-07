@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BuildCalc — Construction Management Tools</title>
+<title>BuildCalc — Construction Budget & Takeoff</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -11,31 +11,26 @@
   <div class="nav-inner">
     <a href="#" class="logo" onclick="return false"><div class="logo-mark">BC</div>BuildCalc</a>
     <div class="nav-links">
-      <a href="#" onclick="showPage('blueprint');return false" id="nl-blueprint" class="active">Blueprint Takeoff</a>
-      <a href="#" onclick="showPage('estimator');return false" id="nl-estimator">Project Estimator</a>
-      <div class="nav-dropdown-wrap">
-        <button class="nav-dd-btn" id="nl-tools-btn" onclick="toggleToolsMenu(event)">Tools &#9660;</button>
-        <div class="nav-dd-menu" id="tools-menu">
-          <a href="#" id="nl-budget" onclick="showPage('budget');return false">Budget Calculator</a>
-          <a href="#" id="nl-schedule" onclick="showPage('schedule');return false">Schedule Estimator</a>
-          <a href="#" id="nl-bids" onclick="showPage('bids');return false">Bid Comparison</a>
-          <a href="#" id="nl-markup" onclick="showPage('markup');return false">Markup &amp; Overhead</a>
-        </div>
-      </div>
+      <a href="#" onclick="showPage('blueprint');return false" id="nl-blueprint" class="active">Blueprint</a>
+      <span class="nav-arrow">→</span>
+      <a href="#" onclick="showPage('estimator');return false" id="nl-estimator">Estimator</a>
       <div class="nav-sep"></div>
-      <a href="#" onclick="showPage('changes');return false" id="nl-changes">Change Orders</a>
-      <a href="#" onclick="showPage('logs');return false" id="nl-logs">Project Logs</a>
+      <a href="#" onclick="showPage('builder');return false" id="nl-builder" class="active">Budget Builder</a>
     </div>
     <div class="nav-dropdown-wrap" id="proj-dd-wrap">
       <button class="proj-dd-trigger" id="proj-dd-btn" onclick="toggleProjectsDropdown(event)">
-        &#128193; <span id="proj-nav-name">New Project</span> &#9660;
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg> <span id="proj-nav-name">New Project</span> &#9660;
       </button>
       <div class="proj-dd-panel" id="proj-dd-panel">
         <div class="proj-dd-section-lbl">Current Project</div>
         <div class="proj-dd-current" id="proj-dd-current-name">New Project</div>
         <div class="proj-dd-btns">
-          <button class="proj-dd-act-btn accent" onclick="saveCurrentProject()">&#128190; Save</button>
+          <button class="proj-dd-act-btn accent" onclick="saveCurrentProject()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M8 3v5h8V3"/><path d="M8 21v-7h8v7"/></svg> Save</button>
           <button class="proj-dd-act-btn" onclick="startNewProjectFromDD()">+ New</button>
+        </div>
+        <div class="proj-dd-share-row">
+          <span class="proj-dd-share-status" id="proj-dd-share-status">Not shared with a client</span>
+          <button class="proj-dd-act-btn" onclick="shareCurrentProject()">Share</button>
         </div>
         <div class="proj-dd-sep"></div>
         <div class="proj-dd-section-lbl">Saved Projects</div>
@@ -48,14 +43,156 @@
         </div>
       </div>
     </div>
+    <div class="auth-user-wrap" id="auth-user-wrap" style="display:none">
+      <span class="auth-user-email" id="auth-user-email"></span>
+      <button class="nav-dd-btn" onclick="handleLogout()">Log Out</button>
+    </div>
     <button class="help-btn" onclick="showHelp()" title="How to use BuildCalc">?</button>
   </div>
 </nav>
 
+<!-- AUTH GATE -->
+<div class="modal-overlay" id="auth-gate">
+  <div class="modal-box" style="width:360px">
+    <div class="modal-head">
+      <span class="modal-title" id="auth-title">Log In</span>
+    </div>
+    <div class="auth-role-toggle" id="auth-role-toggle" style="display:none">
+      <button type="button" class="auth-role-btn active" id="auth-role-builder" onclick="setAuthRole('builder')">I'm a Builder</button>
+      <button type="button" class="auth-role-btn" id="auth-role-client" onclick="setAuthRole('client')">I'm a Client</button>
+    </div>
+    <div class="auth-err" id="auth-err" style="display:none"></div>
+    <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+      <div class="auth-field">
+        <label for="auth-email">Email</label>
+        <input type="email" id="auth-email" required autocomplete="email">
+      </div>
+      <div class="auth-field">
+        <label for="auth-password">Password</label>
+        <input type="password" id="auth-password" required autocomplete="current-password" minlength="8">
+      </div>
+      <button type="submit" class="btn btn-orange" id="auth-submit-btn" style="width:100%;justify-content:center;margin-top:.3rem">Log In</button>
+    </form>
+    <div class="auth-switch">
+      <span id="auth-switch-text">Don't have an account?</span>
+      <a href="#" onclick="toggleAuthMode();return false" id="auth-switch-link">Sign up</a>
+    </div>
+  </div>
+</div>
+
+<!-- CLIENT DASHBOARD (read-only) -->
+<div id="client-app">
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="logo" onclick="return false"><div class="logo-mark">BC</div>BuildCalc</a>
+      <div class="auth-user-wrap" style="margin-left:auto">
+        <span class="auth-user-email" id="client-user-email"></span>
+        <button class="nav-dd-btn" onclick="handleLogout()">Log Out</button>
+      </div>
+    </div>
+  </nav>
+  <div class="client-body">
+    <div id="client-list-view">
+      <div class="client-heading">Shared Projects</div>
+      <div class="client-project-list" id="client-project-list"></div>
+    </div>
+    <div id="client-detail-view" style="display:none">
+      <button class="btn btn-ghost" onclick="clientShowList()">&larr; Back to list</button>
+      <div class="client-heading" id="client-detail-name"></div>
+      <div class="client-summary-grid" id="client-summary-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN DASHBOARD -->
+<div id="admin-app">
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="logo" onclick="return false"><div class="logo-mark">BC</div>BuildCalc <span class="admin-badge">Admin</span></a>
+      <div class="auth-user-wrap" style="margin-left:auto">
+        <span class="auth-user-email" id="admin-user-email"></span>
+        <button class="nav-dd-btn" onclick="handleLogout()">Log Out</button>
+      </div>
+    </div>
+  </nav>
+  <div class="client-body">
+    <div class="client-summary-grid" id="admin-stats-grid" style="margin-top:0;margin-bottom:2rem"></div>
+
+    <div class="client-heading">Users</div>
+    <div class="admin-table-wrap">
+      <table class="admin-table" id="admin-users-table">
+        <thead><tr><th>Email</th><th>Role</th><th>Projects</th><th>Joined</th><th></th></tr></thead>
+        <tbody id="admin-users-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="client-heading" style="margin-top:2rem">Projects</div>
+    <div class="admin-table-wrap">
+      <table class="admin-table" id="admin-projects-table">
+        <thead><tr><th>Name</th><th>Owner</th><th>Shared With</th><th>Updated</th><th></th></tr></thead>
+        <tbody id="admin-projects-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- BUDGET BUILDER -->
+<div class="page" id="pg-builder">
+  <div class="bld-topbar">
+    <input type="text" id="bld-proj-name" class="bld-proj-input" value="New Project" placeholder="Project name…"
+           oninput="project.name=this.value;updateNavProjectName();bldUpdatePrintHeader()" onchange="saveProject()">
+    <div class="tb-sep"></div>
+    <select id="bld-proj-type" class="bld-type-sel" onchange="getBudgetSheet().projectType=this.value;bldUpdatePrintHeader();saveProject()">
+      <option value="residential">Residential</option>
+      <option value="commercial">Commercial</option>
+      <option value="industrial">Industrial</option>
+      <option value="multifamily">Multifamily</option>
+    </select>
+    <div class="bld-tgl-group">
+      <button class="bld-tgl-btn active" data-bt="custom" onclick="bldSetBuildType('custom')">Custom</button>
+      <button class="bld-tgl-btn" data-bt="spec" onclick="bldSetBuildType('spec')">Spec</button>
+    </div>
+    <div class="bld-tgl-group">
+      <button class="bld-tgl-btn active" id="bld-s1" onclick="bldSetStories(1)">1 Story</button>
+      <button class="bld-tgl-btn" id="bld-s2" onclick="bldSetStories(2)">2 Story</button>
+      <button class="bld-tgl-btn" id="bld-s3" onclick="bldSetStories(3)">3+</button>
+    </div>
+    <div class="tb-right">
+      <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="window.print()">Export PDF</button>
+    </div>
+  </div>
+  <div class="bld-print-header" id="bld-print-header">
+    <div class="bld-ph-title" id="bld-ph-title">New Project</div>
+    <div class="bld-ph-meta" id="bld-ph-meta"></div>
+  </div>
+  <div class="bld-body">
+    <div class="bld-table-wrap">
+      <table class="bld-table">
+        <thead>
+          <tr>
+            <th class="bld-th-num">#</th>
+            <th class="bld-th-item">Item</th>
+            <th class="bld-th-money">Materials</th>
+            <th class="bld-th-money">Labor</th>
+            <th class="bld-th-money">Combined</th>
+            <th class="bld-th-status">Status</th>
+            <th class="bld-th-dur">Schedule</th>
+            <th class="bld-th-by">By Others</th>
+            <th class="bld-th-note">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="bld-tbody"></tbody>
+      </table>
+    </div>
+    <div class="bld-summary" id="bld-summary"></div>
+  </div>
+  <div class="bld-gantt-panel" id="bld-gantt"></div>
+</div>
+
 <!-- ESTIMATOR -->
 <div class="page" id="pg-estimator">
   <div class="est-topbar">
-    <input type="text" id="proj-name" value="New Project" onchange="project.name=this.value;const bpn=gid('bp-proj-name');if(bpn)bpn.value=this.value;saveProject()">
+    <input type="text" id="proj-name" value="New Project" onchange="project.name=this.value;const bpn=gid('bp-proj-name');if(bpn)bpn.value=this.value;const bldn=gid('bld-proj-name');if(bldn)bldn.value=this.value;saveProject()">
     <div class="tb-sep"></div>
     <label for="proj-region" style="font-size:.74rem;color:var(--muted);white-space:nowrap;font-weight:600">Region:</label>
     <select id="proj-region" onchange="project.region=this.value;refreshTotals();saveProject()">
@@ -107,242 +244,13 @@
   </div>
 </div>
 
-<!-- BUDGET -->
-<div class="page" id="pg-budget">
-  <div class="pg-inner">
-    <div class="pg-head"><h1>Budget Calculator</h1><p>Parametric cost estimate based on square footage, project type, region, and quality level.</p></div>
-    <div class="card">
-      <div class="card-title">Project Type</div>
-      <div class="type-grid" id="b-typeGrid" style="grid-template-columns:repeat(3,1fr)">
-        <div class="q-opt selected" onclick="pickBType(this,'office')"><div class="qo-label">Office</div></div>
-        <div class="q-opt" onclick="pickBType(this,'retail')"><div class="qo-label">Retail</div></div>
-        <div class="q-opt" onclick="pickBType(this,'warehouse')"><div class="qo-label">Warehouse</div></div>
-        <div class="q-opt" onclick="pickBType(this,'multifamily')"><div class="qo-label">Multifamily</div></div>
-        <div class="q-opt" onclick="pickBType(this,'industrial')"><div class="qo-label">Industrial</div></div>
-        <div class="q-opt" onclick="pickBType(this,'medical')"><div class="qo-label">Medical / Lab</div></div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem">
-      <div class="card">
-        <div class="card-title">Project Details</div>
-        <div class="form-row cols-2">
-          <div><label class="fl">Square Footage</label><input type="number" id="b-sqft" value="10000" min="500" oninput="calcBudget()"></div>
-          <div><label class="fl">Stories</label><input type="number" id="b-stories" value="1" min="1" max="50" oninput="calcBudget()"></div>
-        </div>
-        <label class="fl">Region</label>
-        <select class="form-sel" id="b-region" onchange="calcBudget()">
-          <option value="new-england">New England</option><option value="new-york">New York Metro</option>
-          <option value="mid-atlantic">Mid-Atlantic</option><option value="southeast">Southeast</option>
-          <option value="florida">Florida</option><option value="appalachian">TN / KY</option>
-          <option value="texas">Texas</option><option value="midwest" selected>Midwest</option>
-          <option value="plains">Plains</option><option value="mountain">Mountain West</option>
-          <option value="pacific-nw">Pacific Northwest</option><option value="california">California</option>
-          <option value="hawaii">Hawaii / Alaska</option>
-        </select>
-      </div>
-      <div class="card">
-        <div class="card-title">Quality Level</div>
-        <div class="type-grid" id="b-qualRow" style="grid-template-columns:repeat(3,1fr)">
-          <div class="q-opt" onclick="pickBQual(this,'economy')"><div class="qo-label">Economy</div><div class="qo-sub">Basic finishes</div></div>
-          <div class="q-opt selected" onclick="pickBQual(this,'standard')"><div class="qo-label">Standard</div><div class="qo-sub">Mid-grade</div></div>
-          <div class="q-opt" onclick="pickBQual(this,'premium')"><div class="qo-label">Premium</div><div class="qo-sub">High-end</div></div>
-        </div>
-      </div>
-    </div>
-    <div class="card" id="b-results" style="display:none">
-      <div class="card-title">Estimate Results</div>
-      <div class="res-grid">
-        <div class="res-box accent"><div class="res-label">Total Cost Range</div><div class="res-val" id="b-range">—</div></div>
-        <div class="res-box"><div class="res-label">Cost per SF</div><div class="res-val" id="b-psf">—</div></div>
-        <div class="res-box"><div class="res-label">Stories Adjustment</div><div class="res-val" id="b-sadj">—</div></div>
-      </div>
-      <div style="margin-top:1.1rem">
-        <div class="card-title">Labor / Material Split</div>
-        <div class="split-bar"><div class="split-labor" id="b-lbar"></div></div>
-        <div class="split-legend">
-          <span><span class="swatch" style="background:var(--orange)"></span>Labor <span id="b-lpct">—</span></span>
-          <span><span class="swatch" style="background:var(--border)"></span>Material <span id="b-mpct">—</span></span>
-          <span style="margin-left:auto">Labor: $<span id="b-lamt">—</span>&nbsp;|&nbsp;Material: $<span id="b-mamt">—</span></span>
-        </div>
-      </div>
-      <div style="margin-top:1.1rem"><div class="card-title">CSI Division Breakdown</div><div class="csi-rows" id="b-csi"></div></div>
-    </div>
-  </div>
-</div>
-
-<!-- SCHEDULE -->
-<div class="page" id="pg-schedule">
-  <div class="pg-inner">
-    <div class="pg-head"><h1>Schedule Estimator</h1><p>Generate a phased construction schedule with estimated duration and milestone dates.</p></div>
-    <div style="display:grid;grid-template-columns:1fr 1.65fr;gap:1.2rem">
-      <div>
-        <div class="card">
-          <div class="card-title">Project Type</div>
-          <div class="type-grid" id="s-typeGrid" style="grid-template-columns:repeat(2,1fr)">
-            <div class="q-opt selected" onclick="pickSType(this,'office')"><div class="qo-label">Office</div></div>
-            <div class="q-opt" onclick="pickSType(this,'retail')"><div class="qo-label">Retail</div></div>
-            <div class="q-opt" onclick="pickSType(this,'warehouse')"><div class="qo-label">Warehouse</div></div>
-            <div class="q-opt" onclick="pickSType(this,'multifamily')"><div class="qo-label">Multifamily</div></div>
-            <div class="q-opt" onclick="pickSType(this,'industrial')"><div class="qo-label">Industrial</div></div>
-            <div class="q-opt" onclick="pickSType(this,'medical')"><div class="qo-label">Medical</div></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">Parameters</div>
-          <div class="form-row cols-2">
-            <div><label class="fl">Square Footage</label><input type="number" id="s-sqft" value="10000" min="500" oninput="autoSched()"></div>
-            <div><label class="fl">Stories</label><input type="number" id="s-stories" value="1" min="1" max="50" oninput="autoSched()"></div>
-          </div>
-          <label class="fl">Quality Level</label>
-          <div class="type-grid" id="s-qualRow" style="grid-template-columns:repeat(3,1fr);margin-bottom:.75rem">
-            <div class="q-opt" onclick="pickSQual(this,'economy')"><div class="qo-label">Economy</div></div>
-            <div class="q-opt selected" onclick="pickSQual(this,'standard')"><div class="qo-label">Standard</div></div>
-            <div class="q-opt" onclick="pickSQual(this,'premium')"><div class="qo-label">Premium</div></div>
-          </div>
-          <label class="fl">Construction Start Date</label>
-          <input type="date" id="s-start" oninput="autoSched()" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-        </div>
-        <div class="card" id="s-summary" style="display:none">
-          <div class="card-title">Summary</div>
-          <div class="ba-row"><span class="ba-label">Base Duration</span><span class="ba-val" id="s-dur">—</span></div>
-          <div class="ba-row" id="s-co-row" style="display:none"><span class="ba-label" style="color:var(--orange)">CO Extension</span><span class="ba-val" id="s-co-days" style="color:var(--orange)">—</span></div>
-          <div class="ba-row"><span class="ba-label">Start Date</span><span class="ba-val" id="s-start-lbl">—</span></div>
-          <div class="ba-row"><span class="ba-label">Substantial Completion</span><span class="ba-val" id="s-end">—</span></div>
-          <div class="ba-row"><span class="ba-label">Final Completion</span><span class="ba-val" id="s-final">—</span></div>
-        </div>
-      </div>
-      <div class="card" id="s-gantt-card" style="display:none">
-        <div class="card-title">Phase Schedule</div>
-        <div class="gantt-wrap" id="s-gantt"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- BIDS -->
-<div class="page" id="pg-bids">
-  <div class="pg-inner">
-    <div class="pg-head"><h1>Bid Comparison Tool</h1><p>Compare contractor bids side by side, analyze spread, and identify the best value.</p></div>
-    <div class="card">
-      <div class="card-title">Project Info</div>
-      <div class="form-row cols-3">
-        <div><label class="fl">Project Name</label><input type="text" id="bid-proj" value="New Project" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem"></div>
-        <div><label class="fl">Engineer's Estimate ($)</label><input type="number" id="bid-est" value="0" oninput="analyzeBids()" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem"></div>
-        <div><label class="fl">Number of Bidders</label>
-          <select class="form-sel" id="bid-count" onchange="bidCount=+this.value;renderBidCards()">
-            <option value="2">2 Bidders</option><option value="3" selected>3 Bidders</option>
-            <option value="4">4 Bidders</option><option value="5">5 Bidders</option><option value="6">6 Bidders</option>
-          </select>
-        </div>
-      </div>
-    </div>
-    <div class="bids-grid" id="bid-cards" style="grid-template-columns:repeat(3,1fr)"></div>
-    <div id="bid-analysis" style="display:none">
-      <div class="card">
-        <div class="card-title">Bid Analysis</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-          <div>
-            <div class="ba-row"><span class="ba-label">Lowest Bid</span><span class="ba-val" id="ba-low">—</span></div>
-            <div class="ba-row"><span class="ba-label">Highest Bid</span><span class="ba-val" id="ba-high">—</span></div>
-            <div class="ba-row"><span class="ba-label">Average Bid</span><span class="ba-val" id="ba-avg">—</span></div>
-            <div class="ba-row"><span class="ba-label">Bid Spread</span><span class="ba-val" id="ba-spread">—</span></div>
-            <div class="ba-row"><span class="ba-label">Spread Assessment</span><span class="ba-val" id="ba-spread-lbl">—</span></div>
-          </div>
-          <div id="ba-est-col">
-            <div class="ba-row"><span class="ba-label">Engineer's Estimate</span><span class="ba-val" id="ba-eng">—</span></div>
-            <div class="ba-row"><span class="ba-label">Low vs. Estimate</span><span class="ba-val" id="ba-vs-est">—</span></div>
-          </div>
-        </div>
-        <div class="rank-grid" id="bid-rank"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MARKUP -->
-<div class="page" id="pg-markup">
-  <div class="pg-inner">
-    <div class="pg-head"><h1>Markup &amp; Overhead Calculator</h1><p>Calculate bid price with overhead and profit markup, and compute fully burdened labor rates.</p></div>
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab(this,'mu-project')">Project Markup</button>
-      <button class="tab-btn" onclick="switchTab(this,'mu-burden')">Labor Burden</button>
-    </div>
-    <div class="tab-pane active" id="mu-project">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem">
-        <div class="card">
-          <div class="card-title">Cost Inputs</div>
-          <div class="mu-row"><span class="mu-label">Direct Labor Cost ($)</span><input class="mu-inp" type="number" id="mu-labor" value="0" oninput="calcMarkup()"></div>
-          <div class="mu-row"><span class="mu-label">Direct Material Cost ($)</span><input class="mu-inp" type="number" id="mu-mat" value="0" oninput="calcMarkup()"></div>
-          <div class="mu-row"><span class="mu-label">Subcontractor Cost ($)</span><input class="mu-inp" type="number" id="mu-sub" value="0" oninput="calcMarkup()"></div>
-          <div class="mu-row"><span class="mu-label">Equipment Cost ($)</span><input class="mu-inp" type="number" id="mu-equip" value="0" oninput="calcMarkup()"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Markup Rates</div>
-          <div class="mu-row"><span class="mu-label">Overhead (%)</span><input class="mu-inp" type="number" id="mu-oh" value="15" step="0.5" oninput="calcMarkup()"></div>
-          <div class="mu-row"><span class="mu-label">Profit (%)</span><input class="mu-inp" type="number" id="mu-profit" value="10" step="0.5" oninput="calcMarkup()"></div>
-          <div class="mu-row"><span class="mu-label">Contingency (%)</span><input class="mu-inp" type="number" id="mu-cont" value="5" step="0.5" oninput="calcMarkup()"></div>
-          <div class="mu-row"><span class="mu-label">Bond / Insurance (%)</span><input class="mu-inp" type="number" id="mu-bond" value="2" step="0.1" oninput="calcMarkup()"></div>
-          <div class="mu-row"><span class="mu-label">Retainage (%)</span><input class="mu-inp" type="number" id="mu-ret" value="10" step="0.5" oninput="calcMarkup()"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Breakdown</div>
-        <div class="mu-row"><span class="mu-label">Direct Cost</span><span class="mu-result" id="mu-r-direct">$0</span></div>
-        <div class="mu-row"><span class="mu-label">Overhead</span><span class="mu-result" id="mu-r-oh">$0</span></div>
-        <div class="mu-row"><span class="mu-label">Profit</span><span class="mu-result" id="mu-r-profit">$0</span></div>
-        <div class="mu-row"><span class="mu-label">Contingency</span><span class="mu-result" id="mu-r-cont">$0</span></div>
-        <div class="mu-row"><span class="mu-label">Bond / Insurance</span><span class="mu-result" id="mu-r-bond">$0</span></div>
-        <div class="mu-total"><span class="mu-total-lbl">BID PRICE</span><span class="mu-total-val" id="mu-r-total">$0</span></div>
-        <div style="margin-top:.65rem;display:flex;gap:1.5rem;font-size:.76rem;color:var(--muted)">
-          <span>Markup on cost: <strong id="mu-r-mu" style="color:var(--navy)">—</strong></span>
-          <span>Margin on price: <strong id="mu-r-mg" style="color:var(--navy)">—</strong></span>
-        </div>
-        <div style="margin-top:.85rem;padding-top:.85rem;border-top:1px solid var(--border)">
-          <div style="font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">Retainage</div>
-          <div class="mu-row"><span class="mu-label">Amount Withheld</span><span class="mu-result" id="mu-r-ret">$0</span></div>
-          <div class="mu-row"><span class="mu-label" style="font-weight:600">Net at Substantial Completion</span><span class="mu-result" id="mu-r-net" style="font-weight:700;color:var(--navy)">$0</span></div>
-          <p style="font-size:.74rem;color:var(--muted);margin-top:.55rem;line-height:1.55">Retainage is a % of each progress payment the owner withholds until substantial completion as protection against incomplete or defective work. Typical rate is 5–10%. It does not reduce your bid price — it affects when you get paid.</p>
-        </div>
-      </div>
-    </div>
-    <div class="tab-pane" id="mu-burden">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem">
-        <div class="card">
-          <div class="card-title">Base Wage</div>
-          <div class="mu-row"><span class="mu-label">Straight-time Wage ($/hr)</span><input class="mu-inp" type="number" id="lb-wage" value="35" step="0.25" oninput="calcBurden()"></div>
-          <div class="mu-row"><span class="mu-label">Hours / Year</span><input class="mu-inp" type="number" id="lb-hrs" value="2080" oninput="calcBurden()"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Burden Rates</div>
-          <div class="mu-row"><span class="mu-label">FICA (SS + Medicare %)</span><input class="mu-inp" type="number" id="lb-fica" value="7.65" step="0.1" oninput="calcBurden()"></div>
-          <div class="mu-row"><span class="mu-label">FUTA / SUTA (%)</span><input class="mu-inp" type="number" id="lb-futa" value="3.0" step="0.1" oninput="calcBurden()"></div>
-          <div class="mu-row"><span class="mu-label">Workers Comp (%)</span><input class="mu-inp" type="number" id="lb-wc" value="8.0" step="0.1" oninput="calcBurden()"></div>
-          <div class="mu-row"><span class="mu-label">General Liability (%)</span><input class="mu-inp" type="number" id="lb-gl" value="2.5" step="0.1" oninput="calcBurden()"></div>
-          <div class="mu-row"><span class="mu-label">Benefits / Other (%)</span><input class="mu-inp" type="number" id="lb-ben" value="12.0" step="0.1" oninput="calcBurden()"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title">Labor Burden Summary</div>
-        <div class="mu-row"><span class="mu-label">Base Wage ($/hr)</span><span class="mu-result" id="lb-r-base">$0.00</span></div>
-        <div class="mu-row"><span class="mu-label">Burden Cost ($/hr)</span><span class="mu-result" id="lb-r-burden">$0.00</span></div>
-        <div class="mu-row"><span class="mu-label">Total Burden Rate</span><span class="mu-result" id="lb-r-rate">0.0%</span></div>
-        <div class="mu-total"><span class="mu-total-lbl">FULLY BURDENED RATE</span><span class="mu-total-val" id="lb-r-total">$0.00 / hr</span></div>
-        <div style="margin-top:.65rem;display:flex;gap:1.5rem;font-size:.76rem;color:var(--muted)">
-          <span>Annual burdened cost: <strong id="lb-r-annual" style="color:var(--navy)">$0</strong></span>
-          <span>Base salary: <strong id="lb-r-base-annual" style="color:var(--navy)">$0</strong></span>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- BLUEPRINT -->
+<!-- BLUEPRINT (default page) -->
 <div class="page active" id="pg-blueprint">
   <!-- Toolbar -->
   <div class="bp-topbar">
-    <input type="text" id="bp-proj-name" class="bp-proj-input" value="New Project" placeholder="Project name…" onchange="project.name=this.value;const pn=gid('proj-name');if(pn)pn.value=this.value;saveProject()">
+    <input type="text" id="bp-proj-name" class="bp-proj-input" value="New Project" placeholder="Project name…" onchange="project.name=this.value;const pn=gid('proj-name');if(pn)pn.value=this.value;const bldn=gid('bld-proj-name');if(bldn)bldn.value=this.value;saveProject()">
     <div class="tb-sep"></div>
-    <label class="tool-btn orange" for="bp-file-input">&#128194; Open</label>
+    <label class="tool-btn orange" for="bp-file-input"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg> Open</label>
     <input type="file" id="bp-file-input" accept="application/pdf,image/*" style="display:none" onchange="bpLoadFile(this)">
     <span class="bp-file-lbl" id="bp-file-lbl" style="display:none"></span>
     <div class="tb-sep"></div>
@@ -352,13 +260,15 @@
       <button onclick="bpNextPage()">&#8250;</button>
     </div>
     <div class="tb-sep"></div>
-    <button class="tool-btn" onclick="bpSetScale()">&#128207; Set Scale</button>
+    <button class="tool-btn" onclick="bpSetScale()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="10" rx="1"/><path d="M7 7v3M11 7v4M15 7v3M19 7v4"/></svg> Set Scale</button>
+    <button class="tool-btn" id="bp-trash-btn" onclick="bpToggleTrash()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg> Erase</button>
     <span class="scale-badge unset" id="bp-scale-badge">Scale: not set</span>
     <div class="tb-sep"></div>
     <div class="bp-active-cond" id="bp-active-cond">Select a condition to draw</div>
     <div class="tb-sep"></div>
-    <input type="range" id="bp-zoom" min="25" max="300" value="100" style="width:80px;accent-color:var(--orange)" oninput="bpZoom(+this.value)" title="Zoom">
-    <span id="bp-zoom-lbl" style="font-size:.76rem;color:rgba(255,255,255,.6);min-width:36px">100%</span>
+    <input type="range" id="bp-zoom" min="25" max="300" value="100" style="width:80px;accent-color:var(--orange)" oninput="bpSetZoom(+this.value)" title="Zoom">
+    <input type="number" id="bp-zoom-inp" min="25" max="300" value="100" onchange="bpSetZoom(+this.value)" title="Zoom %" style="width:52px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:4px;color:#fff;font-size:.76rem;padding:2px 4px;text-align:center">
+    <span style="font-size:.76rem;color:rgba(255,255,255,.5)">%</span>
     <div class="tb-sep"></div>
     <button class="tool-btn" onclick="bpClearAll()" style="color:#f87171">&#10005; Clear</button>
   </div>
@@ -407,6 +317,10 @@
       <div class="bp-canvas-wrap" id="bp-canvas-wrap" style="display:none">
         <canvas id="pdf-canvas"></canvas>
         <canvas id="markup-canvas"
+          onpointerdown="bpPointerDown(event)"
+          onpointermove="bpPointerMove(event)"
+          onpointerup="bpPointerUp(event)"
+          onwheel="bpWheel(event)"
           onmousemove="bpMouseMove(event)"
           ondblclick="bpDblClick(event)"
           onclick="bpClick(event)">
@@ -426,194 +340,6 @@
   </div>
 </div>
 
-<!-- CHANGE ORDERS -->
-<div class="page" id="pg-changes">
-  <div class="pg-inner">
-    <div class="pg-head">
-      <h1>Change Orders</h1>
-      <p>Track scope and cost changes against the original contract. Both parties must sign before work proceeds on a change.</p>
-    </div>
-    <div class="co-sum-grid">
-      <div class="co-sum-card">
-        <div class="co-sum-lbl">Base Contract</div>
-        <div class="co-sum-val" id="co-base">$0</div>
-        <div class="co-sum-sub">From Project Estimator</div>
-      </div>
-      <div class="co-sum-card accent">
-        <div class="co-sum-lbl">Approved COs</div>
-        <div class="co-sum-val" id="co-approved-amt">+$0</div>
-        <div class="co-sum-sub" id="co-approved-count">0 approved</div>
-      </div>
-      <div class="co-sum-card highlight">
-        <div class="co-sum-lbl">Revised Contract</div>
-        <div class="co-sum-val" id="co-revised">$0</div>
-        <div class="co-sum-sub">Base + approved COs</div>
-      </div>
-      <div class="co-sum-card soft">
-        <div class="co-sum-lbl">Pending</div>
-        <div class="co-sum-val" id="co-pending-amt">$0</div>
-        <div class="co-sum-sub" id="co-pending-count">0 awaiting approval</div>
-      </div>
-    </div>
-    <div class="co-sched-banner" id="co-sched-banner" style="display:none">
-      <span class="co-sched-banner-icon">&#128197;</span>
-      <div>
-        <div class="co-sched-banner-val"><span id="co-sched-days">+0 days</span> approved schedule impact</div>
-        <div class="co-sched-banner-sub">from <span id="co-sched-count">0</span> change order(s) &mdash; reflected in Schedule Estimator</div>
-      </div>
-      <button class="btn btn-ghost" onclick="showPage('schedule')" style="margin-left:auto;font-size:.8rem;white-space:nowrap">View Schedule &#8594;</button>
-    </div>
-    <div class="card">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-        Change Order Log
-        <button class="btn btn-orange" onclick="showAddCOForm()">+ Add Change Order</button>
-      </div>
-      <div id="co-add-form" style="display:none;background:var(--bg);border-radius:8px;padding:1rem;margin-bottom:1rem">
-        <div class="form-row" style="grid-template-columns:2fr 1fr 1fr 1fr;gap:.75rem">
-          <div>
-            <label class="fl">Description</label>
-            <input type="text" id="co-f-desc" placeholder="e.g. Add exterior lighting" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-          </div>
-          <div>
-            <label class="fl">Cost Impact ($)</label>
-            <input type="number" id="co-f-cost" step="0.01" placeholder="0.00" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-          </div>
-          <div>
-            <label class="fl">Schedule Impact <span style="font-weight:400;color:var(--muted)">(days)</span></label>
-            <input type="number" id="co-f-days" step="1" placeholder="0" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-          </div>
-          <div>
-            <label class="fl">Date</label>
-            <input type="date" id="co-f-date" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-          </div>
-        </div>
-        <div style="margin-top:.6rem">
-          <label class="fl">Scope Summary <span style="font-weight:400;color:var(--muted)">(optional — brief description of what changed)</span></label>
-          <input type="text" id="co-f-scope" placeholder="e.g. Owner requested 6 LED pole lights along north parking lot perimeter" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-        </div>
-        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem">
-          <button class="btn btn-ghost" onclick="hideAddCOForm()">Cancel</button>
-          <button class="btn btn-orange" onclick="submitCO()">Add Change Order</button>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="pa-table">
-          <thead><tr>
-            <th>CO #</th><th>Date</th><th>Description / Scope</th><th style="text-align:right">Cost Impact</th><th style="text-align:right">Sched. Days</th><th>Status</th><th>Actions</th>
-          </tr></thead>
-          <tbody id="co-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- PROJECT LOGS -->
-<div class="page" id="pg-logs">
-  <div class="pg-inner">
-    <div class="pg-head">
-      <h1>Project Logs</h1>
-      <p>Track RFIs and submittals throughout the project lifecycle. Both are formal written records — responses become part of the contract.</p>
-    </div>
-    <div class="tab-bar" style="border-bottom:2px solid var(--border);margin-bottom:1.2rem">
-      <button class="tab-btn active" onclick="switchLogsTab(this,'rfi-pane')">RFI Log</button>
-      <button class="tab-btn" onclick="switchLogsTab(this,'sub-pane')">Submittal Log</button>
-    </div>
-
-    <!-- RFI PANE -->
-    <div class="tab-pane active" id="rfi-pane">
-      <div class="card">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-          Request for Information (RFI) Log
-          <button class="btn btn-orange" onclick="showAddRFIForm()">+ Log RFI</button>
-        </div>
-        <div class="co-context-note">
-          An RFI is a formal written question to the architect or engineer when drawings or specs are unclear or conflicting. The written response is part of the contract record and may trigger a change order.
-        </div>
-        <div id="rfi-add-form" style="display:none;background:var(--bg);border-radius:8px;padding:1rem;margin-bottom:1rem">
-          <div class="form-row cols-3">
-            <div>
-              <label class="fl">Description / Question</label>
-              <input type="text" id="rfi-f-desc" placeholder="e.g. Beam elevation conflict at grid B-4" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-            </div>
-            <div>
-              <label class="fl">Sent To</label>
-              <input type="text" id="rfi-f-sentto" placeholder="e.g. Architect" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-            </div>
-            <div>
-              <label class="fl">Date Submitted</label>
-              <input type="date" id="rfi-f-date" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-            </div>
-          </div>
-          <div style="margin-top:.6rem;max-width:280px">
-            <label class="fl">Response Due Date <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-            <input type="date" id="rfi-f-due" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-          </div>
-          <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem">
-            <button class="btn btn-ghost" onclick="hideAddRFIForm()">Cancel</button>
-            <button class="btn btn-orange" onclick="submitRFI()">Log RFI</button>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="pa-table">
-            <thead><tr>
-              <th>RFI #</th><th>Date</th><th>Description</th><th>Sent To</th><th>Due Date</th><th>Status</th><th>Actions</th>
-            </tr></thead>
-            <tbody id="rfi-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- SUBMITTAL PANE -->
-    <div class="tab-pane" id="sub-pane" style="display:none">
-      <div class="card">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-          Submittal Log
-          <button class="btn btn-orange" onclick="showAddSubForm()">+ Log Submittal</button>
-        </div>
-        <div class="co-context-note">
-          A submittal is product data, a shop drawing, or a material sample submitted to the design team for approval before ordering or installation. <strong>Revise &amp; Resubmit</strong> means the material doesn't meet spec and must be reselected.
-        </div>
-        <div id="sub-add-form" style="display:none;background:var(--bg);border-radius:8px;padding:1rem;margin-bottom:1rem">
-          <div class="form-row cols-3">
-            <div>
-              <label class="fl">Description</label>
-              <input type="text" id="sub-f-desc" placeholder="e.g. Hollow metal doors, product data" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-            </div>
-            <div>
-              <label class="fl">Spec Section</label>
-              <select id="sub-f-spec" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-                <option value="">— Select division —</option>
-              </select>
-            </div>
-            <div>
-              <label class="fl">Date Submitted</label>
-              <input type="date" id="sub-f-date" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-            </div>
-          </div>
-          <div style="margin-top:.6rem;max-width:340px">
-            <label class="fl">Submitted By <span style="font-weight:400;color:var(--muted)">(optional — e.g. Mechanical Sub)</span></label>
-            <input type="text" id="sub-f-by" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem">
-          </div>
-          <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem">
-            <button class="btn btn-ghost" onclick="hideAddSubForm()">Cancel</button>
-            <button class="btn btn-orange" onclick="submitSub()">Log Submittal</button>
-          </div>
-        </div>
-        <div style="overflow-x:auto">
-          <table class="pa-table">
-            <thead><tr>
-              <th>Sub #</th><th>Spec Section</th><th>Description</th><th>Submitted By</th><th>Date</th><th>Status</th><th>Actions</th>
-            </tr></thead>
-            <tbody id="sub-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- HELP MODAL -->
 <div class="modal-overlay" id="help-modal" style="display:none" onclick="if(event.target===this)closeHelp()">
   <div class="modal-box help-box">
@@ -625,24 +351,40 @@
     <div class="help-tool">
       <div class="help-tool-head">
         <span class="help-num">1</span>
-        <div><div class="help-tool-name">Blueprint Takeoff</div><div class="help-tool-sub">Measure directly on uploaded PDFs and drawings</div></div>
+        <div><div class="help-tool-name">Budget Builder</div><div class="help-tool-sub">Critical-path project budget organized by construction sequence</div></div>
       </div>
-      <p class="help-desc">The core of BuildCalc. Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements flow straight into the Project Estimator.</p>
+      <p class="help-desc">The core of BuildCalc. Enter your budget for each line item in construction order — Materials, Labor, and Combined calculate automatically. The summary panel updates in real time so you always know your total.</p>
       <ol class="help-steps">
-        <li>Click <strong>Open</strong> (or drag &amp; drop a file onto the canvas) to load a PDF or image drawing.</li>
-        <li>Type a <strong>project name</strong> in the top-left field — it stays in sync with the Project Estimator.</li>
-        <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet to calibrate all measurements.</li>
-        <li>In the <strong>Conditions panel</strong> (left), click <strong>+ New</strong> to create a named measurement type (e.g. "Concrete Slab"), choose Linear, Area, or Count, and pick a color.</li>
-        <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item.</li>
-        <li>Quantities accumulate in the <strong>Quantities panel</strong> (right). Press <strong>Ctrl+Z</strong> to undo the last completed measurement, <strong>Backspace</strong> to remove the last-placed point while drawing, or <strong>Escape</strong> to cancel in-progress drawing.</li>
-        <li>Use <strong>→ Est</strong> on a single condition or <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs, then send to the Project Estimator.</li>
+        <li>Set a <strong>project name</strong>, building type, and stories at the top.</li>
+        <li>Enter <strong>Materials</strong> and <strong>Labor</strong> costs for each line item. Combined calculates automatically.</li>
+        <li>Use the <strong>Status</strong> dropdown per row to track progress: Not Started → Bid Needed → In Progress → Complete.</li>
+        <li>Toggle <strong>By Others</strong> on any row handled by a subcontractor — enter their name and the cost is tracked separately (excluded from your total but shown in the summary).</li>
+        <li>Click the <strong>pencil icon</strong> on any row to add a note (e.g. "tile needs 6-week lead time").</li>
+        <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance), <strong>Soft Costs</strong> (permits, architect, geotech), and <strong>Other</strong> at the bottom of the table.</li>
+        <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
     </div>
 
     <div class="help-tool">
       <div class="help-tool-head">
         <span class="help-num">2</span>
-        <div><div class="help-tool-name">Project Estimator</div><div class="help-tool-sub">Line-item cost estimating by CSI MasterFormat division</div></div>
+        <div><div class="help-tool-name">Blueprint Takeoff</div><div class="help-tool-sub">Measure directly on uploaded PDFs and drawings</div></div>
+      </div>
+      <p class="help-desc">Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements push straight into the Project Estimator.</p>
+      <ol class="help-steps">
+        <li>Click <strong>Open</strong> (or drag &amp; drop) to load a PDF or image drawing.</li>
+        <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet.</li>
+        <li>In the <strong>Conditions panel</strong> (left), click <strong>+ New</strong> to create a named measurement type, choose Linear, Area, or Count, and pick a color.</li>
+        <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item.</li>
+        <li>Use <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs, then send to the Project Estimator.</li>
+        <li>Press <strong>Ctrl+Z</strong> to undo the last measurement, <strong>Backspace</strong> to remove the last point while drawing, <strong>Escape</strong> to cancel.</li>
+      </ol>
+    </div>
+
+    <div class="help-tool" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+      <div class="help-tool-head">
+        <span class="help-num">3</span>
+        <div><div class="help-tool-name">Project Estimator</div><div class="help-tool-sub">Detailed line-item estimating by CSI MasterFormat division</div></div>
       </div>
       <p class="help-desc">Build a detailed bottom-up estimate organized by construction division. Unit costs are national averages automatically adjusted for your region. Markup is applied on top to produce a final bid price.</p>
       <ol class="help-steps">
@@ -650,96 +392,14 @@
         <li>Click a <strong>CSI division</strong> in the left panel (e.g. 03 Concrete) to open it.</li>
         <li>Click <strong>+ Add from Library</strong> to search and add items, or <strong>+ Custom</strong> for a blank row.</li>
         <li>Enter <strong>quantities</strong> for each item — extended costs update instantly.</li>
-        <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel. Also set <strong>Mat. Sales Tax %</strong> for your state and <strong>Permit Fees %</strong> (typically 0.5–2%) — both are included in the final bid price.</li>
-      </ol>
-    </div>
-
-    <div class="help-tool">
-      <div class="help-tool-head">
-        <span class="help-num">3</span>
-        <div><div class="help-tool-name">Budget Calculator</div><div class="help-tool-sub">Rough order-of-magnitude estimate based on square footage</div></div>
-      </div>
-      <p class="help-desc">Get a fast ballpark cost range before detailed estimating begins. Useful for owner presentations, feasibility studies, or sanity-checking a bid.</p>
-      <ol class="help-steps">
-        <li>Select a <strong>project type</strong> (Office, Warehouse, Medical, etc.).</li>
-        <li>Enter <strong>square footage</strong>, number of <strong>stories</strong>, and <strong>region</strong>.</li>
-        <li>Choose a <strong>quality level</strong> — Economy, Standard, or Premium.</li>
-        <li>Results appear automatically showing a cost range, $/SF, labor/material split, and a CSI division breakdown.</li>
-      </ol>
-    </div>
-
-    <div class="help-tool">
-      <div class="help-tool-head">
-        <span class="help-num">4</span>
-        <div><div class="help-tool-name">Schedule Estimator</div><div class="help-tool-sub">Phased Gantt chart with milestone dates</div></div>
-      </div>
-      <p class="help-desc">Generate a preliminary construction schedule with phase durations and key dates. Duration is based on project type, size, and complexity.</p>
-      <ol class="help-steps">
-        <li>Select a <strong>project type</strong> and <strong>quality level</strong>.</li>
-        <li>Enter <strong>square footage</strong>, <strong>stories</strong>, and a <strong>construction start date</strong>.</li>
-        <li>A Gantt chart appears showing all 7 phases (Pre-Con through Closeout) with durations.</li>
-        <li>The summary panel shows total duration, substantial completion, and final completion dates.</li>
-      </ol>
-    </div>
-
-    <div class="help-tool">
-      <div class="help-tool-head">
-        <span class="help-num">5</span>
-        <div><div class="help-tool-name">Bid Comparison</div><div class="help-tool-sub">Side-by-side contractor bid analysis</div></div>
-      </div>
-      <p class="help-desc">Compare bids from 2–6 contractors, analyze the spread, rank by price, and compare against an engineer's estimate to evaluate whether bids are in line.</p>
-      <ol class="help-steps">
-        <li>Set the <strong>number of bidders</strong> (2–6) using the dropdown.</li>
-        <li>Enter each contractor's <strong>name, bid amount,</strong> and any <strong>notes or qualifications</strong>.</li>
-        <li>Optionally enter an <strong>Engineer's Estimate</strong> to compare against.</li>
-        <li>Analysis appears automatically — spread assessment, ranking, and variance from estimate.</li>
-      </ol>
-    </div>
-
-    <div class="help-tool">
-      <div class="help-tool-head">
-        <span class="help-num">6</span>
-        <div><div class="help-tool-name">Markup &amp; Overhead</div><div class="help-tool-sub">Bid price and labor burden calculators</div></div>
-      </div>
-      <p class="help-desc">Two calculators in one. Project Markup builds a bid price from direct costs. Labor Burden calculates the true hourly cost of an employee including taxes and benefits.</p>
-      <ol class="help-steps">
-        <li><strong>Project Markup tab:</strong> Enter direct labor, material, subcontractor, and equipment costs. Set overhead, profit, contingency, bond, and retainage rates — bid price calculates automatically. The <strong>Retainage</strong> section shows how much the owner withholds until substantial completion and your net cash received.</li>
-        <li><strong>Labor Burden tab:</strong> Enter a base wage and burden rates (FICA, FUTA, workers comp, GL, benefits) — shows fully burdened hourly rate and annual cost.</li>
-        <li>Switch between tabs using the buttons at the top of the page.</li>
-      </ol>
-    </div>
-
-    <div class="help-tool">
-      <div class="help-tool-head">
-        <span class="help-num">7</span>
-        <div><div class="help-tool-name">Change Orders</div><div class="help-tool-sub">Track scope and cost changes against the original contract</div></div>
-      </div>
-      <p class="help-desc">Change orders are written amendments to the original contract that document changes in scope, cost, or schedule. Both parties must sign before work on a change proceeds. This tool tracks every CO against your estimator's base contract value and shows the running revised total.</p>
-      <ol class="help-steps">
-        <li>Navigate to <strong>Change Orders</strong> in the nav — the <strong>Base Contract</strong> value pulls automatically from your Project Estimator bid price.</li>
-        <li>Click <strong>+ Add Change Order</strong>, enter a description, cost impact (can be negative), date, and optional scope summary.</li>
-        <li>New COs start as <strong>Pending</strong>. Use the status dropdown on each row to mark them <strong>Approved</strong> or <strong>Rejected</strong>.</li>
-        <li>Only approved COs add to the <strong>Revised Contract</strong> total. Pending amounts are shown separately so you can see your exposure.</li>
-      </ol>
-    </div>
-
-    <div class="help-tool" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
-      <div class="help-tool-head">
-        <span class="help-num">8</span>
-        <div><div class="help-tool-name">Project Logs</div><div class="help-tool-sub">RFI and submittal tracking throughout the project lifecycle</div></div>
-      </div>
-      <p class="help-desc">Two formal document logs in one place. RFIs (Requests for Information) document questions sent to the design team when drawings are unclear. Submittals are product data and shop drawings submitted for approval before materials are ordered. Both are written records — responses become part of the contract.</p>
-      <ol class="help-steps">
-        <li><strong>RFI Log:</strong> Click <strong>+ Log RFI</strong>, enter the question, who it was sent to, and the due date. Update status to <strong>Answered</strong> when the written response comes back.</li>
-        <li><strong>Submittal Log:</strong> Click <strong>+ Log Submittal</strong>, enter the item description, select a CSI spec section, and the date submitted. Update to <strong>Approved</strong>, <strong>Approved as Noted</strong>, or <strong>Revise &amp; Resubmit</strong> as the design team responds.</li>
-        <li>Use the tabs at the top to switch between the RFI log and the Submittal log.</li>
-        <li>Both logs share the same project data as the estimator — a <strong>Revise &amp; Resubmit</strong> on a material may trigger a change order worth logging there too.</li>
+        <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel, plus <strong>Mat. Sales Tax %</strong> and <strong>Permit Fees %</strong>.</li>
       </ol>
     </div>
 
   </div>
 </div>
 
+<!-- PUSH ALL TO ESTIMATOR MODAL -->
 <!-- PUSH ALL TO ESTIMATOR MODAL -->
 <div class="modal-overlay" id="push-all-modal" style="display:none" onclick="if(event.target===this)bpClosePushAll()">
   <div class="modal-box push-all-box">
@@ -784,23 +444,6 @@
       <button class="btn btn-ghost" onclick="bpModalClose()">Cancel</button>
       <button class="btn btn-orange" onclick="bpModalConfirm()">Add to Estimator</button>
     </div>
-  </div>
-</div>
-
-<!-- PROJECTS MODAL -->
-<div class="modal-overlay" id="projects-modal" style="display:none" onclick="if(event.target===this)closeProjectsPanel()">
-  <div class="modal-box projects-box">
-    <div class="modal-head">
-      <span class="modal-title">My Projects</span>
-      <button class="modal-close" onclick="closeProjectsPanel()">&#10005;</button>
-    </div>
-    <div class="proj-actions">
-      <button class="btn btn-orange" onclick="saveProjectAs()">&#128190; Save As&hellip;</button>
-      <button class="btn btn-ghost" onclick="exportProject()">&#8681; Download File</button>
-      <label class="btn btn-ghost" for="proj-import-input" style="cursor:pointer">&#8679; Import File</label>
-      <input type="file" id="proj-import-input" accept=".buildcalc,.json" style="display:none" onchange="importProject(this)">
-    </div>
-    <div class="proj-list" id="proj-list"></div>
   </div>
 </div>
 
