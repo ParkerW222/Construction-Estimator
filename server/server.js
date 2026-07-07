@@ -37,6 +37,16 @@ async function main() {
   }));
   app.use(express.static(path.join(__dirname, '..', 'client')));
 
+  // TEMPORARY — remove after diagnosing env var issue
+  app.get('/api/debug-env', (req, res) => {
+    res.json({
+      hasTursoUrl: !!process.env.TURSO_DATABASE_URL,
+      hasTursoToken: !!process.env.TURSO_AUTH_TOKEN,
+      hasSessionSecret: !!process.env.SESSION_SECRET,
+      tursoUrlPrefix: process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.slice(0, 15) : null,
+    });
+  });
+
   registerAuthRoutes(app, db);
 
   app.get('/api/projects', requireAuth, async (req, res) => {
