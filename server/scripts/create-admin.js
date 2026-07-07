@@ -13,18 +13,20 @@ if (password.length < 8) {
   process.exit(1);
 }
 
-const db = getDb();
-const existing = usersRepo.getUserByEmail(db, email);
+(async () => {
+  const db = await getDb();
+  const existing = await usersRepo.getUserByEmail(db, email);
 
-if (existing) {
-  const passwordHash = bcrypt.hashSync(password, 10);
-  db.prepare('UPDATE users SET role = ?, password_hash = ? WHERE id = ?').run('admin', passwordHash, existing.id);
-  console.log(`Set admin role and reset password for existing account "${email}".`);
-} else {
-  const id = 'user_' + Date.now();
-  const passwordHash = bcrypt.hashSync(password, 10);
-  usersRepo.createUser(db, { id, email, passwordHash, role: 'admin' });
-  console.log(`Created new admin account "${email}".`);
-}
+  if (existing) {
+    const passwordHash = bcrypt.hashSync(password, 10);
+    await db.execute({ sql: 'UPDATE users SET role = ?, password_hash = ? WHERE id = ?', args: ['admin', passwordHash, existing.id] });
+    console.log(`Set admin role and reset password for existing account "${email}".`);
+  } else {
+    const id = 'user_' + Date.now();
+    const passwordHash = bcrypt.hashSync(password, 10);
+    await usersRepo.createUser(db, { id, email, passwordHash, role: 'admin' });
+    console.log(`Created new admin account "${email}".`);
+  }
 
-db.close();
+  db.close();
+})();

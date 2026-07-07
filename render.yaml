@@ -2,15 +2,13 @@ services:
   - type: web
     name: buildcalc
     env: node
-    plan: starter
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: SESSION_SECRET
         generateValue: true
-      - key: DATA_DIR
-        value: /var/data
-    disk:
-      name: buildcalc-data
-      mountPath: /var/data
-      sizeGB: 1
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

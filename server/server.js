@@ -8,99 +8,132 @@ const adminRepo = require('./db/admin');
 const { registerAuthRoutes, requireAuth, requireAdmin } = require('./auth');
 const SqliteSessionStore = require('./sessionStore');
 
-const db = getDb();
-console.log(`Database ready at ${DB_PATH}`);
-
-const sessionStore = new SqliteSessionStore(db);
-sessionStore.pruneExpired();
-
-if (!process.env.SESSION_SECRET) {
-  console.warn('WARNING: SESSION_SECRET is not set. Using an insecure default — set this before deploying anywhere real.');
+function fail(res, err) {
+  console.error(err);
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
 }
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+async function main() {
+  const db = await getDb();
+  console.log(`Database ready at ${process.env.TURSO_DATABASE_URL || DB_PATH}`);
 
-app.use(express.json());
-app.use(session({
-  store: sessionStore,
-  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 }, // 7 days
-}));
-app.use(express.static(path.join(__dirname, '..', 'client')));
+  const sessionStore = new SqliteSessionStore(db);
+  await sessionStore.pruneExpired();
 
-registerAuthRoutes(app, db);
+  if (!process.env.SESSION_SECRET) {
+    console.warn('WARNING: SESSION_SECRET is not set. Using an insecure default — set this before deploying anywhere real.');
+  }
 
-app.get('/api/projects', requireAuth, (req, res) => {
-  res.json(projectsRepo.listProjects(db, req.session.userId));
-});
+  const app = express();
+  const PORT = process.env.PORT || 3000;
 
-app.get('/api/projects/:id', requireAuth, (req, res) => {
-  const project = projectsRepo.getProject(db, req.params.id, req.session.userId);
-  if (!project) return res.status(404).json({ error: 'Not found' });
-  res.json(project);
-});
+  app.use(express.json());
+  app.use(session({
+    store: sessionStore,
+    secret: process.env.SESSION_SECRET || 'dev-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { maxAge: 1000 * 60 * 60 * 24 * 7 }, // 7 days
+  }));
+  app.use(express.static(path.join(__dirname, '..', 'client')));
 
-app.post('/api/projects', requireAuth, (req, res) => {
-  const { id, name, data } = req.body || {};
-  if (!id || !name || !data) return res.status(400).json({ error: 'id, name, and data are required' });
-  res.json(projectsRepo.upsertProject(db, { id, name, data, ownerId: req.session.userId }));
-});
+  registerAuthRoutes(app, db);
 
-app.delete('/api/projects/:id', requireAuth, (req, res) => {
-  const ok = projectsRepo.deleteProject(db, req.params.id, req.session.userId);
-  if (!ok) return res.status(404).json({ error: 'Not found' });
-  res.status(204).end();
-});
+  app.get('/api/projects', requireAuth, async (req, res) => {
+    try { res.json(await projectsRepo.listProjects(db, req.session.userId)); }
+    catch (err) { fail(res, err); }
+  });
 
-app.post('/api/projects/:id/share', requireAuth, (req, res) => {
-  const { email } = req.body || {};
-  if (!email || !email.trim()) return res.status(400).json({ error: 'Client email is required' });
-  const ok = projectsRepo.shareProject(db, req.params.id, req.session.userId, email.trim());
-  if (!ok) return res.status(404).json({ error: 'Project not found' });
-  res.json({ clientEmail: email.trim() });
-});
+  app.get('/api/projects/:id', requireAuth, async (req, res) => {
+    try {
+      const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      res.json(project);
+    } catch (err) { fail(res, err); }
+  });
 
-app.delete('/api/projects/:id/share', requireAuth, (req, res) => {
-  projectsRepo.unshareProject(db, req.params.id, req.session.userId);
-  res.status(204).end();
-});
+  app.post('/api/projects', requireAuth, async (req, res) => {
+    try {
+      const { id, name, data } = req.body || {};
+      if (!id || !name || !data) return res.status(400).json({ error: 'id, name, and data are required' });
+      res.json(await projectsRepo.upsertProject(db, { id, name, data, ownerId: req.session.userId }));
+    } catch (err) { fail(res, err); }
+  });
 
-app.get('/api/client/projects', requireAuth, (req, res) => {
-  res.json(projectsRepo.listClientProjects(db, req.session.email));
-});
+  app.delete('/api/projects/:id', requireAuth, async (req, res) => {
+    try {
+      const ok = await projectsRepo.deleteProject(db, req.params.id, req.session.userId);
+      if (!ok) return res.status(404).json({ error: 'Not found' });
+      res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
 
-app.get('/api/client/projects/:id', requireAuth, (req, res) => {
-  const project = projectsRepo.getClientProject(db, req.params.id, req.session.email);
-  if (!project) return res.status(404).json({ error: 'Not found' });
-  res.json(project);
-});
+  app.post('/api/projects/:id/share', requireAuth, async (req, res) => {
+    try {
+      const { email } = req.body || {};
+      if (!email || !email.trim()) return res.status(400).json({ error: 'Client email is required' });
+      const ok = await projectsRepo.shareProject(db, req.params.id, req.session.userId, email.trim());
+      if (!ok) return res.status(404).json({ error: 'Project not found' });
+      res.json({ clientEmail: email.trim() });
+    } catch (err) { fail(res, err); }
+  });
 
-app.get('/api/admin/stats', requireAdmin, (req, res) => {
-  res.json(adminRepo.getStats(db));
-});
+  app.delete('/api/projects/:id/share', requireAuth, async (req, res) => {
+    try {
+      await projectsRepo.unshareProject(db, req.params.id, req.session.userId);
+      res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
 
-app.get('/api/admin/users', requireAdmin, (req, res) => {
-  res.json(adminRepo.listAllUsers(db));
-});
+  app.get('/api/client/projects', requireAuth, async (req, res) => {
+    try { res.json(await projectsRepo.listClientProjects(db, req.session.email)); }
+    catch (err) { fail(res, err); }
+  });
 
-app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
-  if (req.params.id === req.session.userId) return res.status(400).json({ error: "You can't delete your own account" });
-  adminRepo.deleteUser(db, req.params.id);
-  res.status(204).end();
-});
+  app.get('/api/client/projects/:id', requireAuth, async (req, res) => {
+    try {
+      const project = await projectsRepo.getClientProject(db, req.params.id, req.session.email);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      res.json(project);
+    } catch (err) { fail(res, err); }
+  });
 
-app.get('/api/admin/projects', requireAdmin, (req, res) => {
-  res.json(adminRepo.listAllProjects(db));
-});
+  app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+    try { res.json(await adminRepo.getStats(db)); }
+    catch (err) { fail(res, err); }
+  });
 
-app.delete('/api/admin/projects/:id', requireAdmin, (req, res) => {
-  adminRepo.deleteAnyProject(db, req.params.id);
-  res.status(204).end();
-});
+  app.get('/api/admin/users', requireAdmin, async (req, res) => {
+    try { res.json(await adminRepo.listAllUsers(db)); }
+    catch (err) { fail(res, err); }
+  });
 
-app.listen(PORT, () => {
-  console.log(`BuildCalc server running at http://localhost:${PORT}`);
+  app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+    try {
+      if (req.params.id === req.session.userId) return res.status(400).json({ error: "You can't delete your own account" });
+      await adminRepo.deleteUser(db, req.params.id);
+      res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
+
+  app.get('/api/admin/projects', requireAdmin, async (req, res) => {
+    try { res.json(await adminRepo.listAllProjects(db)); }
+    catch (err) { fail(res, err); }
+  });
+
+  app.delete('/api/admin/projects/:id', requireAdmin, async (req, res) => {
+    try {
+      await adminRepo.deleteAnyProject(db, req.params.id);
+      res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
+
+  app.listen(PORT, () => {
+    console.log(`BuildCalc server running at http://localhost:${PORT}`);
+  });
+}
+
+main().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });

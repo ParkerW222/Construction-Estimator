@@ -1,43 +1,50 @@
-function listProjects(db, ownerId) {
-  return db.prepare('SELECT id, name, updated_at AS savedAt, client_email AS clientEmail FROM projects WHERE owner_id = ? ORDER BY updated_at DESC').all(ownerId);
+async function listProjects(db, ownerId) {
+  const result = await db.execute({ sql: 'SELECT id, name, updated_at AS savedAt, client_email AS clientEmail FROM projects WHERE owner_id = ? ORDER BY updated_at DESC', args: [ownerId] });
+  return result.rows;
 }
 
-function getProject(db, id, ownerId) {
-  const row = db.prepare('SELECT id, name, data, updated_at AS savedAt, client_email AS clientEmail FROM projects WHERE id = ? AND owner_id = ?').get(id, ownerId);
+async function getProject(db, id, ownerId) {
+  const result = await db.execute({ sql: 'SELECT id, name, data, updated_at AS savedAt, client_email AS clientEmail FROM projects WHERE id = ? AND owner_id = ?', args: [id, ownerId] });
+  const row = result.rows[0];
   if (!row) return null;
   return { id: row.id, name: row.name, savedAt: row.savedAt, clientEmail: row.clientEmail, data: JSON.parse(row.data) };
 }
 
-function upsertProject(db, { id, name, data, ownerId }) {
-  db.prepare(`
-    INSERT INTO projects (id, name, data, owner_id, updated_at)
-    VALUES (?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data, updated_at = excluded.updated_at
-    WHERE projects.owner_id = excluded.owner_id
-  `).run(id, name, JSON.stringify(data), ownerId);
+async function upsertProject(db, { id, name, data, ownerId }) {
+  await db.execute({
+    sql: `
+      INSERT INTO projects (id, name, data, owner_id, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, data = excluded.data, updated_at = excluded.updated_at
+      WHERE projects.owner_id = excluded.owner_id
+    `,
+    args: [id, name, JSON.stringify(data), ownerId],
+  });
   return getProject(db, id, ownerId);
 }
 
-function deleteProject(db, id, ownerId) {
-  const result = db.prepare('DELETE FROM projects WHERE id = ? AND owner_id = ?').run(id, ownerId);
-  return result.changes > 0;
+async function deleteProject(db, id, ownerId) {
+  const result = await db.execute({ sql: 'DELETE FROM projects WHERE id = ? AND owner_id = ?', args: [id, ownerId] });
+  return result.rowsAffected > 0;
 }
 
-function shareProject(db, id, ownerId, email) {
-  const result = db.prepare('UPDATE projects SET client_email = ? WHERE id = ? AND owner_id = ?').run(email, id, ownerId);
-  return result.changes > 0;
+async function shareProject(db, id, ownerId, email) {
+  const result = await db.execute({ sql: 'UPDATE projects SET client_email = ? WHERE id = ? AND owner_id = ?', args: [email, id, ownerId] });
+  return result.rowsAffected > 0;
 }
 
-function unshareProject(db, id, ownerId) {
-  db.prepare('UPDATE projects SET client_email = NULL WHERE id = ? AND owner_id = ?').run(id, ownerId);
+async function unshareProject(db, id, ownerId) {
+  await db.execute({ sql: 'UPDATE projects SET client_email = NULL WHERE id = ? AND owner_id = ?', args: [id, ownerId] });
 }
 
-function listClientProjects(db, email) {
-  return db.prepare('SELECT id, name, updated_at AS savedAt FROM projects WHERE client_email = ? ORDER BY updated_at DESC').all(email);
+async function listClientProjects(db, email) {
+  const result = await db.execute({ sql: 'SELECT id, name, updated_at AS savedAt FROM projects WHERE client_email = ? ORDER BY updated_at DESC', args: [email] });
+  return result.rows;
 }
 
-function getClientProject(db, id, email) {
-  const row = db.prepare('SELECT id, name, data, updated_at AS savedAt FROM projects WHERE id = ? AND client_email = ?').get(id, email);
+async function getClientProject(db, id, email) {
+  const result = await db.execute({ sql: 'SELECT id, name, data, updated_at AS savedAt FROM projects WHERE id = ? AND client_email = ?', args: [id, email] });
+  const row = result.rows[0];
   if (!row) return null;
   return { id: row.id, name: row.name, savedAt: row.savedAt, data: JSON.parse(row.data) };
 }
