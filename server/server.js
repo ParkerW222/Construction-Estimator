@@ -54,9 +54,31 @@ async function main() {
 
   app.post('/api/projects', requireAuth, async (req, res) => {
     try {
-      const { id, name, data } = req.body || {};
+      const { id, name, data, createVersion } = req.body || {};
       if (!id || !name || !data) return res.status(400).json({ error: 'id, name, and data are required' });
-      res.json(await projectsRepo.upsertProject(db, { id, name, data, ownerId: req.session.userId }));
+      const project = await projectsRepo.upsertProject(db, { id, name, data, ownerId: req.session.userId });
+      if (createVersion) await projectsRepo.createVersion(db, { projectId: id, name, data });
+      res.json(project);
+    } catch (err) { fail(res, err); }
+  });
+
+  app.get('/api/projects/:id/versions', requireAuth, async (req, res) => {
+    try {
+      const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      res.json(await projectsRepo.listVersions(db, req.params.id));
+    } catch (err) { fail(res, err); }
+  });
+
+  app.post('/api/projects/:id/versions/:versionId/restore', requireAuth, async (req, res) => {
+    try {
+      const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      const version = await projectsRepo.getVersion(db, req.params.versionId, req.params.id);
+      if (!version) return res.status(404).json({ error: 'Version not found' });
+      await projectsRepo.createVersion(db, { projectId: req.params.id, name: project.name, data: project.data });
+      const restored = await projectsRepo.upsertProject(db, { id: req.params.id, name: version.name, data: version.data, ownerId: req.session.userId });
+      res.json(restored);
     } catch (err) { fail(res, err); }
   });
 

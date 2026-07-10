@@ -211,6 +211,8 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .bp-cond-head-lbl{font-size:.68rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.07em}
 .bp-add-cond-btn{background:var(--orange);color:#fff;border:none;border-radius:5px;padding:.2rem .55rem;font-size:.74rem;font-weight:700;cursor:pointer}
 .bp-add-cond-btn:hover{background:var(--orange-h)}
+.bp-lib-btn{background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);border:1px solid rgba(255,255,255,.2);border-radius:5px;padding:.2rem .55rem;font-size:.74rem;font-weight:700;cursor:pointer}
+.bp-lib-btn:hover{background:rgba(255,255,255,.2);color:#fff}
 .bp-cond-list{flex:1;overflow-y:auto}
 .bp-cond-item{display:flex;align-items:center;gap:.55rem;padding:.55rem .75rem;cursor:pointer;border-left:3px solid transparent;transition:.12s}
 .bp-cond-item:hover{background:rgba(255,255,255,.06)}
@@ -275,6 +277,7 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .bp-canvas-area.drag-over .bp-upload{opacity:.65}
 .tool-btn{border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:.3rem .6rem;font-size:.76rem;font-weight:600;cursor:pointer;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);transition:.15s}
 .tool-btn:hover{background:rgba(255,255,255,.2)}
+.tool-btn:disabled{opacity:.35;cursor:default;pointer-events:none}
 .tool-btn.orange{background:var(--orange);color:#fff;border-color:var(--orange)}
 .tool-btn.orange:hover{background:var(--orange-h)}
 .tool-btn.active{background:#ef4444;color:#fff;border-color:#ef4444}
@@ -323,6 +326,9 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .proj-dd-load-btn:hover{background:rgba(255,255,255,.24);color:#fff}
 .proj-dd-del-btn{background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.8rem;padding:.1rem .25rem;border-radius:4px;transition:.12s;flex-shrink:0;line-height:1}
 .proj-dd-del-btn:hover{color:#f87171;background:rgba(248,113,113,.12)}
+.proj-dd-history-btn{background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;padding:.15rem;border-radius:4px;transition:.12s;flex-shrink:0;line-height:1;display:inline-flex}
+.proj-dd-history-btn:hover{color:#fff;background:rgba(255,255,255,.12)}
+.proj-dd-history-btn svg{width:14px;height:14px}
 .proj-dd-empty-msg{padding:.6rem 1rem .8rem;font-size:.77rem;color:rgba(255,255,255,.45);line-height:1.55}
 .proj-dd-file-row{display:flex;gap:.5rem;padding:.65rem 1rem}
 .proj-dd-file-btn{flex:1;text-align:center;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);border-radius:6px;padding:.3rem .5rem;font-size:.75rem;font-weight:500;cursor:pointer;transition:.12s;font-family:inherit}

@@ -49,7 +49,51 @@ async function getClientProject(db, id, email) {
   return { id: row.id, name: row.name, savedAt: row.savedAt, data: JSON.parse(row.data) };
 }
 
+const MAX_VERSIONS_PER_PROJECT = 20;
+
+async function createVersion(db, { projectId, name, data }) {
+  const id = 'ver_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  await db.execute({
+    sql: 'INSERT INTO project_versions (id, project_id, name, data) VALUES (?, ?, ?, ?)',
+    args: [id, projectId, name, JSON.stringify(data)],
+  });
+  await pruneOldVersions(db, projectId);
+  return id;
+}
+
+async function pruneOldVersions(db, projectId, keep = MAX_VERSIONS_PER_PROJECT) {
+  await db.execute({
+    sql: `
+      DELETE FROM project_versions
+      WHERE project_id = ?
+      AND id NOT IN (
+        SELECT id FROM project_versions WHERE project_id = ? ORDER BY saved_at DESC LIMIT ?
+      )
+    `,
+    args: [projectId, projectId, keep],
+  });
+}
+
+async function listVersions(db, projectId) {
+  const result = await db.execute({
+    sql: 'SELECT id, name, saved_at AS savedAt FROM project_versions WHERE project_id = ? ORDER BY saved_at DESC',
+    args: [projectId],
+  });
+  return result.rows;
+}
+
+async function getVersion(db, versionId, projectId) {
+  const result = await db.execute({
+    sql: 'SELECT id, name, data, saved_at AS savedAt FROM project_versions WHERE id = ? AND project_id = ?',
+    args: [versionId, projectId],
+  });
+  const row = result.rows[0];
+  if (!row) return null;
+  return { id: row.id, name: row.name, savedAt: row.savedAt, data: JSON.parse(row.data) };
+}
+
 module.exports = {
   listProjects, getProject, upsertProject, deleteProject,
   shareProject, unshareProject, listClientProjects, getClientProject,
+  createVersion, listVersions, getVersion,
 };

@@ -362,7 +362,6 @@ function buildLibList(q) {
 document.addEventListener('click', e => {
   if (!e.target.closest('.lib-wrap')) closeLib();
   if (!e.target.closest('#proj-dd-wrap')) closeProjectsDropdown();
-  if (!e.target.closest('.nav-dropdown-wrap')) closeToolsMenu();
 });
 document.addEventListener('keydown', e => {
   const typing = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
@@ -383,12 +382,13 @@ document.addEventListener('keydown', e => {
     bpCurrentPts.pop();
     bpRedraw();
   }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-    if (bpMeasurements.length) {
-      bpMeasurements.pop();
-      bpRenderQtyPanel();
-      bpRedraw();
-    }
+  if ((e.ctrlKey || e.metaKey) && !typing && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    if (e.shiftKey) bpRedo(); else bpUndo();
+  }
+  if ((e.ctrlKey || e.metaKey) && !typing && e.key.toLowerCase() === 'y') {
+    e.preventDefault();
+    bpRedo();
   }
 });
 document.addEventListener('keyup', e => {
@@ -472,12 +472,12 @@ async function apiGetProject(id) {
   } catch (e) { return null; }
 }
 
-async function apiSaveProject(id, name, data) {
+async function apiSaveProject(id, name, data, createVersion) {
   try {
     await fetch(PROJECTS_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, name, data }),
+      body: JSON.stringify({ id, name, data, createVersion: !!createVersion }),
     });
   } catch (e) {}
 }
@@ -528,7 +528,7 @@ async function saveCurrentProject() {
   const dupIdx = list.findIndex(p => p.name === project.name && p.id !== project.id);
   if (dupIdx >= 0 && !confirm(`A project named "${project.name}" already exists. Save anyway as a separate project?`)) return;
   if (!project.id) project.id = 'proj_' + Date.now();
-  await apiSaveProject(project.id, project.name, project);
+  await apiSaveProject(project.id, project.name, project, true);
   saveProject();
   renderProjectsDropdown();
   const btn = gid('proj-dd-btn');
@@ -541,10 +541,7 @@ async function autoSaveCurrentToList() {
   await apiSaveProject(project.id, project.name, project);
 }
 
-async function switchToProject(id) {
-  saveProject();
-  const entry = await apiGetProject(id);
-  if (!entry) return;
+function bpApplyLoadedProject(entry) {
   bpResetAll();
   project = entry.data;
   project.id = entry.id;
@@ -560,6 +557,13 @@ async function switchToProject(id) {
   try { localStorage.setItem(bcProjKey(), JSON.stringify(project)); } catch(e) {}
   updateNavProjectName();
   bpRestoreFromProject();
+}
+
+async function switchToProject(id) {
+  saveProject();
+  const entry = await apiGetProject(id);
+  if (!entry) return;
+  bpApplyLoadedProject(entry);
   closeProjectsDropdown();
 }
 
@@ -648,11 +652,68 @@ async function renderProjectsDropdown() {
         <div class="proj-dd-item-date">${dateStr}</div>
       </div>
       ${isCurrent ? '' : `<button class="proj-dd-load-btn" onclick="switchToProject('${p.id}')">Load</button>`}
+      <button class="proj-dd-history-btn" onclick="openVersionHistory('${p.id}')" title="Version history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg></button>
       <button class="proj-dd-del-btn" onclick="deleteProjectEntry('${p.id}')" title="Delete">&#10005;</button>
     </div>`;
   }).join('');
 }
 
+// ── PROJECT VERSION HISTORY ────────────────────────────────────────
+let versionHistoryProjectId = null;
+
+async function openVersionHistory(projectId) {
+  versionHistoryProjectId = projectId;
+  const listEl = gid('version-history-list');
+  listEl.innerHTML = '<div style="padding:1rem 0;color:var(--muted);font-size:.85rem">Loading…</div>';
+  gid('version-history-modal').style.display = 'flex';
+  closeProjectsDropdown();
+  try {
+    const res = await fetch(`${PROJECTS_API}/${projectId}/versions`);
+    const versions = res.ok ? await res.json() : [];
+    if (!versions.length) {
+      listEl.innerHTML = '<div style="padding:1rem 0;color:var(--muted);font-size:.85rem">No saved versions yet. Versions are created each time you click Save.</div>';
+      return;
+    }
+    listEl.innerHTML = versions.map(v => {
+      const d = new Date(v.savedAt);
+      const dateStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:.6rem .1rem;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600;font-size:.85rem;color:var(--text)">${esc(v.name)}</div>
+          <div style="font-size:.75rem;color:var(--muted)">${dateStr}</div>
+        </div>
+        <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .7rem" onclick="restoreVersion('${v.id}')">Restore</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<div style="padding:1rem 0;color:var(--muted);font-size:.85rem">Could not load version history.</div>';
+  }
+}
+
+function closeVersionHistory() {
+  gid('version-history-modal').style.display = 'none';
+  versionHistoryProjectId = null;
+}
+
+async function restoreVersion(versionId) {
+  const projectId = versionHistoryProjectId;
+  if (!projectId) return;
+  if (!confirm('Restore this version? Your current saved state for this project will be saved as a new version first, so nothing is lost — but anything since your last Save will be replaced.')) return;
+  try {
+    const res = await fetch(`${PROJECTS_API}/${projectId}/versions/${versionId}/restore`, { method: 'POST' });
+    if (!res.ok) { alert('Could not restore this version.'); return; }
+    const restored = await res.json();
+    closeVersionHistory();
+    if (project.id === projectId) {
+      const entry = await apiGetProject(projectId);
+      if (entry) bpApplyLoadedProject(entry);
+    } else {
+      alert(`Restored "${restored.name}". Open it from the project list to see the restored version.`);
+    }
+  } catch (e) {
+    alert('Could not reach the server.');
+  }
+}
 
 // ── DIVISION GUESSER ───────────────────────────────────────────────
 function bpGuessDivision(name) {
@@ -676,42 +737,62 @@ function bpGuessDivision(name) {
 }
 
 // ── BLUEPRINT TAKEOFF ──────────────────────────────────────────────
-const BP_DEFAULT_CONDITIONS = [
-  { id:  1, name: 'Slab',                  color: '#94a3b8', type: 'area',   unit: 'SF' },
-  { id:  2, name: 'Framing & Cornice',     color: '#d97706', type: 'area',   unit: 'SF' },
-  { id:  3, name: 'Windows',               color: '#0ea5e9', type: 'count',  unit: 'EA' },
-  { id:  4, name: 'Exterior Doors',        color: '#0d9488', type: 'count',  unit: 'EA' },
-  { id:  5, name: 'Roofing',               color: '#dc2626', type: 'area',   unit: 'SF' },
-  { id:  6, name: 'Plumbing (Rough)',       color: '#3b82f6', type: 'linear', unit: 'LF' },
-  { id:  7, name: 'Electrical (Rough)',     color: '#eab308', type: 'linear', unit: 'LF' },
-  { id:  8, name: 'HVAC (Rough)',           color: '#22d3ee', type: 'linear', unit: 'LF' },
-  { id:  9, name: 'Alarm System (Rough)',   color: '#fb923c', type: 'linear', unit: 'LF' },
-  { id: 10, name: 'Insulation',            color: '#f472b6', type: 'area',   unit: 'SF' },
-  { id: 11, name: 'Sheetrock',             color: '#e2e8f0', type: 'area',   unit: 'SF' },
-  { id: 12, name: 'Trim',                  color: '#c2975f', type: 'linear', unit: 'LF' },
-  { id: 13, name: 'Paint Interior',        color: '#a78bfa', type: 'area',   unit: 'SF' },
-  { id: 14, name: 'Paint Exterior',        color: '#f87171', type: 'area',   unit: 'SF' },
-  { id: 15, name: 'Tile',                  color: '#10b981', type: 'area',   unit: 'SF' },
-  { id: 16, name: 'Cabinets',              color: '#f97316', type: 'linear', unit: 'LF' },
-  { id: 17, name: 'Counters',              color: '#6366f1', type: 'linear', unit: 'LF' },
-  { id: 18, name: 'Plumbing (Trim Out)',   color: '#1d4ed8', type: 'count',  unit: 'EA' },
-  { id: 19, name: 'Electrical (Trim Out)', color: '#ca8a04', type: 'count',  unit: 'EA' },
-  { id: 20, name: 'HVAC (Trim Out)',       color: '#0e7490', type: 'count',  unit: 'EA' },
-  { id: 21, name: 'Alarm System (Trim Out)', color: '#ea580c', type: 'count', unit: 'EA' },
-  { id: 22, name: 'Hardwood Floors',       color: '#92400e', type: 'area',   unit: 'SF' },
-  { id: 23, name: 'Shower Glass',          color: '#67e8f9', type: 'linear', unit: 'LF' },
-  { id: 24, name: 'Garage Door',           color: '#7c3aed', type: 'count',  unit: 'EA' },
-  { id: 25, name: 'Appliances',            color: '#64748b', type: 'count',  unit: 'EA' },
-  { id: 26, name: 'Landscape',             color: '#16a34a', type: 'area',   unit: 'SF' },
-  { id: 27, name: 'Fence',                 color: '#713f12', type: 'linear', unit: 'LF' },
-  { id: 28, name: 'Doorknobs',             color: '#fbbf24', type: 'count',  unit: 'EA' },
-  { id: 29, name: 'Cabinet Hardware',      color: '#9ca3af', type: 'count',  unit: 'EA' },
-  { id: 30, name: 'Light Fixtures',        color: '#fde047', type: 'count',  unit: 'EA' },
-  { id: 31, name: 'Fans',                  color: '#4ade80', type: 'count',  unit: 'EA' },
-  { id: 32, name: 'Faucets',               color: '#c084fc', type: 'count',  unit: 'EA' },
+// Full library of conditions available via "+ Add from Library" — grouped by category.
+// New projects start with only BP_DEFAULT_CONDITIONS (the shell basics below); everything
+// else here is opt-in, so the sidebar starts clean but nothing useful is out of reach.
+const BP_CONDITION_LIBRARY = [
+  { id:  1, name: 'Slab',                  color: '#94a3b8', type: 'area',   unit: 'SF', category: 'Foundation & Structure' },
+  { id:  2, name: 'Framing & Cornice',     color: '#d97706', type: 'area',   unit: 'SF', category: 'Foundation & Structure' },
+
+  { id: 34, name: 'Masonry / Stone Veneer', color: '#a8a29e', type: 'area',  unit: 'SF', category: 'Exterior Envelope' },
+  { id:  5, name: 'Roofing',               color: '#dc2626', type: 'area',   unit: 'SF', category: 'Exterior Envelope' },
+  { id: 35, name: 'Rain Gutters',          color: '#38bdf8', type: 'linear', unit: 'LF', category: 'Exterior Envelope' },
+  { id:  3, name: 'Windows',               color: '#0ea5e9', type: 'count',  unit: 'EA', category: 'Exterior Envelope' },
+  { id:  4, name: 'Exterior Doors',        color: '#0d9488', type: 'count',  unit: 'EA', category: 'Exterior Envelope' },
+  { id: 24, name: 'Garage Door',           color: '#7c3aed', type: 'count',  unit: 'EA', category: 'Exterior Envelope' },
+  { id: 14, name: 'Paint Exterior',        color: '#f87171', type: 'area',   unit: 'SF', category: 'Exterior Envelope' },
+
+  { id:  6, name: 'Plumbing (Rough)',      color: '#3b82f6', type: 'linear', unit: 'LF', category: 'Rough MEP & Insulation' },
+  { id:  7, name: 'Electrical (Rough)',    color: '#eab308', type: 'linear', unit: 'LF', category: 'Rough MEP & Insulation' },
+  { id:  8, name: 'HVAC (Rough)',          color: '#22d3ee', type: 'linear', unit: 'LF', category: 'Rough MEP & Insulation' },
+  { id:  9, name: 'Alarm System (Rough)',  color: '#fb923c', type: 'linear', unit: 'LF', category: 'Rough MEP & Insulation' },
+  { id: 10, name: 'Insulation',            color: '#f472b6', type: 'area',   unit: 'SF', category: 'Rough MEP & Insulation' },
+
+  { id: 11, name: 'Sheetrock',             color: '#e2e8f0', type: 'area',   unit: 'SF', category: 'Interior Finishes' },
+  { id: 12, name: 'Trim',                  color: '#c2975f', type: 'linear', unit: 'LF', category: 'Interior Finishes' },
+  { id: 13, name: 'Paint Interior',        color: '#a78bfa', type: 'area',   unit: 'SF', category: 'Interior Finishes' },
+  { id: 15, name: 'Tile',                  color: '#10b981', type: 'area',   unit: 'SF', category: 'Interior Finishes' },
+  { id: 22, name: 'Hardwood Floors',       color: '#92400e', type: 'area',   unit: 'SF', category: 'Interior Finishes' },
+  { id: 39, name: 'Carpet',                color: '#818cf8', type: 'area',   unit: 'SF', category: 'Interior Finishes' },
+  { id: 36, name: 'Fireplace',             color: '#b45309', type: 'count',  unit: 'EA', category: 'Interior Finishes' },
+  { id: 33, name: 'Interior Doors',        color: '#14b8a6', type: 'count',  unit: 'EA', category: 'Interior Finishes' },
+
+  { id: 16, name: 'Cabinets',              color: '#f97316', type: 'linear', unit: 'LF', category: 'Cabinets & Counters' },
+  { id: 17, name: 'Counters',              color: '#6366f1', type: 'linear', unit: 'LF', category: 'Cabinets & Counters' },
+
+  { id: 18, name: 'Plumbing (Trim Out)',   color: '#1d4ed8', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 19, name: 'Electrical (Trim Out)', color: '#ca8a04', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 20, name: 'HVAC (Trim Out)',       color: '#0e7490', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 21, name: 'Alarm System (Trim Out)', color: '#ea580c', type: 'count', unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 30, name: 'Light Fixtures',        color: '#fde047', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 31, name: 'Fans',                  color: '#4ade80', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 32, name: 'Faucets',               color: '#c084fc', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 28, name: 'Doorknobs',             color: '#fbbf24', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 29, name: 'Cabinet Hardware',      color: '#9ca3af', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+  { id: 23, name: 'Shower Glass',          color: '#67e8f9', type: 'linear', unit: 'LF', category: 'Trim-Out MEP & Fixtures' },
+  { id: 25, name: 'Appliances',            color: '#64748b', type: 'count',  unit: 'EA', category: 'Trim-Out MEP & Fixtures' },
+
+  { id: 26, name: 'Landscape',             color: '#16a34a', type: 'area',   unit: 'SF', category: 'Sitework' },
+  { id: 27, name: 'Fence',                 color: '#713f12', type: 'linear', unit: 'LF', category: 'Sitework' },
+  { id: 37, name: 'Flatwork (Driveway/Walks)', color: '#a3a3a3', type: 'area', unit: 'SF', category: 'Sitework' },
+  { id: 38, name: 'Sprinklers',            color: '#0891b2', type: 'linear', unit: 'LF', category: 'Sitework' },
 ];
+
+const BP_STARTER_IDS = [1, 2, 3, 4, 5];
+const BP_DEFAULT_CONDITIONS = BP_CONDITION_LIBRARY.filter(c => BP_STARTER_IDS.includes(c.id));
+
 let bpConditions = BP_DEFAULT_CONDITIONS.map(c => ({ ...c }));
-let bpCondNextId = 33;
+let bpCondNextId = 40;
 let bpActiveCondId = 1;
 let bpMeasurements = [];
 let bpMeasNextId = 1;
@@ -726,6 +807,8 @@ let bpScalePxPerFt = null, bpScalePts = [], bpScaleMode = false, bpTrashMode = f
 let bpCurrentPts = [];
 let bpDragCondId = null;
 let bpIsImg = false, bpImg = null;
+let bpUndoStack = [], bpRedoStack = [];
+const BP_UNDO_LIMIT = 50;
 
 // ── BLUEPRINT INDEXEDDB PERSISTENCE ────────────────────────────────
 const BP_DB_NAME = 'buildcalc_bp', BP_DB_VERSION = 1, BP_STORE = 'files';
@@ -772,6 +855,7 @@ function bpRestoreFromProject() {
   }
   bpRenderConditions();
   bpUpdateActiveIndicator();
+  bpResetUndoHistory();
   if (!state || !project.id) return;
   bpLoadStoredFile(project.id).then(stored => {
     if (!stored) return;
@@ -779,9 +863,8 @@ function bpRestoreFromProject() {
     bpZoomPct  = state.zoomPct  || 100;
     bpIsImg    = state.isImg    || false;
     bpPageNum  = state.pageNum  || 1;
-    const zSlider = gid('bp-zoom'), zInp = gid('bp-zoom-inp');
-    if (zSlider) zSlider.value = bpZoomPct;
-    if (zInp) zInp.value = bpZoomPct;
+    const zoomReadout = gid('bp-zoom-pct');
+    if (zoomReadout) zoomReadout.textContent = bpZoomPct + '%';
     if (stored.type === 'image') {
       bpImg = new Image();
       bpImg.onload = () => {
@@ -821,7 +904,7 @@ function bpResetAll() {
   bpScalePxPerFt = null; bpScalePts = []; bpScaleMode = false; bpTrashMode = false; bpHideMode = false;
   bpPageData = {}; bpPanActive = false;
   bpConditions = BP_DEFAULT_CONDITIONS.map(c => ({ ...c }));
-  bpCondNextId = 33; bpActiveCondId = 1;
+  bpCondNextId = 40; bpActiveCondId = 1;
   const trashBtnReset = gid('bp-trash-btn'); if (trashBtnReset) trashBtnReset.classList.remove('active');
   const hideBtnReset = gid('bp-hide-btn'); if (hideBtnReset) hideBtnReset.classList.remove('active-hide');
   const upload = gid('bp-upload'), wrap = gid('bp-canvas-wrap');
@@ -831,17 +914,76 @@ function bpResetAll() {
   if (fileLbl) { fileLbl.style.display = 'none'; fileLbl.textContent = ''; }
   const fileInput = gid('bp-file-input');
   if (fileInput) fileInput.value = '';
-  const zSlider = gid('bp-zoom'), zInp = gid('bp-zoom-inp');
-  if (zSlider) zSlider.value = 100;
-  if (zInp) zInp.value = 100;
+  const zoomReadout = gid('bp-zoom-pct');
+  if (zoomReadout) zoomReadout.textContent = '100%';
   bpUpdateScaleBadge();
   bpRenderConditions();
   bpRenderQtyPanel();
   bpUpdateActiveIndicator();
+  bpResetUndoHistory();
 }
 
 function bpGetCond(id) { return bpConditions.find(c => c.id === id); }
 function bpGetActiveCond() { return bpGetCond(bpActiveCondId); }
+
+// ── UNDO / REDO ────────────────────────────────────────────────────
+function bpSnapshotState() {
+  return JSON.stringify({
+    conditions: bpConditions,
+    measurements: bpMeasurements,
+    activeCondId: bpActiveCondId,
+    scalePxPerFt: bpScalePxPerFt,
+  });
+}
+
+function bpPushUndo() {
+  bpUndoStack.push(bpSnapshotState());
+  if (bpUndoStack.length > BP_UNDO_LIMIT) bpUndoStack.shift();
+  bpRedoStack = [];
+  bpUpdateUndoRedoButtons();
+}
+
+function bpRestoreSnapshot(json) {
+  const s = JSON.parse(json);
+  bpConditions = s.conditions;
+  bpMeasurements = s.measurements;
+  bpActiveCondId = s.activeCondId;
+  bpScalePxPerFt = s.scalePxPerFt;
+  bpRenderConditions();
+  bpUpdateActiveIndicator();
+  bpRenderQtyPanel();
+  bpUpdateScaleBadge();
+  bpRedraw();
+}
+
+function bpUndo() {
+  if (!bpUndoStack.length) return;
+  bpRedoStack.push(bpSnapshotState());
+  bpRestoreSnapshot(bpUndoStack.pop());
+  saveProject();
+  bpUpdateUndoRedoButtons();
+}
+
+function bpRedo() {
+  if (!bpRedoStack.length) return;
+  bpUndoStack.push(bpSnapshotState());
+  bpRestoreSnapshot(bpRedoStack.pop());
+  saveProject();
+  bpUpdateUndoRedoButtons();
+}
+
+function bpUpdateUndoRedoButtons() {
+  const undoBtn = gid('bp-undo-btn');
+  const redoBtn = gid('bp-redo-btn');
+  if (undoBtn) undoBtn.disabled = !bpUndoStack.length;
+  if (redoBtn) redoBtn.disabled = !bpRedoStack.length;
+}
+
+function bpResetUndoHistory() {
+  bpUndoStack = [];
+  bpRedoStack = [];
+  bpUpdateUndoRedoButtons();
+}
 
 function bpSelectCond(id) {
   bpActiveCondId = id;
@@ -904,6 +1046,7 @@ function bpCondDrop(e, targetId) {
   const fromIdx = bpConditions.findIndex(c => c.id === bpDragCondId);
   const toIdx = bpConditions.findIndex(c => c.id === targetId);
   if (fromIdx === -1 || toIdx === -1) return;
+  bpPushUndo();
   const [moved] = bpConditions.splice(fromIdx, 1);
   bpConditions.splice(toIdx, 0, moved);
   bpRenderConditions();
@@ -1010,6 +1153,7 @@ function bpConfirmAddCond() {
   const name = (gid('bpnc-name').value || '').trim();
   if (!name) { gid('bpnc-name').focus(); return; }
   const unit = bpNewCondType === 'area' ? 'SF' : bpNewCondType === 'linear' ? 'LF' : 'EA';
+  bpPushUndo();
   if (bpEditingCondId !== null) {
     const c = bpGetCond(bpEditingCondId);
     if (c) { c.name = name; c.color = bpNewCondColor; c.type = bpNewCondType; c.unit = unit; }
@@ -1029,6 +1173,64 @@ function bpConfirmAddCond() {
   if (c) c.style.cursor = 'crosshair';
 }
 
+function openCondLib() {
+  gid('cond-lib-search').value = '';
+  buildCondLibList('');
+  gid('cond-lib-modal').style.display = 'flex';
+  setTimeout(() => gid('cond-lib-search').focus(), 50);
+}
+
+function closeCondLib() {
+  gid('cond-lib-modal').style.display = 'none';
+}
+
+function filterCondLib(q) {
+  buildCondLibList(q);
+}
+
+function buildCondLibList(q) {
+  const ql = q.toLowerCase();
+  const el = gid('cond-lib-list');
+  const byCategory = {};
+  BP_CONDITION_LIBRARY.forEach(c => {
+    if (q && !c.name.toLowerCase().includes(ql)) return;
+    (byCategory[c.category] = byCategory[c.category] || []).push(c);
+  });
+  const cats = Object.keys(byCategory);
+  if (!cats.length) {
+    el.innerHTML = '<div style="padding:1rem 0;color:var(--muted);font-size:.85rem">No matching conditions.</div>';
+    return;
+  }
+  el.innerHTML = cats.map(cat => `
+    <div style="font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:.7rem 0 .35rem">${cat}</div>
+    ${byCategory[cat].map(c => {
+      const already = bpConditions.some(bc => bc.id === c.id);
+      return `<div class="modal-lib-item${already ? ' selected' : ''}" onclick="${already ? '' : `addCondFromLib(${c.id})`}" style="cursor:${already ? 'default' : 'pointer'}">
+        <span style="display:flex;align-items:center;gap:.5rem">
+          <span style="width:10px;height:10px;border-radius:2px;background:${c.color};display:inline-block;flex-shrink:0"></span>
+          <span class="modal-lib-name">${esc(c.name)}</span>
+        </span>
+        <span class="modal-lib-cost">${already ? 'Added' : c.unit}</span>
+      </div>`;
+    }).join('')}
+  `).join('');
+}
+
+function addCondFromLib(id) {
+  if (bpConditions.some(c => c.id === id)) return;
+  const source = BP_CONDITION_LIBRARY.find(c => c.id === id);
+  if (!source) return;
+  bpPushUndo();
+  const { category, ...cond } = source;
+  bpConditions.push({ ...cond });
+  bpActiveCondId = id;
+  bpRenderConditions();
+  bpUpdateActiveIndicator();
+  bpRenderQtyPanel();
+  saveProject();
+  buildCondLibList(gid('cond-lib-search').value);
+}
+
 function bpDeleteCond(id) {
   const cond = bpGetCond(id);
   const linkedItem = cond && cond.estItemId ? project.items.find(i => i.id === cond.estItemId) : null;
@@ -1036,6 +1238,7 @@ function bpDeleteCond(id) {
     ? 'Delete this condition, its measurements, and the matching Estimator line item?'
     : 'Delete this condition and all its measurements?';
   if (!confirm(msg)) return;
+  bpPushUndo();
   if (linkedItem) project.items = project.items.filter(i => i.id !== linkedItem.id);
   bpConditions = bpConditions.filter(c => c.id !== id);
   bpMeasurements = bpMeasurements.filter(m => m.condId !== id);
@@ -1051,6 +1254,7 @@ function bpDeleteCond(id) {
 function bpToggleCondVis(id) {
   const c = bpGetCond(id);
   if (!c) return;
+  bpPushUndo();
   c.hidden = !c.hidden;
   bpRenderConditions();
   bpRedraw();
@@ -1230,6 +1434,7 @@ function bpLoadFile(input) {
     bpScaleMode = false;
     bpPageData = {};
     bpRenderQtyPanel();
+    bpResetUndoHistory();
   }
 
   const fileLbl = gid('bp-file-lbl');
@@ -1348,11 +1553,9 @@ function bpRenderImg() {
 function bpSetZoom(pct) {
   pct = Math.min(300, Math.max(25, Math.round(+pct) || 100));
   bpZoomPct = pct;
-  const slider = gid('bp-zoom'); if (slider) slider.value = pct;
-  const inp = gid('bp-zoom-inp'); if (inp) inp.value = pct;
+  const readout = gid('bp-zoom-pct'); if (readout) readout.textContent = pct + '%';
   if (bpIsImg && bpImg) bpRenderImg(); else bpRenderPage();
 }
-function bpZoom(pct) { bpSetZoom(pct); }
 
 function bpPrevPage() {
   if (bpPageNum <= 1) return;
@@ -1455,6 +1658,7 @@ function bpClick(e) {
       const px = Math.sqrt(dx * dx + dy * dy);
       const ans = prompt('Distance between the two points (in feet):');
       if (ans && +ans > 0) {
+        bpPushUndo();
         bpScalePxPerFt = px / +ans;
       }
       bpScalePts = [];
@@ -1462,6 +1666,7 @@ function bpClick(e) {
       bpUpdateScaleBadge();
       const c = gid('markup-canvas');
       if (c) c.style.cursor = 'crosshair';
+      saveProject();
     }
     return;
   }
@@ -1470,9 +1675,11 @@ function bpClick(e) {
   if (!cond) return;
 
   if (cond.type === 'count') {
+    bpPushUndo();
     bpMeasurements.push({ id: bpMeasNextId++, condId: cond.id, type: 'count', pts: [bpCanvasXY(e)], value: 1 });
     bpRenderQtyPanel();
     bpRedraw();
+    saveProject();
     return;
   }
 
@@ -1566,6 +1773,7 @@ function bpFindMeasurementAt(pt) {
 function bpDeleteMeasurementAt(pt) {
   const m = bpFindMeasurementAt(pt);
   if (!m) return;
+  bpPushUndo();
   bpMeasurements.splice(bpMeasurements.indexOf(m), 1);
   bpRenderQtyPanel();
   bpRedraw();
@@ -1614,10 +1822,12 @@ function bpFinishShape() {
     value = bpScalePxPerFt ? area / (bpScalePxPerFt * bpScalePxPerFt) : area;
   }
 
+  bpPushUndo();
   bpMeasurements.push({ id: bpMeasNextId++, condId: cond.id, type: cond.type, pts, value: Math.round(value * 10) / 10 });
   bpCurrentPts = [];
   bpRenderQtyPanel();
   bpRedraw();
+  saveProject();
 }
 
 function bpRedraw() {
