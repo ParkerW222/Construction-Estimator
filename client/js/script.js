@@ -1089,13 +1089,14 @@ function bpSendCondToEst(condId) {
   bpPendingCondId = condId;
   const total = bpCondTotal(condId);
   gid('modal-meas-lbl').textContent = `${cond.name} — ${fmtN(Math.round(total * 10) / 10)} ${cond.unit}`;
-  const guessedDiv = bpGuessDivision(cond.name);
+  const existing = cond.estItemId ? project.items.find(i => i.id === cond.estItemId) : null;
+  const guessedDiv = existing ? existing.div : bpGuessDivision(cond.name);
   gid('modal-div').innerHTML = Object.entries(CSI_ITEMS)
     .map(([d, info]) => `<option value="${d}"${d === guessedDiv ? ' selected' : ''}>${d} — ${info.name}</option>`)
     .join('');
-  gid('modal-desc').value = cond.name;
-  gid('modal-cost').value = '';
   bpModalPickDiv(guessedDiv);
+  gid('modal-desc').value = existing ? existing.desc : cond.name;
+  gid('modal-cost').value = existing ? existing.unitCost : '';
   gid('send-modal').style.display = 'flex';
 }
 
@@ -1123,7 +1124,20 @@ function bpModalConfirm() {
   const desc = gid('modal-desc').value.trim() || cond.name;
   const cost = +(gid('modal-cost').value) || 0;
   const total = bpCondTotal(bpPendingCondId);
-  project.items.push({ id: project.nextId++, div, desc, unit: cond.unit, qty: Math.round(total * 10) / 10, unitCost: cost, custom: true });
+  const qty = Math.round(total * 10) / 10;
+
+  const existing = cond.estItemId ? project.items.find(i => i.id === cond.estItemId) : null;
+  if (existing) {
+    existing.div = div;
+    existing.desc = desc;
+    existing.unit = cond.unit;
+    existing.qty = qty;
+    existing.unitCost = cost;
+  } else {
+    const item = { id: project.nextId++, div, desc, unit: cond.unit, qty, unitCost: cost, custom: true };
+    project.items.push(item);
+    cond.estItemId = item.id;
+  }
   saveProject();
   bpModalClose();
   activeDiv = div;
@@ -1136,10 +1150,13 @@ function bpModalClose() { gid('send-modal').style.display = 'none'; bpPendingCon
 // ── PUSH ALL TO ESTIMATOR ─────────────────────────────────────────
 function bpPushAllToEst() {
   if (!bpConditions.length) { alert('No conditions to push.'); return; }
-  bpPaRows = bpConditions.map(c => ({ condId: c.id, div: bpGuessDivision(c.name), cost: 0 }));
+  bpPaRows = bpConditions.map(c => {
+    const existing = c.estItemId ? project.items.find(i => i.id === c.estItemId) : null;
+    return { condId: c.id, div: existing ? existing.div : bpGuessDivision(c.name), cost: existing ? existing.unitCost : 0 };
+  });
   gid('push-all-rows').innerHTML = bpConditions.map((c, i) => {
     const total = bpCondTotal(c.id);
-    const guessed = bpGuessDivision(c.name);
+    const guessed = bpPaRows[i].div;
     const divOpts = Object.entries(CSI_ITEMS).map(([d, info]) => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${info.name}</option>`).join('');
     return `<tr>
       <td style="padding:.45rem .5rem">
@@ -1153,7 +1170,7 @@ function bpPushAllToEst() {
         </select>
       </td>
       <td style="padding:.45rem .5rem">
-        <input type="number" min="0" step="0.01" value="0" id="pa-cost-${i}" onchange="bpPaRows[${i}].cost=+this.value" style="width:76px;font-size:.83rem;padding:.22rem .4rem;border:1px solid var(--border);border-radius:4px">
+        <input type="number" min="0" step="0.01" value="${bpPaRows[i].cost}" id="pa-cost-${i}" onchange="bpPaRows[${i}].cost=+this.value" style="width:76px;font-size:.83rem;padding:.22rem .4rem;border:1px solid var(--border);border-radius:4px">
       </td>
     </tr>`;
   }).join('');
@@ -1165,7 +1182,19 @@ function bpPushAllConfirm() {
     const total = bpCondTotal(c.id);
     if (total <= 0 && c.type !== 'count') return;
     const row = bpPaRows[i];
-    project.items.push({ id: project.nextId++, div: row.div, desc: c.name, unit: c.unit, qty: Math.round(total * 10) / 10, unitCost: row.cost, custom: true });
+    const qty = Math.round(total * 10) / 10;
+    const existing = c.estItemId ? project.items.find(it => it.id === c.estItemId) : null;
+    if (existing) {
+      existing.div = row.div;
+      existing.desc = c.name;
+      existing.unit = c.unit;
+      existing.qty = qty;
+      existing.unitCost = row.cost;
+    } else {
+      const item = { id: project.nextId++, div: row.div, desc: c.name, unit: c.unit, qty, unitCost: row.cost, custom: true };
+      project.items.push(item);
+      c.estItemId = item.id;
+    }
   });
   saveProject();
   bpClosePushAll();
