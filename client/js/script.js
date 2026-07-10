@@ -1030,7 +1030,13 @@ function bpConfirmAddCond() {
 }
 
 function bpDeleteCond(id) {
-  if (!confirm('Delete this condition and all its measurements?')) return;
+  const cond = bpGetCond(id);
+  const linkedItem = cond && cond.estItemId ? project.items.find(i => i.id === cond.estItemId) : null;
+  const msg = linkedItem
+    ? 'Delete this condition, its measurements, and the matching Estimator line item?'
+    : 'Delete this condition and all its measurements?';
+  if (!confirm(msg)) return;
+  if (linkedItem) project.items = project.items.filter(i => i.id !== linkedItem.id);
   bpConditions = bpConditions.filter(c => c.id !== id);
   bpMeasurements = bpMeasurements.filter(m => m.condId !== id);
   if (bpActiveCondId === id) bpActiveCondId = bpConditions.length ? bpConditions[0].id : null;
@@ -1038,6 +1044,8 @@ function bpDeleteCond(id) {
   bpUpdateActiveIndicator();
   bpRenderQtyPanel();
   bpRedraw();
+  renderAll();
+  saveProject();
 }
 
 function bpToggleCondVis(id) {
