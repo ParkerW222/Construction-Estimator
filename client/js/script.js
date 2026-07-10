@@ -722,8 +722,9 @@ let bpPdf = null, bpPageNum = 1, bpPageCount = 0, bpZoomPct = 100;
 let bpRenderToken = 0, bpRenderTask = null;
 let bpPageData = {}; // per-page { measurements, scalePxPerFt }
 let bpSpaceDown = false, bpPanActive = false, bpPanMouseStart = null, bpPanScrollStart = null;
-let bpScalePxPerFt = null, bpScalePts = [], bpScaleMode = false, bpTrashMode = false;
+let bpScalePxPerFt = null, bpScalePts = [], bpScaleMode = false, bpTrashMode = false, bpHideMode = false;
 let bpCurrentPts = [];
+let bpDragCondId = null;
 let bpIsImg = false, bpImg = null;
 
 // ── BLUEPRINT INDEXEDDB PERSISTENCE ────────────────────────────────
@@ -817,10 +818,12 @@ function bpResetAll() {
   bpPdf = null; bpImg = null; bpIsImg = false;
   bpPageNum = 1; bpPageCount = 0; bpZoomPct = 100;
   bpMeasurements = []; bpMeasNextId = 1; bpCurrentPts = [];
-  bpScalePxPerFt = null; bpScalePts = []; bpScaleMode = false;
+  bpScalePxPerFt = null; bpScalePts = []; bpScaleMode = false; bpTrashMode = false; bpHideMode = false;
   bpPageData = {}; bpPanActive = false;
   bpConditions = BP_DEFAULT_CONDITIONS.map(c => ({ ...c }));
   bpCondNextId = 33; bpActiveCondId = 1;
+  const trashBtnReset = gid('bp-trash-btn'); if (trashBtnReset) trashBtnReset.classList.remove('active');
+  const hideBtnReset = gid('bp-hide-btn'); if (hideBtnReset) hideBtnReset.classList.remove('active-hide');
   const upload = gid('bp-upload'), wrap = gid('bp-canvas-wrap');
   if (upload) upload.style.display = '';
   if (wrap) wrap.style.display = 'none';
@@ -845,8 +848,11 @@ function bpSelectCond(id) {
   bpCurrentPts = [];
   bpScaleMode = false;
   bpTrashMode = false;
+  bpHideMode = false;
   const trashBtn = gid('bp-trash-btn');
   if (trashBtn) trashBtn.classList.remove('active');
+  const hideBtn = gid('bp-hide-btn');
+  if (hideBtn) hideBtn.classList.remove('active-hide');
   bpRenderConditions();
   bpUpdateActiveIndicator();
   const c = gid('markup-canvas');
@@ -858,14 +864,57 @@ function bpRenderConditions() {
   const list = gid('bp-cond-list');
   if (!list) return;
   list.innerHTML = bpConditions.map(c => `
-    <div class="bp-cond-item${c.id === bpActiveCondId ? ' active' : ''}${c.hidden ? ' bp-cond-hidden' : ''}" onclick="bpSelectCond(${c.id})">
+    <div class="bp-cond-item${c.id === bpActiveCondId ? ' active' : ''}${c.hidden ? ' bp-cond-hidden' : ''}"
+         draggable="true" data-cond-id="${c.id}"
+         ondragstart="bpCondDragStart(event, ${c.id})"
+         ondragover="bpCondDragOver(event)"
+         ondragleave="bpCondDragLeave(event)"
+         ondrop="bpCondDrop(event, ${c.id})"
+         ondragend="bpCondDragEnd(event)"
+         onclick="${c.hidden ? `bpToggleCondVis(${c.id})` : `bpSelectCond(${c.id})`}"
+         title="${c.hidden ? 'Hidden — click to show' : ''}">
       <span style="width:12px;height:12px;border-radius:3px;background:${c.color};flex-shrink:0;display:inline-block"></span>
       <span style="flex:1;font-size:.82rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</span>
       <span style="font-size:.72rem;color:rgba(255,255,255,.5);flex-shrink:0">${c.unit}</span>
-      <button onclick="event.stopPropagation();bpToggleCondVis(${c.id})" title="${c.hidden ? 'Show layer' : 'Hide layer'}" style="background:none;border:none;color:${c.hidden ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.4)'};cursor:pointer;font-size:.7rem;padding:0 0 0 .3rem;line-height:1">${c.hidden ? '○' : '●'}</button>
       <button onclick="event.stopPropagation();bpEditCond(${c.id})" title="Edit" style="background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.72rem;padding:0 0 0 .25rem;line-height:1">✏</button>
       <button onclick="event.stopPropagation();bpDeleteCond(${c.id})" title="Delete" style="background:none;border:none;color:rgba(255,255,255,.3);cursor:pointer;font-size:.75rem;padding:0 0 0 .25rem;line-height:1">✕</button>
     </div>`).join('');
+}
+
+function bpCondDragStart(e, id) {
+  bpDragCondId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging');
+}
+
+function bpCondDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (+e.currentTarget.dataset.condId !== bpDragCondId) e.currentTarget.classList.add('drag-over');
+}
+
+function bpCondDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function bpCondDrop(e, targetId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (bpDragCondId == null || bpDragCondId === targetId) return;
+  const fromIdx = bpConditions.findIndex(c => c.id === bpDragCondId);
+  const toIdx = bpConditions.findIndex(c => c.id === targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const [moved] = bpConditions.splice(fromIdx, 1);
+  bpConditions.splice(toIdx, 0, moved);
+  bpRenderConditions();
+  bpRenderQtyPanel();
+  saveProject();
+}
+
+function bpCondDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.bp-cond-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+  bpDragCondId = null;
 }
 
 function bpUpdateActiveIndicator() {
@@ -1293,7 +1342,13 @@ function bpSetScale() {
   }
   bpScalePts = [];
   bpScaleMode = true;
+  bpTrashMode = false;
+  bpHideMode = false;
   bpCurrentPts = [];
+  const trashBtn = gid('bp-trash-btn');
+  if (trashBtn) trashBtn.classList.remove('active');
+  const hideBtn = gid('bp-hide-btn');
+  if (hideBtn) hideBtn.classList.remove('active-hide');
   const c = gid('markup-canvas');
   if (c) c.style.cursor = 'crosshair';
   bpUpdateScaleBadge();
@@ -1347,6 +1402,11 @@ function bpWheel(e) {
 function bpClick(e) {
   if (bpSpaceDown) return;
   if (bpTrashMode) { bpDeleteMeasurementAt(bpCanvasXY(e)); return; }
+  if (bpHideMode) {
+    const m = bpFindMeasurementAt(bpCanvasXY(e));
+    if (m) bpToggleCondVis(m.condId);
+    return;
+  }
   if (bpScaleMode) {
     const pt = bpCanvasXY(e);
     bpScalePts.push(pt);
@@ -1417,14 +1477,31 @@ function bpMouseMove(e) {
 
 function bpToggleTrash() {
   bpTrashMode = !bpTrashMode;
-  if (bpTrashMode) { bpScaleMode = false; bpCurrentPts = []; bpRedraw(); }
+  if (bpTrashMode) {
+    bpScaleMode = false; bpHideMode = false; bpCurrentPts = []; bpRedraw();
+    const hideBtn = gid('bp-hide-btn');
+    if (hideBtn) hideBtn.classList.remove('active-hide');
+  }
   const btn = gid('bp-trash-btn');
   if (btn) btn.classList.toggle('active', bpTrashMode);
   const c = gid('markup-canvas');
   if (c) c.style.cursor = bpTrashMode ? 'pointer' : 'crosshair';
 }
 
-function bpDeleteMeasurementAt(pt) {
+function bpToggleHideMode() {
+  bpHideMode = !bpHideMode;
+  if (bpHideMode) {
+    bpScaleMode = false; bpTrashMode = false; bpCurrentPts = []; bpRedraw();
+    const trashBtn = gid('bp-trash-btn');
+    if (trashBtn) trashBtn.classList.remove('active');
+  }
+  const btn = gid('bp-hide-btn');
+  if (btn) btn.classList.toggle('active-hide', bpHideMode);
+  const c = gid('markup-canvas');
+  if (c) c.style.cursor = bpHideMode ? 'pointer' : 'crosshair';
+}
+
+function bpFindMeasurementAt(pt) {
   const z = bpZoomPct / 100;
   const HIT_DOT  = 12 / z;
   const HIT_LINE = 8  / z;
@@ -1443,14 +1520,18 @@ function bpDeleteMeasurementAt(pt) {
     } else if (m.type === 'area') {
       hit = bpPointInPoly(pt, m.pts);
     }
-    if (hit) {
-      bpMeasurements.splice(i, 1);
-      bpRenderQtyPanel();
-      bpRedraw();
-      saveProject();
-      return;
-    }
+    if (hit) return m;
   }
+  return null;
+}
+
+function bpDeleteMeasurementAt(pt) {
+  const m = bpFindMeasurementAt(pt);
+  if (!m) return;
+  bpMeasurements.splice(bpMeasurements.indexOf(m), 1);
+  bpRenderQtyPanel();
+  bpRedraw();
+  saveProject();
 }
 
 function bpDistToSeg(p, a, b) {
