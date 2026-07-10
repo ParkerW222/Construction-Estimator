@@ -1267,6 +1267,8 @@ function bpCondTotal(condId) {
   return bpCondMeasurements(condId).reduce((s, m) => s + m.value, 0);
 }
 
+function bpCondCopyMeas(condId) { return bpCondMeasurements(condId).find(m => m.type === 'copy'); }
+
 function bpRenderQtyPanel() {
   const panel = gid('bp-qty-list');
   if (!panel) return;
@@ -1277,6 +1279,7 @@ function bpRenderQtyPanel() {
   panel.innerHTML = bpConditions.map(c => {
     const total = bpCondTotal(c.id);
     const count = bpCondMeasurements(c.id).length;
+    const copyMeas = bpCondCopyMeas(c.id);
     return `<div class="bp-qty-row">
       <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem">
         <span style="width:10px;height:10px;border-radius:2px;background:${c.color};display:inline-block;flex-shrink:0"></span>
@@ -1286,9 +1289,75 @@ function bpRenderQtyPanel() {
         <span style="font-size:1.05rem;font-weight:700;color:var(--navy)">${fmtN(Math.round(total * 10) / 10)} <span style="font-size:.74rem;font-weight:400;color:var(--muted)">${c.unit}</span></span>
         <span style="font-size:.72rem;color:var(--muted)">${count} item${count !== 1 ? 's' : ''}</span>
       </div>
-      <button class="to-send-btn" onclick="bpSendCondToEst(${c.id})">→ Send to Estimator</button>
+      ${copyMeas ? `<div style="display:flex;align-items:center;gap:.3rem;font-size:.7rem;color:var(--muted);margin-bottom:.35rem">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">↳ copied from ${esc(copyMeas.sourceName)}</span>
+        <span style="cursor:pointer;font-weight:700" title="Remove copied value" onclick="bpRemoveCopyVal(${c.id})">&#10005;</span>
+      </div>` : ''}
+      <div style="display:flex;gap:.4rem">
+        <button class="to-send-btn" style="flex:1" onclick="bpSendCondToEst(${c.id})">→ Send to Estimator</button>
+        <button class="bp-copy-val-btn" onclick="openCopyVal(${c.id})" title="Copy a value from another condition">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>
     </div>`;
   }).join('<hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0">');
+}
+
+// ── COPY VALUE BETWEEN CONDITIONS ───────────────────────────────────
+let bpCopyTargetId = null;
+
+function bpCopySourceCandidates(targetId) {
+  const target = bpGetCond(targetId);
+  if (!target) return [];
+  return bpConditions.filter(c => c.id !== targetId && c.unit === target.unit && bpCondTotal(c.id) > 0);
+}
+
+function openCopyVal(condId) {
+  bpCopyTargetId = condId;
+  const target = bpGetCond(condId);
+  if (!target) return;
+  gid('copy-val-title').textContent = `Copy Value into "${target.name}"`;
+  const candidates = bpCopySourceCandidates(condId);
+  if (!candidates.length) {
+    gid('copy-val-hint').textContent = `No other measured conditions use "${target.unit}" yet.`;
+    gid('copy-val-list').innerHTML = '';
+  } else {
+    gid('copy-val-hint').textContent = `Pick a condition to copy its current total into "${target.name}".`;
+    gid('copy-val-list').innerHTML = candidates.map(c => `
+      <div class="modal-lib-item" style="cursor:pointer" onclick="bpApplyCopyVal(${c.id})">
+        <span style="display:flex;align-items:center;gap:.5rem">
+          <span style="width:10px;height:10px;border-radius:2px;background:${c.color};display:inline-block;flex-shrink:0"></span>
+          <span class="modal-lib-name">${esc(c.name)}</span>
+        </span>
+        <span class="modal-lib-cost">${fmtN(Math.round(bpCondTotal(c.id) * 10) / 10)} ${c.unit}</span>
+      </div>`).join('');
+  }
+  gid('copy-val-modal').style.display = 'flex';
+}
+
+function closeCopyVal() { gid('copy-val-modal').style.display = 'none'; bpCopyTargetId = null; }
+
+function bpApplyCopyVal(sourceId) {
+  const targetId = bpCopyTargetId;
+  const target = bpGetCond(targetId);
+  const source = bpGetCond(sourceId);
+  if (!target || !source) { closeCopyVal(); return; }
+  bpPushUndo();
+  bpMeasurements = bpMeasurements.filter(m => !(m.condId === targetId && m.type === 'copy'));
+  bpMeasurements.push({
+    id: bpMeasNextId++, condId: targetId, type: 'copy', pts: [],
+    value: bpCondTotal(sourceId), sourceCondId: sourceId, sourceName: source.name,
+  });
+  bpRenderQtyPanel();
+  saveProject();
+  closeCopyVal();
+}
+
+function bpRemoveCopyVal(condId) {
+  bpPushUndo();
+  bpMeasurements = bpMeasurements.filter(m => !(m.condId === condId && m.type === 'copy'));
+  bpRenderQtyPanel();
+  saveProject();
 }
 
 // ── SEND TO ESTIMATOR MODAL ────────────────────────────────────────

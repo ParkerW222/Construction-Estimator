@@ -383,10 +383,12 @@
       <ol class="help-steps">
         <li>Click <strong>Open</strong> (or drag &amp; drop) to load a PDF or image drawing.</li>
         <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet.</li>
-        <li>In the <strong>Conditions panel</strong> (left), click <strong>+ New</strong> to create a named measurement type, choose Linear, Area, or Count, and pick a color.</li>
+        <li>The <strong>Conditions panel</strong> (left) starts with 5 common conditions. Click <strong>+ Library</strong> to search and add more from a categorized list, or <strong>+ New</strong> for a fully custom one. Drag conditions to reorder them.</li>
         <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item.</li>
-        <li>Use <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs, then send to the Project Estimator.</li>
-        <li>Press <strong>Ctrl+Z</strong> to undo the last measurement, <strong>Backspace</strong> to remove the last point while drawing, <strong>Escape</strong> to cancel.</li>
+        <li>Already have a matching measurement elsewhere (e.g. Slab and Hardwood Floors cover the same area)? Click the <strong>copy icon</strong> next to a condition's Send to Estimator button to copy another condition's value straight in — no re-drawing needed.</li>
+        <li>Use <strong>Hide Layer</strong> to click and hide a layer on the drawing, or <strong>Erase</strong> to click and delete a measurement.</li>
+        <li>Use <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs for every measured condition at once, then send to the Project Estimator. Conditions with nothing measured yet are skipped automatically.</li>
+        <li>Use the <strong>Undo/Redo</strong> buttons (or <strong>Ctrl+Z</strong> / <strong>Ctrl+Shift+Z</strong>) to step back or forward through any change — measurements, conditions, or reordering. <strong>Backspace</strong> removes the last point while drawing, <strong>Escape</strong> cancels.</li>
       </ol>
     </div>
 
@@ -404,6 +406,11 @@
         <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel, plus <strong>Mat. Sales Tax %</strong> and <strong>Permit Fees %</strong>.</li>
       </ol>
     </div>
+
+    <p style="font-size:.78rem;color:var(--muted);margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+      <strong style="color:var(--text)">Tip:</strong> every time you click Save, a version of the whole project is kept.
+      Open the <strong>project dropdown</strong> at the top and choose <strong>Version History</strong> to review or restore an earlier save.
+    </p>
 
   </div>
 </div>
@@ -478,6 +485,18 @@
     <input type="text" id="cond-lib-search" placeholder="Search conditions…" oninput="filterCondLib(this.value)"
       style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.86rem;margin-bottom:.75rem">
     <div id="cond-lib-list" style="max-height:420px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- COPY VALUE MODAL -->
+<div class="modal-overlay" id="copy-val-modal" style="display:none" onclick="if(event.target===this)closeCopyVal()">
+  <div class="modal-box" style="width:400px">
+    <div class="modal-head">
+      <span class="modal-title" id="copy-val-title">Copy Value</span>
+      <button class="modal-close" onclick="closeCopyVal()">&#10005;</button>
+    </div>
+    <div style="font-size:.8rem;color:var(--muted);margin-bottom:.6rem" id="copy-val-hint"></div>
+    <div id="copy-val-list" style="max-height:360px;overflow-y:auto"></div>
   </div>
 </div>
 
