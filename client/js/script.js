@@ -1082,6 +1082,7 @@ function bpRenderQtyPanel() {
 // ── SEND TO ESTIMATOR MODAL ────────────────────────────────────────
 let bpPendingCondId = null;
 let bpPaRows = [];
+let bpPaConds = [];
 
 function bpSendCondToEst(condId) {
   const cond = bpGetCond(condId);
@@ -1149,12 +1150,13 @@ function bpModalClose() { gid('send-modal').style.display = 'none'; bpPendingCon
 
 // ── PUSH ALL TO ESTIMATOR ─────────────────────────────────────────
 function bpPushAllToEst() {
-  if (!bpConditions.length) { alert('No conditions to push.'); return; }
-  bpPaRows = bpConditions.map(c => {
+  bpPaConds = bpConditions.filter(c => bpCondTotal(c.id) > 0);
+  if (!bpPaConds.length) { alert('Nothing measured yet — draw or count some conditions on the drawing first.'); return; }
+  bpPaRows = bpPaConds.map(c => {
     const existing = c.estItemId ? project.items.find(i => i.id === c.estItemId) : null;
     return { condId: c.id, div: existing ? existing.div : bpGuessDivision(c.name), cost: existing ? existing.unitCost : 0 };
   });
-  gid('push-all-rows').innerHTML = bpConditions.map((c, i) => {
+  gid('push-all-rows').innerHTML = bpPaConds.map((c, i) => {
     const total = bpCondTotal(c.id);
     const guessed = bpPaRows[i].div;
     const divOpts = Object.entries(CSI_ITEMS).map(([d, info]) => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${info.name}</option>`).join('');
@@ -1178,9 +1180,8 @@ function bpPushAllToEst() {
 }
 
 function bpPushAllConfirm() {
-  bpConditions.forEach((c, i) => {
+  bpPaConds.forEach((c, i) => {
     const total = bpCondTotal(c.id);
-    if (total <= 0 && c.type !== 'count') return;
     const row = bpPaRows[i];
     const qty = Math.round(total * 10) / 10;
     const existing = c.estItemId ? project.items.find(it => it.id === c.estItemId) : null;
