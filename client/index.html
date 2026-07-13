@@ -488,6 +488,23 @@
   </div>
 </div>
 
+<!-- SCALE DETECTION MODAL -->
+<div class="modal-overlay" id="scale-detect-modal" style="display:none" onclick="if(event.target===this)closeScaleDetectModal()">
+  <div class="modal-box" style="width:380px">
+    <div class="modal-head">
+      <span class="modal-title">Scale Detected</span>
+      <button class="modal-close" onclick="closeScaleDetectModal()">&#10005;</button>
+    </div>
+    <p style="font-size:.85rem;color:var(--text);margin-bottom:.4rem">Found <strong id="scale-detect-label"></strong> printed on this drawing.</p>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:1rem">That works out to <strong id="scale-detect-pxft"></strong>. Use this scale for measuring on this page?</p>
+    <p id="scale-detect-ocr-note" style="display:none;font-size:.74rem;color:var(--orange);margin-bottom:1rem">&#9888; Detected with OCR on a scanned page — text can be misread, so double-check before using.</p>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="bpRejectDetectedScale()">Set Manually</button>
+      <button class="btn btn-orange" onclick="bpConfirmDetectedScale()">Use This Scale</button>
+    </div>
+  </div>
+</div>
+
 <!-- COPY VALUE MODAL -->
 <div class="modal-overlay" id="copy-val-modal" style="display:none" onclick="if(event.target===this)closeCopyVal()">
   <div class="modal-box" style="width:400px">
@@ -501,6 +518,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/7.0.0/tesseract.min.js"></script>
 <script src="js/data.js"></script>
 <script src="js/script.js"></script>
 </body>

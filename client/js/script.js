@@ -1533,6 +1533,7 @@ function bpLoadFile(input) {
         bpPageNum = 1;
         bpShowCanvas();
         bpRenderPage();
+        bpTryAutoDetectScale();
       }).catch(err => alert('Could not load PDF: ' + err.message));
     };
     reader.readAsArrayBuffer(file);
@@ -1633,6 +1634,7 @@ function bpPrevPage() {
   gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`;
   bpLoadPage();
   bpRenderPage();
+  bpTryAutoDetectScale();
 }
 function bpNextPage() {
   if (bpPageNum >= bpPageCount) return;
@@ -1641,6 +1643,149 @@ function bpNextPage() {
   gid('bp-page-lbl').textContent = `${bpPageNum} / ${bpPageCount}`;
   bpLoadPage();
   bpRenderPage();
+  bpTryAutoDetectScale();
+}
+
+// ── AUTO SCALE DETECTION ─────────────────────────────────────────────
+// Looks for a printed scale note (e.g. 1/4" = 1'-0") in the PDF's text layer
+// and converts it to px-per-foot in the same coordinate space bpRenderPage
+// uses (PDF points * the 1.5 base render multiplier, independent of zoom).
+const BP_RENDER_PT_MULT = 1.5;
+let bpDetectedScalePxPerFt = null;
+
+function bpScaleFromRatio(paperInches, realFeet, label) {
+  if (!paperInches || !realFeet) return null;
+  const pointsPerRealFoot = 72 * (paperInches / realFeet);
+  const pxPerFt = pointsPerRealFoot * BP_RENDER_PT_MULT;
+  if (!isFinite(pxPerFt) || pxPerFt < 2 || pxPerFt > 600) return null;
+  return { pxPerFt, label };
+}
+
+function bpParseScaleNote(rawText) {
+  const text = rawText
+    .replace(/[′’]/g, "'")
+    .replace(/[″”]/g, '"')
+    .replace(/\s+/g, ' ');
+
+  // Fractional-inch form: 1/4" = 1'-0"
+  let m = text.match(/(\d+)\s*\/\s*(\d+)\s*"?\s*=\s*(\d+)\s*'(?:\s*-?\s*(\d+)\s*")?/);
+  if (m) {
+    const paperInches = (+m[1]) / (+m[2]);
+    const realFeet = +m[3] + (+(m[4] || 0)) / 12;
+    return bpScaleFromRatio(paperInches, realFeet, `${m[1]}/${m[2]}" = ${m[3]}'${m[4] ? `-${m[4]}"` : ''}`);
+  }
+
+  // Whole-inch form: 1" = 20'-0"
+  m = text.match(/(\d+)\s*"\s*=\s*(\d+)\s*'(?:\s*-?\s*(\d+)\s*")?/);
+  if (m) {
+    const paperInches = +m[1];
+    const realFeet = +m[2] + (+(m[3] || 0)) / 12;
+    return bpScaleFromRatio(paperInches, realFeet, `${m[1]}" = ${m[2]}'${m[3] ? `-${m[3]}"` : ''}`);
+  }
+
+  // OCR often drops the tiny foot-mark apostrophe (e.g. reads 1'-0" as 1-0"). These
+  // fallbacks anchor on the closing inches quote instead, which OCR reads far more reliably.
+  m = text.match(/(\d+)\s*\/\s*(\d+)\s*"?\s*=\s*(\d+)\s*'?-\s*(\d+)\s*"/);
+  if (m) {
+    const paperInches = (+m[1]) / (+m[2]);
+    const realFeet = +m[3] + (+m[4]) / 12;
+    return bpScaleFromRatio(paperInches, realFeet, `${m[1]}/${m[2]}" = ${m[3]}'-${m[4]}"`);
+  }
+
+  m = text.match(/(\d+)\s*"\s*=\s*(\d+)\s*'?-\s*(\d+)\s*"/);
+  if (m) {
+    const paperInches = +m[1];
+    const realFeet = +m[2] + (+m[3]) / 12;
+    return bpScaleFromRatio(paperInches, realFeet, `${m[1]}" = ${m[2]}'-${m[3]}"`);
+  }
+
+  return null;
+}
+
+function bpTryAutoDetectScale() {
+  if (!bpPdf || bpScalePxPerFt) return;
+  const page = bpPageNum;
+  bpPdf.getPage(page).then(p => p.getTextContent()).then(content => {
+    if (bpScalePxPerFt || page !== bpPageNum) return;
+    const text = content.items.map(i => i.str).join(' ');
+    const found = bpParseScaleNote(text);
+    if (found) { bpShowScaleDetectModal(found, false); return; }
+    // Little to no embedded text usually means a scanned/flattened page — fall back to OCR
+    // on the title-block area (bottom band of the sheet), where scale notes conventionally live.
+    if (text.trim().length < 30) bpTryOcrDetectScale();
+  }).catch(() => {});
+}
+
+let bpOcrWorker = null;
+async function bpGetOcrWorker() {
+  if (!bpOcrWorker) bpOcrWorker = await Tesseract.createWorker('eng');
+  return bpOcrWorker;
+}
+
+async function bpTryOcrDetectScale() {
+  if (!bpPdf || bpScalePxPerFt || typeof Tesseract === 'undefined') return;
+  const pageNum = bpPageNum;
+  const badge = gid('bp-scale-badge');
+  try {
+    const page = await bpPdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 2 });
+    const full = document.createElement('canvas');
+    full.width = viewport.width;
+    full.height = viewport.height;
+    await page.render({ canvasContext: full.getContext('2d'), viewport }).promise;
+
+    if (badge) { badge.textContent = 'Scanning for scale…'; badge.className = 'scale-badge setting'; }
+    const worker = await bpGetOcrWorker();
+
+    // Try the title-block band first (fast, usually where scale notes live).
+    const bandH = Math.round(full.height * 0.22);
+    const crop = document.createElement('canvas');
+    crop.width = full.width;
+    crop.height = bandH;
+    crop.getContext('2d').drawImage(full, 0, full.height - bandH, full.width, bandH, 0, 0, full.width, bandH);
+    let { data } = await worker.recognize(crop);
+    if (pageNum !== bpPageNum || bpScalePxPerFt) return;
+    let found = bpParseScaleNote(data.text || '');
+
+    // Fall back to OCR-ing the whole sheet — slower, but catches notes outside that band
+    // or ones the tighter crop degraded past legibility.
+    if (!found) {
+      ({ data } = await worker.recognize(full));
+      if (pageNum !== bpPageNum || bpScalePxPerFt) return;
+      found = bpParseScaleNote(data.text || '');
+    }
+
+    if (found) bpShowScaleDetectModal(found, true);
+  } catch (e) {
+    // OCR failures are non-fatal — fall back to manual Set Scale silently
+  } finally {
+    if (badge && !bpScalePxPerFt) bpUpdateScaleBadge();
+  }
+}
+
+function bpShowScaleDetectModal(found, viaOcr) {
+  bpDetectedScalePxPerFt = found.pxPerFt;
+  gid('scale-detect-label').textContent = found.label;
+  gid('scale-detect-pxft').textContent = `1 ft = ${found.pxPerFt.toFixed(1)} px`;
+  const note = gid('scale-detect-ocr-note');
+  if (note) note.style.display = viaOcr ? 'block' : 'none';
+  gid('scale-detect-modal').style.display = 'flex';
+}
+
+function closeScaleDetectModal() { gid('scale-detect-modal').style.display = 'none'; }
+
+function bpConfirmDetectedScale() {
+  if (!bpDetectedScalePxPerFt) { closeScaleDetectModal(); return; }
+  bpScalePxPerFt = bpDetectedScalePxPerFt;
+  bpUpdateScaleBadge();
+  bpRedraw();
+  saveProject();
+  closeScaleDetectModal();
+}
+
+function bpRejectDetectedScale() {
+  closeScaleDetectModal();
+  bpSetScale();
 }
 
 function bpSetScale() {
