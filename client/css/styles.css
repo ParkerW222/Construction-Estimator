@@ -457,6 +457,9 @@ body.admin-mode #admin-app{display:block}
 .bp-copy-val-btn{flex-shrink:0;width:28px;background:none;border:1.5px solid var(--border);color:var(--muted);border-radius:5px;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center}
 .bp-copy-val-btn:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
 .bp-copy-val-btn .icon{width:14px;height:14px}
+.bp-clear-cond-btn{flex-shrink:0;width:28px;background:none;border:1.5px solid var(--border);color:var(--muted);border-radius:5px;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center}
+.bp-clear-cond-btn:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+.bp-clear-cond-btn .icon{width:14px;height:14px}
 /* FORM INPUT — reusable class matching shared input style */
 .form-input{width:100%;border:1px solid var(--border);border-radius:var(--radius-sm);padding:.52rem .65rem;font-size:.88rem;color:var(--text);background:var(--surface);transition:.15s;font-family:inherit}
 .form-input:focus{outline:none;border-color:var(--orange);box-shadow:var(--focus-ring)}

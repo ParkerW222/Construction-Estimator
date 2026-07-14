@@ -995,6 +995,7 @@ function bpSnapshotState() {
     measurements: bpMeasurements,
     activeCondId: bpActiveCondId,
     scalePxPerFt: bpScalePxPerFt,
+    pageData: bpPageData,
   });
 }
 
@@ -1011,6 +1012,7 @@ function bpRestoreSnapshot(json) {
   bpMeasurements = s.measurements;
   bpActiveCondId = s.activeCondId;
   bpScalePxPerFt = s.scalePxPerFt;
+  bpPageData = s.pageData || {};
   bpRenderConditions();
   bpUpdateActiveIndicator();
   bpRenderQtyPanel();
@@ -1384,6 +1386,9 @@ function bpRenderQtyPanel() {
         <button class="bp-copy-val-btn" onclick="openCopyVal(${c.id})" title="Copy a value from another condition">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
+        <button class="bp-clear-cond-btn" onclick="bpClearCondMeasurements(${c.id})" title="Clear all measurements for this condition">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>
+        </button>
       </div>
     </div>`;
   }).join('<hr style="border:none;border-top:1px solid var(--border);margin:.5rem 0">');
@@ -1443,6 +1448,23 @@ function bpRemoveCopyVal(condId) {
   bpPushUndo();
   bpRemoveCopyMeasEverywhere(condId);
   bpRenderQtyPanel();
+  saveProject();
+}
+
+function bpClearCondMeasurements(condId) {
+  const cond = bpGetCond(condId);
+  if (!cond) return;
+  if (!bpCondAllPagesMeasurements(condId).length) return;
+  if (!confirm(`Clear all measurements for "${cond.name}"? This removes everything measured for it on every page — the condition itself stays.`)) return;
+  bpPushUndo();
+  bpMeasurements = bpMeasurements.filter(m => m.condId !== condId);
+  Object.keys(bpPageData).forEach(pn => {
+    if (+pn === bpPageNum) return;
+    const pd = bpPageData[pn];
+    if (pd && pd.measurements) pd.measurements = pd.measurements.filter(m => m.condId !== condId);
+  });
+  bpRenderQtyPanel();
+  bpRedraw();
   saveProject();
 }
 

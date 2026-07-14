@@ -362,16 +362,17 @@
     <div class="help-tool">
       <div class="help-tool-head">
         <span class="help-num">1</span>
-        <div><div class="help-tool-name">Budget Builder</div><div class="help-tool-sub">Critical-path project budget organized by construction sequence</div></div>
+        <div><div class="help-tool-name">Budget Builder</div><div class="help-tool-sub">Critical-path project budget and schedule, driven by the Estimator</div></div>
       </div>
-      <p class="help-desc">The core of BuildCalc. Enter your budget for each line item in construction order — Materials, Labor, and Combined calculate automatically. The summary panel updates in real time so you always know your total.</p>
+      <p class="help-desc">Construction Phases aren't typed in by hand — every CSI division you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead, Soft Costs, and Other stay manual, since those aren't Estimator line items.</p>
       <ol class="help-steps">
         <li>Set a <strong>project name</strong>, building type, and stories at the top.</li>
-        <li>Enter <strong>Materials</strong> and <strong>Labor</strong> costs for each line item. Combined calculates automatically.</li>
-        <li>Use the <strong>Status</strong> dropdown per row to track progress: Not Started → Bid Needed → In Progress → Complete.</li>
-        <li>Toggle <strong>By Others</strong> on any row handled by a subcontractor — enter their name and the cost is tracked separately (excluded from your total but shown in the summary).</li>
-        <li>Click the <strong>pencil icon</strong> on any row to add a note (e.g. "tile needs 6-week lead time").</li>
-        <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance), <strong>Soft Costs</strong> (permits, architect, geotech), and <strong>Other</strong> at the bottom of the table.</li>
+        <li><strong>Construction Phases</strong> populate on their own from whatever's been costed in the Project Estimator. Add or change a cost there, and the matching phase (and its dollar figure) updates here — nothing to enter twice.</li>
+        <li>Use the <strong>Status</strong> dropdown per phase to track progress: Not Started → Bid Needed → In Progress → Complete.</li>
+        <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
+        <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
+        <li>Toggle <strong>By Others</strong> on any phase handled by a subcontractor — tracked separately, excluded from your total.</li>
+        <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance), <strong>Soft Costs</strong> (permits, architect, geotech), and <strong>Other</strong> manually at the bottom of the table.</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
     </div>
@@ -383,14 +384,15 @@
       </div>
       <p class="help-desc">Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements push straight into the Project Estimator.</p>
       <ol class="help-steps">
-        <li>Click <strong>Open</strong> (or drag &amp; drop) to load a PDF or image drawing.</li>
+        <li>Click <strong>Open</strong> (or drag &amp; drop) to load a PDF or image drawing. If it has a printed scale note (e.g. <em>1/4" = 1'-0"</em>), BuildCalc tries to read it automatically — from the file's text if it's a digital export, or via OCR if it's a scanned drawing — and shows a <strong>Scale Detected</strong> popup for you to confirm before it's used. Nothing found? Set it manually the same way as always.</li>
         <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet.</li>
         <li>The <strong>Conditions panel</strong> (left) starts with 5 common conditions. Click <strong>+ Library</strong> to search and add more from a categorized list, or <strong>+ New</strong> for a fully custom one. Drag conditions to reorder them.</li>
-        <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item.</li>
-        <li>Already have a matching measurement elsewhere (e.g. Slab and Hardwood Floors cover the same area)? Click the <strong>copy icon</strong> next to a condition's Send to Estimator button to copy another condition's value straight in — no re-drawing needed.</li>
-        <li>Use <strong>Hide Layer</strong> to click and hide a layer on the drawing, or <strong>Erase</strong> to click and delete a measurement.</li>
-        <li>Use <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs for every measured condition at once, then send to the Project Estimator. Conditions with nothing measured yet are skipped automatically.</li>
-        <li>Use the <strong>Undo/Redo</strong> buttons (or <strong>Ctrl+Z</strong> / <strong>Ctrl+Shift+Z</strong>) to step back or forward through any change — measurements, conditions, or reordering. <strong>Backspace</strong> removes the last point while drawing, <strong>Escape</strong> cancels.</li>
+        <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item. Hover over any marked-up shape to see which condition it belongs to.</li>
+        <li>Already have a matching measurement elsewhere (e.g. Slab and Hardwood Floors cover the same area)? Click the <strong>copy icon</strong> next to a condition's Send to Estimator button to copy another condition's value straight in — no re-drawing needed. Works across every page of the file, not just the one you're on.</li>
+        <li>Click the <strong>clear icon</strong> next to a condition to wipe every measurement for just that condition, on every page — it asks for confirmation first, and the condition itself stays (only its markup is removed).</li>
+        <li>Use <strong>Hide Layer</strong> to click and hide a layer on the drawing, or <strong>Erase</strong> to click and delete a single measurement.</li>
+        <li>Use <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs for every measured condition at once, then send to the Project Estimator. Conditions with nothing measured yet are skipped automatically, and totals combine across every page a condition was marked up on.</li>
+        <li>Use the <strong>Undo/Redo</strong> buttons (or <strong>Ctrl+Z</strong> / <strong>Ctrl+Shift+Z</strong>) to step back or forward through any change — measurements, conditions, or reordering, on any page. <strong>Backspace</strong> removes the last point while drawing, <strong>Escape</strong> cancels.</li>
       </ol>
     </div>
 
@@ -402,8 +404,8 @@
       <p class="help-desc">Build a detailed bottom-up estimate organized by construction division. Unit costs are national averages automatically adjusted for your region. Markup is applied on top to produce a final bid price.</p>
       <ol class="help-steps">
         <li>Set your <strong>project name</strong> and <strong>region</strong> in the top bar — this adjusts all unit costs.</li>
-        <li>Click a <strong>CSI division</strong> in the left panel (e.g. 03 Concrete) to open it.</li>
-        <li>Click <strong>+ Add from Library</strong> to search and add items, or <strong>+ Custom</strong> for a blank row.</li>
+        <li>Click a <strong>CSI division</strong> in the left panel (e.g. 03 Concrete) to open it, or click <strong>See All</strong> at the top of that list to view every division's items together in one table.</li>
+        <li>Click <strong>+ Add from Library</strong> to search and add items, or <strong>+ Custom</strong> for a blank row (Custom needs a specific division selected, not See All).</li>
         <li>Enter <strong>quantities</strong> for each item — extended costs update instantly.</li>
         <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel, plus <strong>Mat. Sales Tax %</strong> and <strong>Permit Fees %</strong>.</li>
       </ol>
