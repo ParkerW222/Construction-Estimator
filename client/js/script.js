@@ -86,9 +86,9 @@ function renderTable() {
   gid('items-thead').innerHTML = `<tr>
     <th>Description</th>
     <th style="width:50px">Unit</th>
-    <th style="width:78px;text-align:right">Qty</th>
-    <th style="width:88px;text-align:right">Unit Cost</th>
-    <th style="width:88px;text-align:right">Extended</th>
+    <th style="min-width:100px;text-align:right">Qty</th>
+    <th style="min-width:108px;text-align:right">Unit Cost</th>
+    <th style="min-width:108px;text-align:right">Extended</th>
     <th style="width:34px"></th>
   </tr>`;
   gid('center-title').textContent = `Division ${activeDiv} — ${CSI_ITEMS[activeDiv].name}`;
@@ -108,9 +108,9 @@ function renderTable() {
     return `<tr>
       <td style="min-width:170px;font-weight:500">${descCell}</td>
       <td>${i.unit}</td>
-      <td style="width:78px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
-      <td style="width:88px;text-align:right"><input class="inp-cost" type="number" value="${i.unitCost}" min="0" step="0.01" oninput="updCost(${i.id},this.value)"></td>
-      <td style="width:88px;text-align:right" class="ext-cost" id="ext-${i.id}">${fmt(ext)}</td>
+      <td style="min-width:100px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
+      <td style="min-width:108px;text-align:right"><input class="inp-cost" type="number" value="${i.unitCost}" min="0" step="0.01" oninput="updCost(${i.id},this.value)"></td>
+      <td style="min-width:108px;text-align:right" class="ext-cost" id="ext-${i.id}">${fmt(ext)}</td>
       <td style="width:34px;text-align:center"><button class="btn btn-red" style="padding:.2rem .4rem;font-size:.72rem" onclick="delItem(${i.id})">✕</button></td>
     </tr>`;
   }).join('');
@@ -121,9 +121,9 @@ function renderAllItemsTable() {
     <th style="width:60px">Div</th>
     <th>Description</th>
     <th style="width:50px">Unit</th>
-    <th style="width:78px;text-align:right">Qty</th>
-    <th style="width:88px;text-align:right">Unit Cost</th>
-    <th style="width:88px;text-align:right">Extended</th>
+    <th style="min-width:100px;text-align:right">Qty</th>
+    <th style="min-width:108px;text-align:right">Unit Cost</th>
+    <th style="min-width:108px;text-align:right">Extended</th>
     <th style="width:34px"></th>
   </tr>`;
   const items = [...project.items].sort((a, b) => a.div.localeCompare(b.div));
@@ -143,9 +143,9 @@ function renderAllItemsTable() {
       <td style="width:60px;font-size:.72rem;color:var(--muted);cursor:pointer" title="${esc(CSI_ITEMS[i.div] ? CSI_ITEMS[i.div].name : '')} — click to open this division" onclick="setDiv('${i.div}')">${i.div}</td>
       <td style="min-width:170px;font-weight:500">${descCell}</td>
       <td>${i.unit}</td>
-      <td style="width:78px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
-      <td style="width:88px;text-align:right"><input class="inp-cost" type="number" value="${i.unitCost}" min="0" step="0.01" oninput="updCost(${i.id},this.value)"></td>
-      <td style="width:88px;text-align:right" class="ext-cost" id="ext-${i.id}">${fmt(ext)}</td>
+      <td style="min-width:100px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
+      <td style="min-width:108px;text-align:right"><input class="inp-cost" type="number" value="${i.unitCost}" min="0" step="0.01" oninput="updCost(${i.id},this.value)"></td>
+      <td style="min-width:108px;text-align:right" class="ext-cost" id="ext-${i.id}">${fmt(ext)}</td>
       <td style="width:34px;text-align:center"><button class="btn btn-red" style="padding:.2rem .4rem;font-size:.72rem" onclick="delItem(${i.id})">✕</button></td>
     </tr>`;
   }).join('');
@@ -1325,11 +1325,35 @@ function bpToggleCondVis(id) {
 
 function bpCondMeasurements(condId) { return bpMeasurements.filter(m => m.condId === condId); }
 
-function bpCondTotal(condId) {
-  return bpCondMeasurements(condId).reduce((s, m) => s + m.value, 0);
+// Conditions are shared across every page of a Blueprint file, but measurements are stored
+// per page — so a condition's real total is whatever's marked up on THIS page (live, possibly
+// not yet flushed to bpPageData) plus whatever's stored for every OTHER page.
+function bpCondAllPagesMeasurements(condId) {
+  let all = bpCondMeasurements(condId);
+  Object.keys(bpPageData).forEach(pn => {
+    if (+pn === bpPageNum) return; // current page's live bpMeasurements already covers this one
+    const pd = bpPageData[pn];
+    if (pd && pd.measurements) all = all.concat(pd.measurements.filter(m => m.condId === condId));
+  });
+  return all;
 }
 
-function bpCondCopyMeas(condId) { return bpCondMeasurements(condId).find(m => m.type === 'copy'); }
+function bpCondTotal(condId) {
+  return bpCondAllPagesMeasurements(condId).reduce((s, m) => s + m.value, 0);
+}
+
+function bpCondCopyMeas(condId) { return bpCondAllPagesMeasurements(condId).find(m => m.type === 'copy'); }
+
+// Removes any existing "copied value" measurement for a condition, on every page — so
+// re-copying from a new source replaces the old copy instead of stacking across pages.
+function bpRemoveCopyMeasEverywhere(condId) {
+  bpMeasurements = bpMeasurements.filter(m => !(m.condId === condId && m.type === 'copy'));
+  Object.keys(bpPageData).forEach(pn => {
+    if (+pn === bpPageNum) return;
+    const pd = bpPageData[pn];
+    if (pd && pd.measurements) pd.measurements = pd.measurements.filter(m => !(m.condId === condId && m.type === 'copy'));
+  });
+}
 
 function bpRenderQtyPanel() {
   const panel = gid('bp-qty-list');
@@ -1340,7 +1364,7 @@ function bpRenderQtyPanel() {
   }
   panel.innerHTML = bpConditions.map(c => {
     const total = bpCondTotal(c.id);
-    const count = bpCondMeasurements(c.id).length;
+    const count = bpCondAllPagesMeasurements(c.id).length;
     const copyMeas = bpCondCopyMeas(c.id);
     return `<div class="bp-qty-row">
       <div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem">
@@ -1405,7 +1429,7 @@ function bpApplyCopyVal(sourceId) {
   const source = bpGetCond(sourceId);
   if (!target || !source) { closeCopyVal(); return; }
   bpPushUndo();
-  bpMeasurements = bpMeasurements.filter(m => !(m.condId === targetId && m.type === 'copy'));
+  bpRemoveCopyMeasEverywhere(targetId);
   bpMeasurements.push({
     id: bpMeasNextId++, condId: targetId, type: 'copy', pts: [],
     value: bpCondTotal(sourceId), sourceCondId: sourceId, sourceName: source.name,
@@ -1417,7 +1441,7 @@ function bpApplyCopyVal(sourceId) {
 
 function bpRemoveCopyVal(condId) {
   bpPushUndo();
-  bpMeasurements = bpMeasurements.filter(m => !(m.condId === condId && m.type === 'copy'));
+  bpRemoveCopyMeasEverywhere(condId);
   bpRenderQtyPanel();
   saveProject();
 }
@@ -2231,27 +2255,9 @@ function bpClearAll() {
 }
 
 // ── BUDGET BUILDER ─────────────────────────────────────────────────
-const BLD_PHASES = [
-  { id: 'demo',       label: 'Demo / Site Prep' },
-  { id: 'excavation', label: 'Excavation & Earthwork' },
-  { id: 'foundation', label: 'Foundation & Concrete' },
-  { id: 'framing',    label: 'Framing' },
-  { id: 'roofing',    label: 'Roofing' },
-  { id: 'envelope',   label: 'Windows, Doors & Exterior' },
-  { id: 'plumbing_r', label: 'Rough Plumbing' },
-  { id: 'hvac_r',     label: 'Rough HVAC / Mechanical' },
-  { id: 'elec_r',     label: 'Rough Electrical' },
-  { id: 'insulation', label: 'Insulation' },
-  { id: 'drywall',    label: 'Drywall' },
-  { id: 'tile_paint', label: 'Tile & Paint' },
-  { id: 'millwork',   label: 'Millwork & Cabinets' },
-  { id: 'plumbing_f', label: 'Finish Plumbing & Fixtures' },
-  { id: 'hvac_f',     label: 'Finish HVAC & Controls' },
-  { id: 'elec_f',     label: 'Finish Electrical & Lighting' },
-  { id: 'flooring',   label: 'Flooring' },
-  { id: 'appliances', label: 'Appliances & Equipment' },
-  { id: 'exterior',   label: 'Exterior & Flatwork' },
-];
+// Construction Phases are driven live by whatever's been costed in the Estimator
+// (see bldPhaseDivisions) rather than a fixed list — see BLD_OVERHEAD/SOFT/OTHER below
+// for the sections that are still manually maintained.
 
 const BLD_OVERHEAD = [
   { id: 'taxes',       label: 'Taxes' },
@@ -2295,18 +2301,36 @@ function getBudgetSheet() {
   return project.budgetSheet;
 }
 
+// Construction Phases are no longer a fixed list — each CSI division with cost pushed
+// from the Estimator becomes its own phase, so the two tools stay in sync automatically.
+function bldPhaseDivisions() {
+  return Object.keys(CSI_ITEMS).filter(d => divTotal(d) > 0).sort();
+}
+
 function bldGetRow(section, id) {
   const bs = getBudgetSheet();
-  if (!bs[section][id]) bs[section][id] = { mat: '', labor: '', combined: '', startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '' };
+  if (!bs[section][id]) {
+    bs[section][id] = section === 'phases'
+      ? { startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '' }
+      : { mat: '', labor: '', combined: '', startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '' };
+  }
   return bs[section][id];
 }
 
 function bldCalcTotals() {
   const bs = getBudgetSheet();
-  const sections = ['phases', 'overhead', 'soft', 'other'];
   let grand = 0, byOthersTotal = 0;
   const sectionTotals = {};
-  sections.forEach(sec => {
+
+  let phasesTotal = 0;
+  bldPhaseDivisions().forEach(d => {
+    const row = bldGetRow('phases', d);
+    const cost = divTotal(d);
+    if (row.byOthers) byOthersTotal += cost; else { phasesTotal += cost; grand += cost; }
+  });
+  sectionTotals.phases = phasesTotal;
+
+  ['overhead', 'soft', 'other'].forEach(sec => {
     let t = 0;
     Object.values(bs[sec] || {}).forEach(row => {
       const mat = parseFloat(row.mat) || 0;
@@ -2316,11 +2340,12 @@ function bldCalcTotals() {
     });
     sectionTotals[sec] = t;
   });
+
   let projectStart = null, projectEnd = null;
-  BLD_PHASES.forEach(ph => {
-    const row = bldGetRow('phases', ph.id);
-    if (row.startDate) { const d = new Date(row.startDate + 'T12:00:00'); if (!projectStart || d < projectStart) projectStart = d; }
-    if (row.endDate)   { const d = new Date(row.endDate   + 'T12:00:00'); if (!projectEnd   || d > projectEnd)   projectEnd   = d; }
+  bldPhaseDivisions().forEach(d => {
+    const row = bldGetRow('phases', d);
+    if (row.startDate) { const dt = new Date(row.startDate + 'T12:00:00'); if (!projectStart || dt < projectStart) projectStart = dt; }
+    if (row.endDate)   { const dt = new Date(row.endDate   + 'T12:00:00'); if (!projectEnd   || dt > projectEnd)   projectEnd   = dt; }
   });
   return { grand, byOthersTotal, sectionTotals, projectStart, projectEnd };
 }
@@ -2404,7 +2429,45 @@ function bldRenderTable() {
     });
   };
 
-  renderSection('Construction Phases', 'phases', BLD_PHASES, 1, true);
+  const phaseDivs = bldPhaseDivisions();
+  html += `<tr class="bld-section-hdr"><td colspan="9">Construction Phases</td></tr>`;
+  if (!phaseDivs.length) {
+    html += `<tr><td colspan="9" class="bld-empty-msg">No costed items yet — push conditions or add line items in the Estimator, and they'll show up here as phases automatically.</td></tr>`;
+  } else {
+    phaseDivs.forEach((d, i) => {
+      const row = bldGetRow('phases', d);
+      const stCls = BLD_STATUS_CLASS[row.status] || 'bs-ns';
+      const byOCls = row.byOthers ? ' by-others' : '';
+      html += `<tr class="bld-row${byOCls}" data-section="phases" data-id="${d}">
+        <td class="bld-num">${i + 1}</td>
+        <td class="bld-label">${d} — ${esc(CSI_ITEMS[d].name)}</td>
+        <td class="bld-cell bld-cost-readonly" colspan="3" title="From the Estimator — division ${d} total">${fmt(divTotal(d))}</td>
+        <td class="bld-status-cell">
+          <select class="bld-status-sel ${stCls}" onchange="bldSetStatus('phases','${d}',this.value)">
+            ${BLD_STATUSES.map(s => `<option value="${s}"${row.status===s?' selected':''}>${s}</option>`).join('')}
+          </select>
+        </td>
+        <td class="bld-dur-cell">
+          <input type="date" class="bld-date-inp" value="${row.startDate||''}" title="Start date"
+            onchange="bldUpdateItem('phases','${d}','startDate',this.value)">
+          <input type="date" class="bld-date-inp" value="${row.endDate||''}" title="End date"
+            onchange="bldUpdateItem('phases','${d}','endDate',this.value)">
+        </td>
+        <td class="bld-bo-cell">
+          <label class="bld-bo-tgl" title="By Others — tracked but excluded from your total">
+            <input type="checkbox" onchange="bldToggleByOthers('phases','${d}',this.checked)"${row.byOthers?' checked':''}>
+            <span class="bld-bo-chk"></span>
+          </label>
+        </td>
+        <td class="bld-note-cell">
+          <input type="text" class="bld-note-inp" placeholder="Note…"
+            value="${(row.note||'').replace(/"/g,'&quot;')}"
+            onchange="bldUpdateItem('phases','${d}','note',this.value)">
+        </td>
+      </tr>`;
+    });
+  }
+
   renderSection('Overhead', 'overhead', BLD_OVERHEAD, null, false);
   renderSection('Soft Costs', 'soft', BLD_SOFT, null, false);
   renderSection('Other', 'other', BLD_OTHER, null, false);
@@ -2413,16 +2476,20 @@ function bldRenderTable() {
   bldRenderSummary();
 }
 
-function bldSchedBars() {
-  const COLOR = { 'Not Started': '#cbd5e1', 'Bid Needed': '#7c3aed', 'In Progress': '#f97316', 'Complete': '#16a34a' };
-  const phases = BLD_PHASES.map(ph => {
-    const row = bldGetRow('phases', ph.id);
+function bldGanttPhases() {
+  return bldPhaseDivisions().map(d => {
+    const row = bldGetRow('phases', d);
     if (!row.startDate || !row.endDate) return null;
     const s = new Date(row.startDate + 'T12:00:00');
     const e = new Date(row.endDate   + 'T12:00:00');
     if (e <= s) return null;
-    return { label: ph.label, status: row.status, s, e };
+    return { div: d, label: `${d} — ${CSI_ITEMS[d].name}`, status: row.status, s, e };
   }).filter(Boolean);
+}
+
+function bldSchedBars() {
+  const COLOR = { 'Not Started': '#cbd5e1', 'Bid Needed': '#7c3aed', 'In Progress': '#f97316', 'Complete': '#16a34a' };
+  const phases = bldGanttPhases();
   if (!phases.length) return '';
   const min = Math.min(...phases.map(p => p.s));
   const max = Math.max(...phases.map(p => p.e));
@@ -2431,7 +2498,7 @@ function bldSchedBars() {
   const bars = phases.map(p => {
     const left  = (p.s - min) / span * 100;
     const width = Math.max((p.e - p.s) / span * 100, 1);
-    return `<div class="bld-seg" style="left:${left}%;width:${width}%;background:${COLOR[p.status]||'#cbd5e1'}" title="${p.label}"></div>`;
+    return `<div class="bld-seg" style="left:${left}%;width:${width}%;background:${COLOR[p.status]||'#cbd5e1'}" title="${esc(p.label)}"></div>`;
   }).join('');
   return `<div class="bld-seg-track">${bars}</div>`;
 }
@@ -2441,14 +2508,7 @@ function bldRenderGantt() {
   if (!el) return;
   const COLOR = { 'Not Started': '#cbd5e1', 'Bid Needed': '#7c3aed', 'In Progress': '#f97316', 'Complete': '#16a34a' };
 
-  const phases = BLD_PHASES.map(ph => {
-    const row = bldGetRow('phases', ph.id);
-    if (!row.startDate || !row.endDate) return null;
-    const s = new Date(row.startDate + 'T12:00:00');
-    const e = new Date(row.endDate   + 'T12:00:00');
-    if (e <= s) return null;
-    return { label: ph.label, status: row.status, s, e };
-  }).filter(Boolean);
+  const phases = bldGanttPhases();
 
   if (!phases.length) { el.classList.remove('has-data', 'open'); return; }
   const wasOpen = el.classList.contains('open');
@@ -2479,16 +2539,23 @@ function bldRenderGantt() {
       </div>
     </div>`;
 
+  bldGanttMinT = minT;
+  bldGanttSpan = span;
+
   const rowsHtml = phases.map(p => {
     const left  = ((p.s.getTime() - minT) / span * 100).toFixed(2);
     const width = Math.max((p.e.getTime() - p.s.getTime()) / span * 100, 1).toFixed(2);
     const color = COLOR[p.status] || '#cbd5e1';
     return `
       <div class="bld-gantt-row">
-        <div class="bld-gantt-lbl" title="${p.label}">${p.label}</div>
+        <div class="bld-gantt-lbl" title="${esc(p.label)}">${esc(p.label)}</div>
         <div class="bld-gantt-trk">
           <div class="bld-gantt-bar" style="left:${left}%;width:${width}%;background:${color}"
-               title="${p.label} · ${fmtShort(p.s)} – ${fmtShort(p.e)}"></div>
+               title="${esc(p.label)} · ${fmtShort(p.s)} – ${fmtShort(p.e)} (drag to reschedule)"
+               onmousedown="bldGanttBarMouseDown(event,'${p.div}','move')">
+            <div class="bld-gantt-handle bld-gantt-handle-l" onmousedown="bldGanttBarMouseDown(event,'${p.div}','resize-left')"></div>
+            <div class="bld-gantt-handle bld-gantt-handle-r" onmousedown="bldGanttBarMouseDown(event,'${p.div}','resize-right')"></div>
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -2515,6 +2582,78 @@ function bldRenderGantt() {
 function bldToggleGantt() {
   const el = gid('bld-gantt');
   if (el) el.classList.toggle('open');
+}
+
+// ── GANTT DRAG-TO-RESCHEDULE ─────────────────────────────────────────
+const BLD_DAY_MS = 86400000;
+let bldGanttMinT = 0, bldGanttSpan = 0;
+let bldDrag = null;
+
+function bldFmtISODate(d) {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function bldGanttBarMouseDown(e, div, mode) {
+  e.preventDefault();
+  e.stopPropagation();
+  const bar = e.currentTarget.classList.contains('bld-gantt-bar') ? e.currentTarget : e.currentTarget.closest('.bld-gantt-bar');
+  const trk = bar.closest('.bld-gantt-trk');
+  const row = bldGetRow('phases', div);
+  bldDrag = {
+    div, mode, bar,
+    startClientX: e.clientX,
+    origStart: new Date(row.startDate + 'T12:00:00').getTime(),
+    origEnd: new Date(row.endDate + 'T12:00:00').getTime(),
+    trackWidth: trk.getBoundingClientRect().width,
+    previewStart: null, previewEnd: null,
+  };
+  bar.classList.add('dragging');
+  document.body.style.userSelect = 'none';
+  document.addEventListener('mousemove', bldGanttMouseMove);
+  document.addEventListener('mouseup', bldGanttMouseUp);
+}
+
+function bldGanttMouseMove(e) {
+  if (!bldDrag || !bldGanttSpan) return;
+  const deltaPx = e.clientX - bldDrag.startClientX;
+  const deltaMsRaw = deltaPx / bldDrag.trackWidth * bldGanttSpan;
+  const deltaMs = Math.round(deltaMsRaw / BLD_DAY_MS) * BLD_DAY_MS;
+
+  let newStart = bldDrag.origStart, newEnd = bldDrag.origEnd;
+  if (bldDrag.mode === 'move') {
+    newStart = bldDrag.origStart + deltaMs;
+    newEnd   = bldDrag.origEnd + deltaMs;
+  } else if (bldDrag.mode === 'resize-left') {
+    newStart = Math.min(bldDrag.origStart + deltaMs, bldDrag.origEnd - BLD_DAY_MS);
+  } else if (bldDrag.mode === 'resize-right') {
+    newEnd = Math.max(bldDrag.origEnd + deltaMs, bldDrag.origStart + BLD_DAY_MS);
+  }
+  bldDrag.previewStart = newStart;
+  bldDrag.previewEnd = newEnd;
+
+  const left  = (newStart - bldGanttMinT) / bldGanttSpan * 100;
+  const width = Math.max((newEnd - newStart) / bldGanttSpan * 100, 1);
+  bldDrag.bar.style.left = left + '%';
+  bldDrag.bar.style.width = width + '%';
+}
+
+function bldGanttMouseUp() {
+  if (!bldDrag) return;
+  const { div, previewStart, previewEnd, bar } = bldDrag;
+  document.body.style.userSelect = '';
+  if (bar) bar.classList.remove('dragging');
+  document.removeEventListener('mousemove', bldGanttMouseMove);
+  document.removeEventListener('mouseup', bldGanttMouseUp);
+  bldDrag = null;
+
+  if (previewStart != null && previewEnd != null) {
+    const row = bldGetRow('phases', div);
+    row.startDate = bldFmtISODate(new Date(previewStart));
+    row.endDate = bldFmtISODate(new Date(previewEnd));
+    saveProject();
+  }
+  bldRenderSummary();
 }
 
 function bldRenderSummary() {
