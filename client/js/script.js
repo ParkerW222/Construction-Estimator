@@ -54,7 +54,13 @@ function grandTotal() {
 function renderAll() { renderDivNav(); renderTable(); renderSum(); }
 
 function renderDivNav() {
-  gid('div-nav').innerHTML = Object.entries(CSI_ITEMS).map(([d, info]) => {
+  const allTotal = grandTotal();
+  const seeAllRow = `<div class="dni${activeDiv === 'ALL' ? ' active' : ''}" onclick="setDiv('ALL')">
+    <span class="dni-num">&#9776;</span>
+    <span class="dni-name">See All</span>
+    ${allTotal > 0 ? `<span class="dni-sub">${fmt(allTotal)}</span>` : ''}
+  </div><div class="dni-sep"></div>`;
+  gid('div-nav').innerHTML = seeAllRow + Object.entries(CSI_ITEMS).map(([d, info]) => {
     const sub = divTotal(d);
     return `<div class="dni${d === activeDiv ? ' active' : ''}" onclick="setDiv('${d}')">
       <span class="dni-num">${d}</span>
@@ -65,6 +71,26 @@ function renderDivNav() {
 }
 
 function renderTable() {
+  const addCustomBtn = gid('add-custom-btn');
+  if (addCustomBtn) {
+    addCustomBtn.disabled = activeDiv === 'ALL';
+    addCustomBtn.title = activeDiv === 'ALL' ? 'Select a specific division to add a custom item' : '';
+  }
+
+  if (activeDiv === 'ALL') {
+    gid('center-title').textContent = 'All Divisions — Every Item';
+    renderAllItemsTable();
+    return;
+  }
+
+  gid('items-thead').innerHTML = `<tr>
+    <th>Description</th>
+    <th style="width:50px">Unit</th>
+    <th style="width:78px;text-align:right">Qty</th>
+    <th style="width:88px;text-align:right">Unit Cost</th>
+    <th style="width:88px;text-align:right">Extended</th>
+    <th style="width:34px"></th>
+  </tr>`;
   gid('center-title').textContent = `Division ${activeDiv} — ${CSI_ITEMS[activeDiv].name}`;
   const items = divItems(activeDiv);
   const m = rm();
@@ -80,6 +106,41 @@ function renderTable() {
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
     return `<tr>
+      <td style="min-width:170px;font-weight:500">${descCell}</td>
+      <td>${i.unit}</td>
+      <td style="width:78px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
+      <td style="width:88px;text-align:right"><input class="inp-cost" type="number" value="${i.unitCost}" min="0" step="0.01" oninput="updCost(${i.id},this.value)"></td>
+      <td style="width:88px;text-align:right" class="ext-cost" id="ext-${i.id}">${fmt(ext)}</td>
+      <td style="width:34px;text-align:center"><button class="btn btn-red" style="padding:.2rem .4rem;font-size:.72rem" onclick="delItem(${i.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAllItemsTable() {
+  gid('items-thead').innerHTML = `<tr>
+    <th style="width:60px">Div</th>
+    <th>Description</th>
+    <th style="width:50px">Unit</th>
+    <th style="width:78px;text-align:right">Qty</th>
+    <th style="width:88px;text-align:right">Unit Cost</th>
+    <th style="width:88px;text-align:right">Extended</th>
+    <th style="width:34px"></th>
+  </tr>`;
+  const items = [...project.items].sort((a, b) => a.div.localeCompare(b.div));
+  const m = rm();
+
+  if (!items.length) {
+    gid('items-tbody').innerHTML = `<tr><td colspan="7" class="empty-msg">No items yet — select a division to add from the library or create a custom item.</td></tr>`;
+    return;
+  }
+
+  gid('items-tbody').innerHTML = items.map(i => {
+    const ext = i.qty * (i.unitCost * m);
+    const descCell = i.custom
+      ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
+      : i.desc;
+    return `<tr>
+      <td style="width:60px;font-size:.72rem;color:var(--muted);cursor:pointer" title="${esc(CSI_ITEMS[i.div] ? CSI_ITEMS[i.div].name : '')} — click to open this division" onclick="setDiv('${i.div}')">${i.div}</td>
       <td style="min-width:170px;font-weight:500">${descCell}</td>
       <td>${i.unit}</td>
       <td style="width:78px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
@@ -320,6 +381,7 @@ function addLibItem(d, idx) {
 }
 
 function addCustom() {
+  if (activeDiv === 'ALL') return;
   project.items.push({ id: project.nextId++, div: activeDiv, desc: 'Custom Item', unit: 'EA', qty: 1, unitCost: 0, custom: true });
   renderAll();
   saveProject();
@@ -1908,8 +1970,42 @@ function bpDblClick(e) {
   if (cond.type === 'area'   && bpCurrentPts.length >= 3) bpFinishShape();
 }
 
+let bpHoverMeasId = null;
+
+function bpShowHoverTip(cond, clientX, clientY) {
+  const tip = gid('bp-hover-tip');
+  if (!tip) return;
+  tip.innerHTML = `<span class="bp-hover-tip-dot" style="background:${cond.color}"></span>${esc(cond.name)}`;
+  tip.style.left = (clientX + 14) + 'px';
+  tip.style.top = (clientY + 16) + 'px';
+  tip.style.display = 'flex';
+}
+
+function bpHideHoverTip() {
+  bpHoverMeasId = null;
+  const tip = gid('bp-hover-tip');
+  if (tip) tip.style.display = 'none';
+}
+
 function bpMouseMove(e) {
-  if (bpSpaceDown) return;
+  if (bpSpaceDown) { bpHideHoverTip(); return; }
+
+  // Hover tooltip: show which condition a marked-up measurement belongs to,
+  // as long as we're not mid-draw or mid-scale-pick (those have their own overlay).
+  if (!bpCurrentPts.length && !(bpScaleMode && bpScalePts.length)) {
+    const hoverPt = bpCanvasXY(e);
+    const hit = bpFindMeasurementAt(hoverPt);
+    const cond = hit ? bpGetCond(hit.condId) : null;
+    if (cond) {
+      bpHoverMeasId = hit.id;
+      bpShowHoverTip(cond, e.clientX, e.clientY);
+    } else if (bpHoverMeasId !== null) {
+      bpHideHoverTip();
+    }
+  } else if (bpHoverMeasId !== null) {
+    bpHideHoverTip();
+  }
+
   if (!bpCurrentPts.length && !bpScaleMode) return;
   bpRedraw();
   const pt = bpCanvasXY(e);

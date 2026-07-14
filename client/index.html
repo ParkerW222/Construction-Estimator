@@ -224,11 +224,11 @@
             <div class="lib-list" id="lib-list"></div>
           </div>
         </div>
-        <button class="btn btn-ghost" onclick="addCustom()">+ Custom</button>
+        <button class="btn btn-ghost" id="add-custom-btn" onclick="addCustom()">+ Custom</button>
       </div>
       <div class="items-wrap">
         <table class="items">
-          <thead><tr>
+          <thead id="items-thead"><tr>
             <th>Description</th>
             <th style="width:50px">Unit</th>
             <th style="width:78px;text-align:right">Qty</th>
@@ -331,10 +331,12 @@
           onpointerup="bpPointerUp(event)"
           onwheel="bpWheel(event)"
           onmousemove="bpMouseMove(event)"
+          onmouseleave="bpHideHoverTip()"
           ondblclick="bpDblClick(event)"
           onclick="bpClick(event)">
         </canvas>
       </div>
+      <div class="bp-hover-tip" id="bp-hover-tip" style="display:none"></div>
     </div>
     <!-- RIGHT: Quantities -->
     <div class="bp-qty-panel">
