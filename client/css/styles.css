@@ -72,14 +72,6 @@ nav{background:linear-gradient(to right,var(--navy-d) 0%,var(--navy) 100%);posit
 .btn-orange:hover{background:var(--orange-h)}
 .btn-ghost{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-ghost:hover{background:var(--bg);border-color:var(--navy-l)}
 .btn-red{background:#dc2626;color:#fff;border:none}.btn-red:hover{background:#b91c1c}
-.lib-wrap{position:relative}
-.lib-dd{position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--sh-md);min-width:320px;max-height:340px;display:none;flex-direction:column}
-.lib-dd.open{display:flex}
-.lib-search{border:none;border-bottom:1px solid var(--border);padding:.45rem .7rem;font-size:.82rem;outline:none;border-radius:8px 8px 0 0}
-.lib-list{overflow-y:auto;flex:1}
-.lib-item{display:flex;align-items:center;padding:.38rem .7rem;cursor:pointer;font-size:.78rem;gap:.5rem}.lib-item:hover{background:var(--bg)}
-.li-desc{flex:1}.li-unit{color:var(--muted);font-size:.7rem;width:30px;text-align:center}.li-cost{color:var(--navy);font-weight:600;font-size:.74rem;width:50px;text-align:right}
-.lib-sec{padding:.28rem .7rem .12rem;font-size:.68rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:#f8fafc}
 .items-wrap{flex:1;overflow-y:auto}
 table.items{width:100%;border-collapse:collapse}
 table.items th{position:sticky;top:0;background:var(--surface);font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:.45rem .55rem;border-bottom:2px solid var(--border);text-align:left;z-index:10}
@@ -365,7 +357,6 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .modal-close{background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--muted);padding:.2rem .4rem;border-radius:var(--radius-sm);line-height:1}
 .modal-close:hover{color:var(--text);background:var(--bg)}
 .modal-meas{background:var(--bg);border-radius:6px;padding:.5rem .8rem;font-size:.82rem;color:var(--navy);font-weight:600}
-.modal-lib{display:flex;flex-direction:column;gap:.2rem;max-height:150px;overflow-y:auto;margin-top:.35rem;border:1.5px solid var(--border);border-radius:6px;padding:.3rem}
 .modal-lib-item{padding:.38rem .6rem;border-radius:5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:.5rem}
 .modal-lib-item:hover{background:var(--bg)}
 .modal-lib-item.selected{background:rgba(249,115,22,.12);outline:1.5px solid var(--orange)}

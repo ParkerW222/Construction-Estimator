@@ -1,5 +1,5 @@
 // ── STATE ──────────────────────────────────────────────────────────
-let project = { id: 'proj_' + Date.now(), name: 'New Project', region: 'midwest', items: [], nextId: 1 };
+let project = { id: 'proj_' + Date.now(), name: 'New Project', items: [], nextId: 1 };
 let activeDiv = '03';
 let estMu = { oh: 10, profit: 8, cont: 5, matTax: 0, permit: 1.0 };
 let currentUser = null;
@@ -16,9 +16,6 @@ function esc(s) {
 function fmt(n) {
   if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
   return '$' + Math.round(n).toLocaleString();
-}
-function fmtC(n) {
-  return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 function fmtN(n) { return Math.round(n).toLocaleString(); }
 
@@ -41,11 +38,9 @@ function showPage(p) {
 }
 
 // ── ESTIMATOR ──────────────────────────────────────────────────────
-function rm() { return REGION_MULT[project.region].mult; }
 function divItems(d) { return project.items.filter(i => i.div === d); }
 function divTotal(d) {
-  const m = rm();
-  return divItems(d).reduce((sum, i) => sum + i.qty * (i.unitCost * m), 0);
+  return divItems(d).reduce((sum, i) => sum + i.qty * i.unitCost, 0);
 }
 function grandTotal() {
   return Object.keys(CSI_ITEMS).reduce((sum, d) => sum + divTotal(d), 0);
@@ -93,7 +88,6 @@ function renderTable() {
   </tr>`;
   gid('center-title').textContent = `Division ${activeDiv} — ${CSI_ITEMS[activeDiv].name}`;
   const items = divItems(activeDiv);
-  const m = rm();
 
   if (!items.length) {
     gid('items-tbody').innerHTML = `<tr><td colspan="6" class="empty-msg">No items yet — add from the library or create a custom item.</td></tr>`;
@@ -101,7 +95,7 @@ function renderTable() {
   }
 
   gid('items-tbody').innerHTML = items.map(i => {
-    const ext = i.qty * (i.unitCost * m);
+    const ext = i.qty * i.unitCost;
     const descCell = i.custom
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
@@ -127,7 +121,6 @@ function renderAllItemsTable() {
     <th style="width:34px"></th>
   </tr>`;
   const items = [...project.items].sort((a, b) => a.div.localeCompare(b.div));
-  const m = rm();
 
   if (!items.length) {
     gid('items-tbody').innerHTML = `<tr><td colspan="7" class="empty-msg">No items yet — select a division to add from the library or create a custom item.</td></tr>`;
@@ -135,7 +128,7 @@ function renderAllItemsTable() {
   }
 
   gid('items-tbody').innerHTML = items.map(i => {
-    const ext = i.qty * (i.unitCost * m);
+    const ext = i.qty * i.unitCost;
     const descCell = i.custom
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
@@ -230,7 +223,7 @@ function updQty(id, val) {
   if (!item) return;
   item.qty = +val || 0;
   const el = gid('ext-' + id);
-  if (el) el.textContent = fmt(item.qty * (item.unitCost * rm()));
+  if (el) el.textContent = fmt(item.qty * item.unitCost);
   refreshTotals();
 }
 
@@ -239,7 +232,7 @@ function updCost(id, val) {
   if (!item) return;
   item.unitCost = +val || 0;
   const el = gid('ext-' + id);
-  if (el) el.textContent = fmt(item.qty * (item.unitCost * rm()));
+  if (el) el.textContent = fmt(item.qty * item.unitCost);
   refreshTotals();
 }
 
@@ -252,7 +245,6 @@ function updateField(id, field, val) {
 function refreshTotals() { renderDivNav(); renderSum(); saveProject(); }
 
 function exportEstimatePDF() {
-  const m       = rm();
   const direct  = grandTotal();
   const ohAmt   = direct * estMu.oh / 100;
   const prAmt   = (direct + ohAmt) * estMu.profit / 100;
@@ -261,7 +253,6 @@ function exportEstimatePDF() {
   const permitAmt = (direct + ohAmt + prAmt + coAmt + taxAmt) * estMu.permit / 100;
   const bid     = direct + ohAmt + prAmt + coAmt + taxAmt + permitAmt;
   const retAmt  = bid * estMu.ret / 100;
-  const regionLabel = (REGION_MULT[project.region] || {}).label || project.region;
   const today   = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 
   let divSections = '';
@@ -269,7 +260,7 @@ function exportEstimatePDF() {
     const items = divItems(d);
     if (!items.length) return;
     const rows = items.map(i => {
-      const ext = i.qty * (i.unitCost * m);
+      const ext = i.qty * i.unitCost;
       return `<tr>
         <td>${i.desc}</td><td class="c">${i.unit}</td>
         <td class="r">${fmtN(i.qty)}</td><td class="r">$${fmtN(i.unitCost)}</td>
@@ -316,7 +307,6 @@ function exportEstimatePDF() {
     ['Bond / Insurance', estMu.bond + '%'],
     ...(estMu.matTax > 0 ? [['Material Sales Tax', estMu.matTax + '%']] : []),
     ...(estMu.permit  > 0 ? [['Permit Fees', estMu.permit + '%']]        : []),
-    ['Regional Multiplier', m.toFixed(2) + '×'],
   ].map(([l,v]) => `<tr><td>${l}</td><td class="r">${v}</td></tr>`).join('');
 
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
@@ -345,7 +335,7 @@ tfoot td{background:#f0f2f6;border-top:1.5px solid #ccc;padding:5px 8px;font-siz
 </style></head><body>
 <div class="header">
   <div><div class="brand">Build<span>Calc</span></div><div style="font-size:10px;color:#999;margin-top:3px">Construction Cost Estimate</div></div>
-  <div class="pm"><div class="pn">${project.name||'New Project'}</div><div class="ps">Region: ${regionLabel} &nbsp;|&nbsp; ${today}</div></div>
+  <div class="pm"><div class="pn">${project.name||'New Project'}</div><div class="ps">${today}</div></div>
 </div>
 ${divSections}${coSection}
 <div class="sw">
@@ -372,14 +362,6 @@ ${divSections}${coSection}
 function delItem(id) { project.items = project.items.filter(i => i.id !== id); renderAll(); saveProject(); }
 function setDiv(d) { activeDiv = d; renderAll(); }
 
-function addLibItem(d, idx) {
-  const info = CSI_ITEMS[d].items[idx];
-  project.items.push({ id: project.nextId++, div: d, desc: info.desc, unit: info.unit, qty: 1, unitCost: info.cost, custom: false });
-  if (activeDiv !== d) setDiv(d); else renderAll();
-  saveProject();
-  closeLib();
-}
-
 function addCustom() {
   if (activeDiv === 'ALL') return;
   project.items.push({ id: project.nextId++, div: activeDiv, desc: 'Custom Item', unit: 'EA', qty: 1, unitCost: 0, custom: true });
@@ -387,42 +369,7 @@ function addCustom() {
   saveProject();
 }
 
-function toggleLib() {
-  const dd = gid('lib-dd');
-  if (dd.classList.contains('open')) {
-    closeLib();
-  } else {
-    dd.classList.add('open');
-    buildLibList('');
-    gid('lib-search').value = '';
-    gid('lib-search').focus();
-  }
-}
-function closeLib() { gid('lib-dd').classList.remove('open'); }
-function filterLib(q) { buildLibList(q); }
-
-function buildLibList(q) {
-  const ql = q.toLowerCase();
-  let html = '';
-  Object.entries(CSI_ITEMS).forEach(([d, info]) => {
-    const filtered = info.items.filter(i => !q || i.desc.toLowerCase().includes(ql));
-    if (filtered.length) {
-      html += `<div class="lib-sec">${d} — ${info.name}</div>`;
-      filtered.forEach(item => {
-        const idx = info.items.indexOf(item);
-        html += `<div class="lib-item" onclick="addLibItem('${d}',${idx})">
-          <span class="li-desc">${item.desc}</span>
-          <span class="li-unit">${item.unit}</span>
-          <span class="li-cost">${fmtC(item.cost)}</span>
-        </div>`;
-      });
-    }
-  });
-  gid('lib-list').innerHTML = html || '<div style="padding:.7rem;color:var(--muted);font-size:.8rem">No items found.</div>';
-}
-
 document.addEventListener('click', e => {
-  if (!e.target.closest('.lib-wrap')) closeLib();
   if (!e.target.closest('#proj-dd-wrap')) closeProjectsDropdown();
 });
 document.addEventListener('keydown', e => {
@@ -465,9 +412,8 @@ document.addEventListener('keyup', e => {
 
 function newProject() {
   if (!confirm('Start a new project? Current items will be cleared.')) return;
-  project = { id: 'proj_' + Date.now(), name: 'New Project', region: 'midwest', items: [], nextId: 1 };
+  project = { id: 'proj_' + Date.now(), name: 'New Project', items: [], nextId: 1 };
   gid('proj-name').value = 'New Project';
-  gid('proj-region').value = 'midwest';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = 'New Project';
   const bbn = gid('bld-proj-name');
@@ -505,7 +451,6 @@ function loadProject() {
     if (s) {
       project = JSON.parse(s);
       gid('proj-name').value = project.name || 'New Project';
-      gid('proj-region').value = project.region || 'midwest';
       const bpn = gid('bp-proj-name');
       if (bpn) bpn.value = project.name || 'New Project';
       const bbn = gid('bld-proj-name');
@@ -608,7 +553,6 @@ function bpApplyLoadedProject(entry) {
   project = entry.data;
   project.id = entry.id;
   gid('proj-name').value = project.name || 'New Project';
-  gid('proj-region').value = project.region || 'midwest';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = project.name || 'New Project';
   const bbn = gid('bld-proj-name');
@@ -633,9 +577,8 @@ function startNewProjectFromDD() {
   autoSaveCurrentToList();
   if (!confirm('Start a new project? Current items will be cleared.')) return;
   bpResetAll();
-  project = { id: 'proj_' + Date.now(), name: 'New Project', region: 'midwest', items: [], nextId: 1 };
+  project = { id: 'proj_' + Date.now(), name: 'New Project', items: [], nextId: 1 };
   gid('proj-name').value = 'New Project';
-  gid('proj-region').value = 'midwest';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = 'New Project';
   const bbn = gid('bld-proj-name');
@@ -676,7 +619,6 @@ function importProject(input) {
       }
       project = data;
       gid('proj-name').value = project.name || 'New Project';
-      gid('proj-region').value = project.region || 'midwest';
       const bpn = gid('bp-proj-name');
       if (bpn) bpn.value = project.name || 'New Project';
       const bbn = gid('bld-proj-name');
@@ -1484,27 +1426,9 @@ function bpSendCondToEst(condId) {
   gid('modal-div').innerHTML = Object.entries(CSI_ITEMS)
     .map(([d, info]) => `<option value="${d}"${d === guessedDiv ? ' selected' : ''}>${d} — ${info.name}</option>`)
     .join('');
-  bpModalPickDiv(guessedDiv);
   gid('modal-desc').value = existing ? existing.desc : cond.name;
   gid('modal-cost').value = existing ? existing.unitCost : '';
   gid('send-modal').style.display = 'flex';
-}
-
-function bpModalPickDiv(d) {
-  gid('modal-lib').innerHTML = CSI_ITEMS[d].items.map((li, idx) => `
-    <div class="modal-lib-item" id="mli-${idx}" onclick="bpModalPickLib('${d}',${idx})">
-      <span class="modal-lib-name">${li.desc}</span>
-      <span class="modal-lib-cost">${li.unit} &mdash; ${fmtC(li.cost)}</span>
-    </div>`).join('');
-  gid('modal-cost').value = '';
-  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach(el => el.classList.remove('selected'));
-}
-
-function bpModalPickLib(d, idx) {
-  const li = CSI_ITEMS[d].items[idx];
-  gid('modal-desc').value = li.desc;
-  gid('modal-cost').value = li.cost;
-  gid('modal-lib').querySelectorAll('.modal-lib-item').forEach((el, i) => el.classList.toggle('selected', i === idx));
 }
 
 function bpModalConfirm() {

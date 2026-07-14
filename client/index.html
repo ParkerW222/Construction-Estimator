@@ -194,17 +194,6 @@
   <div class="est-topbar">
     <input type="text" id="proj-name" value="New Project" onchange="project.name=this.value;const bpn=gid('bp-proj-name');if(bpn)bpn.value=this.value;const bldn=gid('bld-proj-name');if(bldn)bldn.value=this.value;saveProject()">
     <div class="tb-sep"></div>
-    <label for="proj-region" style="font-size:.74rem;color:var(--muted);white-space:nowrap;font-weight:600">Region:</label>
-    <select id="proj-region" onchange="project.region=this.value;refreshTotals();saveProject()">
-      <option value="new-england">New England</option><option value="new-york">New York Metro</option>
-      <option value="mid-atlantic">Mid-Atlantic</option><option value="southeast">Southeast</option>
-      <option value="florida">Florida</option><option value="appalachian">TN / KY</option>
-      <option value="texas">Texas</option><option value="midwest" selected>Midwest</option>
-      <option value="plains">Plains</option><option value="mountain">Mountain West</option>
-      <option value="pacific-nw">Pacific Northwest</option><option value="california">California</option>
-      <option value="hawaii">Hawaii / Alaska</option>
-    </select>
-    <div class="tb-sep"></div>
     <div class="tb-right">
       <span class="tb-label">Bid Price</span>
       <span class="tb-total" id="top-total">$0</span>
@@ -217,13 +206,6 @@
     <div class="est-center">
       <div class="est-toolbar">
         <span class="div-title" id="center-title">Division 03 — Concrete</span>
-        <div class="lib-wrap">
-          <button class="btn btn-orange" onclick="toggleLib()">+ Add from Library</button>
-          <div class="lib-dd" id="lib-dd">
-            <input class="lib-search" type="text" placeholder="Search items…" oninput="filterLib(this.value)" id="lib-search">
-            <div class="lib-list" id="lib-list"></div>
-          </div>
-        </div>
         <button class="btn btn-ghost" id="add-custom-btn" onclick="addCustom()">+ Custom</button>
       </div>
       <div class="items-wrap">
@@ -401,11 +383,11 @@
         <span class="help-num">3</span>
         <div><div class="help-tool-name">Project Estimator</div><div class="help-tool-sub">Detailed line-item estimating by CSI MasterFormat division</div></div>
       </div>
-      <p class="help-desc">Build a detailed bottom-up estimate organized by construction division. Unit costs are national averages automatically adjusted for your region. Markup is applied on top to produce a final bid price.</p>
+      <p class="help-desc">Build a detailed bottom-up estimate organized by construction division, using your own real numbers throughout. Markup is applied on top to produce a final bid price.</p>
       <ol class="help-steps">
-        <li>Set your <strong>project name</strong> and <strong>region</strong> in the top bar — this adjusts all unit costs.</li>
+        <li>Set your <strong>project name</strong> in the top bar.</li>
         <li>Click a <strong>CSI division</strong> in the left panel (e.g. 03 Concrete) to open it, or click <strong>See All</strong> at the top of that list to view every division's items together in one table.</li>
-        <li>Click <strong>+ Add from Library</strong> to search and add items, or <strong>+ Custom</strong> for a blank row (Custom needs a specific division selected, not See All).</li>
+        <li>Click <strong>+ Custom</strong> to add a blank row and enter your own description, unit, and cost (needs a specific division selected, not See All).</li>
         <li>Enter <strong>quantities</strong> for each item — extended costs update instantly.</li>
         <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel, plus <strong>Mat. Sales Tax %</strong> and <strong>Permit Fees %</strong>.</li>
       </ol>
@@ -453,9 +435,7 @@
     </div>
     <div class="modal-meas" id="modal-meas-lbl"></div>
     <label class="fl" style="margin-top:.85rem">CSI Division</label>
-    <select class="form-sel" id="modal-div" onchange="bpModalPickDiv(this.value)"></select>
-    <label class="fl" style="margin-top:.85rem">Pick from Library <span style="color:var(--muted);font-weight:400;font-size:.75rem">— click to fill cost</span></label>
-    <div class="modal-lib" id="modal-lib"></div>
+    <select class="form-sel" id="modal-div"></select>
     <label class="fl" style="margin-top:.85rem">Description</label>
     <input type="text" id="modal-desc" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.52rem .65rem;font-size:.88rem;margin-bottom:.65rem">
     <label class="fl">Unit Cost ($/unit)</label>
