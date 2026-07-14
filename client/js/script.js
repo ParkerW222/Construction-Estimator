@@ -1539,7 +1539,7 @@ function bpPushAllToEst() {
         </select>
       </td>
       <td style="padding:.45rem .5rem">
-        <input type="number" min="0" step="0.01" value="${bpPaRows[i].cost}" id="pa-cost-${i}" onchange="bpPaRows[${i}].cost=+this.value" style="width:76px;font-size:.83rem;padding:.22rem .4rem;border:1px solid var(--border);border-radius:4px">
+        <input type="number" min="0" step="0.01" value="${bpPaRows[i].cost}" id="pa-cost-${i}" onchange="bpPaRows[${i}].cost=+this.value" class="pa-cost-inp" style="min-width:100px;font-size:.83rem;padding:.22rem .4rem;border:1px solid var(--border);border-radius:4px">
       </td>
     </tr>`;
   }).join('');
