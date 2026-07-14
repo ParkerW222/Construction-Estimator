@@ -46,7 +46,7 @@ function grandTotal() {
   return Object.keys(CSI_ITEMS).reduce((sum, d) => sum + divTotal(d), 0);
 }
 
-const COMMON_UNITS = ['EA', 'SF', 'LF', 'SY', 'CY', 'TON', 'LS'];
+const COMMON_UNITS = ['EA', 'SF', 'LF'];
 function unitCell(i) {
   if (!i.custom) return i.unit;
   const opts = COMMON_UNITS.includes(i.unit) ? COMMON_UNITS : [i.unit, ...COMMON_UNITS];
