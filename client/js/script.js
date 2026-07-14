@@ -1772,9 +1772,10 @@ function bpTryAutoDetectScale() {
     const text = content.items.map(i => i.str).join(' ');
     const found = bpParseScaleNote(text);
     if (found) { bpShowScaleDetectModal(found, false); return; }
-    // Little to no embedded text usually means a scanned/flattened page — fall back to OCR
-    // on the title-block area (bottom band of the sheet), where scale notes conventionally live.
-    if (text.trim().length < 30) bpTryOcrDetectScale();
+    // No match in the text layer — could be a scanned page with no usable text at all, or a
+    // born-digital page whose scale note just isn't in a format we matched. Either way, fall
+    // back to OCR rather than assuming "has some text" means "scale note must be readable".
+    bpTryOcrDetectScale();
   }).catch(() => {});
 }
 
@@ -1788,6 +1789,7 @@ async function bpTryOcrDetectScale() {
   if (!bpPdf || bpScalePxPerFt || typeof Tesseract === 'undefined') return;
   const pageNum = bpPageNum;
   const badge = gid('bp-scale-badge');
+  let showedNotFound = false;
   try {
     const page = await bpPdf.getPage(pageNum);
     const viewport = page.getViewport({ scale: 2 });
@@ -1817,11 +1819,18 @@ async function bpTryOcrDetectScale() {
       found = bpParseScaleNote(data.text || '');
     }
 
-    if (found) bpShowScaleDetectModal(found, true);
+    if (found) {
+      bpShowScaleDetectModal(found, true);
+    } else if (badge && pageNum === bpPageNum && !bpScalePxPerFt) {
+      showedNotFound = true;
+      badge.textContent = 'No scale note found — set manually';
+      badge.className = 'scale-badge unset';
+      setTimeout(() => { if (pageNum === bpPageNum && !bpScalePxPerFt) bpUpdateScaleBadge(); }, 3000);
+    }
   } catch (e) {
     // OCR failures are non-fatal — fall back to manual Set Scale silently
   } finally {
-    if (badge && !bpScalePxPerFt) bpUpdateScaleBadge();
+    if (badge && !bpScalePxPerFt && !showedNotFound) bpUpdateScaleBadge();
   }
 }
 
