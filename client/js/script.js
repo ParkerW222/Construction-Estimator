@@ -46,6 +46,15 @@ function grandTotal() {
   return Object.keys(CSI_ITEMS).reduce((sum, d) => sum + divTotal(d), 0);
 }
 
+const COMMON_UNITS = ['EA', 'SF', 'LF', 'SY', 'CY', 'TON', 'LS'];
+function unitCell(i) {
+  if (!i.custom) return i.unit;
+  const opts = COMMON_UNITS.includes(i.unit) ? COMMON_UNITS : [i.unit, ...COMMON_UNITS];
+  return `<select class="unit-sel" onchange="updateField(${i.id},'unit',this.value)">
+    ${opts.map(u => `<option value="${u}"${u === i.unit ? ' selected' : ''}>${u}</option>`).join('')}
+  </select>`;
+}
+
 function renderAll() { renderDivNav(); renderTable(); renderSum(); }
 
 function renderDivNav() {
@@ -101,7 +110,7 @@ function renderTable() {
       : i.desc;
     return `<tr>
       <td style="min-width:170px;font-weight:500">${descCell}</td>
-      <td>${i.unit}</td>
+      <td>${unitCell(i)}</td>
       <td style="min-width:100px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
       <td style="min-width:108px;text-align:right"><input class="inp-cost" type="number" value="${i.unitCost}" min="0" step="0.01" oninput="updCost(${i.id},this.value)"></td>
       <td style="min-width:108px;text-align:right" class="ext-cost" id="ext-${i.id}">${fmt(ext)}</td>
@@ -135,7 +144,7 @@ function renderAllItemsTable() {
     return `<tr>
       <td style="width:60px;font-size:.72rem;color:var(--muted);cursor:pointer" title="${esc(CSI_ITEMS[i.div] ? CSI_ITEMS[i.div].name : '')} — click to open this division" onclick="setDiv('${i.div}')">${i.div}</td>
       <td style="min-width:170px;font-weight:500">${descCell}</td>
-      <td>${i.unit}</td>
+      <td>${unitCell(i)}</td>
       <td style="min-width:100px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
       <td style="min-width:108px;text-align:right"><input class="inp-cost" type="number" value="${i.unitCost}" min="0" step="0.01" oninput="updCost(${i.id},this.value)"></td>
       <td style="min-width:108px;text-align:right" class="ext-cost" id="ext-${i.id}">${fmt(ext)}</td>

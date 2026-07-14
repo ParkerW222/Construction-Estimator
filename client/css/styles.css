@@ -83,6 +83,8 @@ table.items tr:hover td{background:#f8fafc}
 .inp-cost::-webkit-outer-spin-button,.inp-cost::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .inp-qty,.inp-cost{-moz-appearance:textfield}
 .ext-cost{font-weight:600;color:var(--navy)}
+.unit-sel{border:1px solid var(--border);border-radius:4px;padding:.18rem .3rem;font-size:.78rem;font-family:inherit;color:var(--text);background:var(--surface);transition:.12s}
+.unit-sel:focus{outline:none;border-color:var(--orange)}
 .empty-msg{text-align:center;padding:3rem 1rem;color:var(--muted);font-size:.84rem}
 
 /* SUMMARY */
