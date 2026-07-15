@@ -15,7 +15,7 @@
       <span class="nav-arrow">→</span>
       <a href="#" onclick="showPage('estimator');return false" id="nl-estimator">Estimator</a>
       <div class="nav-sep"></div>
-      <a href="#" onclick="showPage('builder');return false" id="nl-builder" class="active">Budget Builder</a>
+      <a href="#" onclick="showPage('builder');return false" id="nl-builder" class="active">Payments & Scheduling</a>
     </div>
     <div class="nav-dropdown-wrap" id="proj-dd-wrap">
       <button class="proj-dd-trigger" id="proj-dd-btn" onclick="toggleProjectsDropdown(event)">
@@ -344,9 +344,9 @@
     <div class="help-tool">
       <div class="help-tool-head">
         <span class="help-num">1</span>
-        <div><div class="help-tool-name">Budget Builder</div><div class="help-tool-sub">Critical-path project budget and schedule, driven by the Estimator</div></div>
+        <div><div class="help-tool-name">Payments & Scheduling</div><div class="help-tool-sub">Critical-path project schedule and contractor payments, driven by the Estimator</div></div>
       </div>
-      <p class="help-desc">Construction Phases aren't typed in by hand — every CSI division you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead, Soft Costs, and Other stay manual, since those aren't Estimator line items.</p>
+      <p class="help-desc">Construction Phases aren't typed in by hand — every CSI division you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead and Soft Costs stay manual, since those aren't Estimator line items.</p>
       <ol class="help-steps">
         <li>Set a <strong>project name</strong>, building type, and stories at the top.</li>
         <li><strong>Construction Phases</strong> populate on their own from whatever's been costed in the Project Estimator. Add or change a cost there, and the matching phase (and its dollar figure) updates here — nothing to enter twice.</li>
@@ -354,7 +354,7 @@
         <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
         <li>Toggle <strong>By Others</strong> on any phase handled by a subcontractor — tracked separately, excluded from your total.</li>
-        <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance), <strong>Soft Costs</strong> (permits, architect, geotech), and <strong>Other</strong> manually at the bottom of the table.</li>
+        <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance) and <strong>Soft Costs</strong> (permits, architect, geotech) manually at the bottom of the table.</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
     </div>

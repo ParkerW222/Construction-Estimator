@@ -2229,16 +2229,6 @@ const BLD_SOFT = [
   { id: 'consultant', label: 'Project Consultant' },
 ];
 
-const BLD_OTHER = [
-  { id: 'tips',        label: 'Tips / Gratuity' },
-  { id: 'trash',       label: 'Trash / Dumpster' },
-  { id: 'maids',       label: 'Final Cleaning' },
-  { id: 'pole',        label: 'Electrical Pole / Temp Power' },
-  { id: 'fence',       label: 'Temporary Fence' },
-  { id: 'toilet',      label: 'Portable Toilet' },
-  { id: 'inspections', label: 'Third Party Inspections' },
-];
-
 const BLD_STATUSES = ['Not Started', 'Bid Needed', 'In Progress', 'Complete'];
 const BLD_STATUS_CLASS = { 'Not Started': 'bs-ns', 'Bid Needed': 'bs-bid', 'In Progress': 'bs-ip', 'Complete': 'bs-cp' };
 
@@ -2250,7 +2240,6 @@ function getBudgetSheet() {
       phases: {},
       overhead: {},
       soft: {},
-      other: {},
     };
   }
   return project.budgetSheet;
@@ -2285,7 +2274,7 @@ function bldCalcTotals() {
   });
   sectionTotals.phases = phasesTotal;
 
-  ['overhead', 'soft', 'other'].forEach(sec => {
+  ['overhead', 'soft'].forEach(sec => {
     let t = 0;
     Object.values(bs[sec] || {}).forEach(row => {
       const mat = parseFloat(row.mat) || 0;
@@ -2425,7 +2414,6 @@ function bldRenderTable() {
 
   renderSection('Overhead', 'overhead', BLD_OVERHEAD, null, false);
   renderSection('Soft Costs', 'soft', BLD_SOFT, null, false);
-  renderSection('Other', 'other', BLD_OTHER, null, false);
 
   gid('bld-tbody').innerHTML = html;
   bldRenderSummary();
@@ -2634,7 +2622,6 @@ function bldRenderSummary() {
       <div class="bld-sum-row"><span>Construction</span><span>${fmt(sectionTotals.phases||0)}</span></div>
       <div class="bld-sum-row"><span>Overhead</span><span>${fmt(sectionTotals.overhead||0)}</span></div>
       <div class="bld-sum-row"><span>Soft Costs</span><span>${fmt(sectionTotals.soft||0)}</span></div>
-      <div class="bld-sum-row"><span>Other</span><span>${fmt(sectionTotals.other||0)}</span></div>
       <div class="bld-sum-divider"></div>
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(grand)}</span></div>
       ${byOthersTotal ? `<div class="bld-sum-row bld-sum-bo"><span>By Others</span><span>${fmt(byOthersTotal)}</span></div>` : ''}
@@ -2841,11 +2828,23 @@ async function clientShowProject(id) {
   gid('client-detail-name').textContent = data.name || 'Project';
 
   const bs = data.budgetSheet || {};
-  const sections = ['phases', 'overhead', 'soft', 'other'];
-  const sectionLabels = { phases: 'Construction', overhead: 'Overhead', soft: 'Soft Costs', other: 'Other' };
+  const sections = ['phases', 'overhead', 'soft'];
+  const sectionLabels = { phases: 'Construction', overhead: 'Overhead', soft: 'Soft Costs' };
   let grand = 0;
   const sectionTotals = {};
-  sections.forEach(sec => {
+
+  // Construction Phases are Estimator-driven — their cost is the division's items, not
+  // fields stored on the phase row itself, so this section is computed separately.
+  const phaseDivisions = Object.keys(CSI_ITEMS).filter(d => (data.items || []).some(i => i.div === d));
+  let phasesTotal = 0;
+  phaseDivisions.forEach(d => {
+    const row = (bs.phases || {})[d] || {};
+    const cost = (data.items || []).filter(i => i.div === d).reduce((s, i) => s + i.qty * i.unitCost, 0);
+    if (!row.byOthers) { phasesTotal += cost; grand += cost; }
+  });
+  sectionTotals.phases = phasesTotal;
+
+  ['overhead', 'soft'].forEach(sec => {
     let t = 0;
     Object.values(bs[sec] || {}).forEach(row => {
       const mat = parseFloat(row.mat) || 0;
