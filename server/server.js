@@ -4,6 +4,7 @@ const session = require('express-session');
 const path = require('path');
 const { getDb, DB_PATH } = require('./db/migrate');
 const projectsRepo = require('./db/projects');
+const projectFilesRepo = require('./db/projectFiles');
 const adminRepo = require('./db/admin');
 const { registerAuthRoutes, requireAuth, requireAdmin } = require('./auth');
 const SqliteSessionStore = require('./sessionStore');
@@ -12,6 +13,8 @@ function fail(res, err) {
   console.error(err);
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
 }
+
+const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB — Blueprint PDF/image files stored for cross-device sync
 
 async function main() {
   const db = await getDb();
@@ -82,10 +85,36 @@ async function main() {
     } catch (err) { fail(res, err); }
   });
 
+  app.put('/api/projects/:id/file', requireAuth, express.raw({ type: '*/*', limit: '25mb' }), async (req, res) => {
+    try {
+      const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ error: 'No file data received' });
+      if (req.body.length > MAX_FILE_BYTES) return res.status(413).json({ error: `File too large — max ${MAX_FILE_BYTES / (1024 * 1024)}MB` });
+      const fileName = req.get('X-File-Name') ? decodeURIComponent(req.get('X-File-Name')) : 'drawing';
+      const mimeType = req.get('Content-Type') || 'application/octet-stream';
+      await projectFilesRepo.upsertProjectFile(db, { projectId: req.params.id, fileName, mimeType, data: req.body });
+      res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
+
+  app.get('/api/projects/:id/file', requireAuth, async (req, res) => {
+    try {
+      const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      const file = await projectFilesRepo.getProjectFile(db, req.params.id);
+      if (!file) return res.status(404).json({ error: 'No file stored' });
+      res.set('Content-Type', file.mimeType || 'application/octet-stream');
+      res.set('X-File-Name', encodeURIComponent(file.fileName || 'drawing'));
+      res.send(Buffer.from(file.data));
+    } catch (err) { fail(res, err); }
+  });
+
   app.delete('/api/projects/:id', requireAuth, async (req, res) => {
     try {
       const ok = await projectsRepo.deleteProject(db, req.params.id, req.session.userId);
       if (!ok) return res.status(404).json({ error: 'Not found' });
+      await projectFilesRepo.deleteProjectFile(db, req.params.id);
       res.status(204).end();
     } catch (err) { fail(res, err); }
   });
@@ -148,6 +177,15 @@ async function main() {
       await adminRepo.deleteAnyProject(db, req.params.id);
       res.status(204).end();
     } catch (err) { fail(res, err); }
+  });
+
+  // Catches body-parser errors (e.g. oversized file uploads) thrown before a route handler
+  // runs, so they come back as JSON instead of Express's default HTML error page.
+  app.use((err, req, res, next) => {
+    if (err && err.type === 'entity.too.large') {
+      return res.status(413).json({ error: `File too large — max ${MAX_FILE_BYTES / (1024 * 1024)}MB` });
+    }
+    fail(res, err);
   });
 
   app.listen(PORT, () => {

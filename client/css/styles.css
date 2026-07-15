@@ -276,6 +276,8 @@ input[type=number]:focus,input[type=date]:focus,.form-sel:focus{outline:none;bor
 .bp-proj-input::placeholder{color:rgba(255,255,255,.3)}
 /* Blueprint filename label */
 .bp-file-lbl{font-size:.74rem;color:rgba(255,255,255,.42);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bp-file-sync{font-size:.68rem;color:rgba(255,255,255,.4);white-space:nowrap}
+.bp-file-sync.warn{color:#fbbf24}
 /* Drag-over state */
 .bp-canvas-area.drag-over{outline:3px dashed var(--orange)!important;outline-offset:-6px}
 .bp-canvas-area.drag-over .bp-upload{opacity:.65}

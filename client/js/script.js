@@ -858,6 +858,63 @@ function bpDeleteStoredFile(projId) {
   }).catch(() => {});
 }
 
+// ── BLUEPRINT SERVER FILE SYNC ─────────────────────────────────────
+// The file itself only ever lived in this browser's IndexedDB, so opening a project on a
+// different computer showed the markup but not the drawing underneath it. Uploading a copy to
+// the server (kept out of the JSON project-data blob and its version snapshots — see
+// migration 0006 — so it doesn't bloat storage) lets any device pull it down on demand.
+const BP_MAX_FILE_BYTES = 20 * 1024 * 1024; // keep in sync with server.js's MAX_FILE_BYTES
+
+function bpSetFileSyncStatus(text, warn) {
+  const el = gid('bp-file-sync');
+  if (!el) return;
+  if (!text) { el.style.display = 'none'; return; }
+  el.textContent = text;
+  el.className = 'bp-file-sync' + (warn ? ' warn' : '');
+  el.style.display = 'inline';
+}
+
+function bpUploadFileToServer(projId, file) {
+  if (!projId || !file) return;
+  if (file.size > BP_MAX_FILE_BYTES) {
+    bpSetFileSyncStatus(`⚠ too large to sync across devices (max ${BP_MAX_FILE_BYTES / (1024 * 1024)}MB)`, true);
+    return;
+  }
+  bpSetFileSyncStatus('Syncing…');
+  fetch(`/api/projects/${projId}/file`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(file.name || 'drawing'),
+    },
+    body: file,
+  }).then(res => {
+    bpSetFileSyncStatus(res.ok ? '✓ synced' : '⚠ sync failed', !res.ok);
+  }).catch(() => bpSetFileSyncStatus('⚠ sync failed', true));
+}
+
+function bpDownloadFileFromServer(projId) {
+  if (!projId) return Promise.resolve(null);
+  return fetch(`/api/projects/${projId}/file`).then(async res => {
+    if (!res.ok) return null;
+    const contentType = res.headers.get('Content-Type') || '';
+    const fileNameHeader = res.headers.get('X-File-Name');
+    const fileName = fileNameHeader ? decodeURIComponent(fileNameHeader) : '';
+    if (contentType.startsWith('image/')) {
+      const blob = await res.blob();
+      const dataUrl = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(blob);
+      });
+      return { type: 'image', dataUrl, fileName };
+    }
+    const data = await res.arrayBuffer();
+    return { type: 'pdf', data, fileName };
+  }).catch(() => null);
+}
+
 function bpRestoreFromProject() {
   const state = project.bpState;
   // Restore conditions immediately — don't gate on file existence
@@ -871,41 +928,54 @@ function bpRestoreFromProject() {
   bpResetUndoHistory();
   if (!state || !project.id) return;
   bpLoadStoredFile(project.id).then(stored => {
-    if (!stored) return;
-    bpPageData = state.pageData || {};
-    bpZoomPct  = state.zoomPct  || 100;
-    bpIsImg    = state.isImg    || false;
-    bpPageNum  = state.pageNum  || 1;
-    const zoomReadout = gid('bp-zoom-pct');
-    if (zoomReadout) zoomReadout.textContent = bpZoomPct + '%';
-    if (stored.type === 'image') {
-      bpImg = new Image();
-      bpImg.onload = () => {
-        bpPageCount = 1;
-        bpLoadPage();
-        bpShowCanvas();
-        const fileLbl = gid('bp-file-lbl');
-        if (fileLbl) { fileLbl.textContent = stored.fileName || ''; fileLbl.style.display = stored.fileName ? '' : 'none'; }
-        bpRenderImg();
-      };
-      bpImg.src = stored.dataUrl;
-    } else if (stored.type === 'pdf') {
-      if (typeof pdfjsLib === 'undefined') return;
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      pdfjsLib.getDocument({ data: stored.data }).promise.then(pdf => {
-        bpPdf = pdf;
-        bpPageCount = pdf.numPages;
-        bpPageNum = Math.min(bpPageNum, bpPageCount);
-        bpLoadPage();
-        bpShowCanvas();
-        const fileLbl = gid('bp-file-lbl');
-        if (fileLbl) { fileLbl.textContent = stored.fileName || ''; fileLbl.style.display = stored.fileName ? '' : 'none'; }
-        const pageLbl = gid('bp-page-lbl');
-        if (pageLbl) pageLbl.textContent = `${bpPageNum} / ${bpPageCount}`;
-        bpRenderPage();
-      }).catch(() => {});
-    }
+    if (stored) { bpRenderStoredFile(stored, state); return; }
+    // Not cached in this browser — e.g. the project was opened on a different computer than
+    // the one the file was uploaded from. Pull a copy from the server and cache it locally.
+    bpSetFileSyncStatus('Downloading drawing…');
+    bpDownloadFileFromServer(project.id).then(downloaded => {
+      if (!downloaded) { bpSetFileSyncStatus(null); return; }
+      bpSetFileSyncStatus('✓ synced');
+      const forStorage = downloaded.type === 'pdf' ? { ...downloaded, data: downloaded.data.slice(0) } : downloaded;
+      bpStoreFile(project.id, forStorage);
+      bpRenderStoredFile(downloaded, state);
+    }).catch(() => bpSetFileSyncStatus(null));
   }).catch(() => {});
+}
+
+function bpRenderStoredFile(stored, state) {
+  bpPageData = state.pageData || {};
+  bpZoomPct  = state.zoomPct  || 100;
+  bpIsImg    = state.isImg    || false;
+  bpPageNum  = state.pageNum  || 1;
+  const zoomReadout = gid('bp-zoom-pct');
+  if (zoomReadout) zoomReadout.textContent = bpZoomPct + '%';
+  if (stored.type === 'image') {
+    bpImg = new Image();
+    bpImg.onload = () => {
+      bpPageCount = 1;
+      bpLoadPage();
+      bpShowCanvas();
+      const fileLbl = gid('bp-file-lbl');
+      if (fileLbl) { fileLbl.textContent = stored.fileName || ''; fileLbl.style.display = stored.fileName ? '' : 'none'; }
+      bpRenderImg();
+    };
+    bpImg.src = stored.dataUrl;
+  } else if (stored.type === 'pdf') {
+    if (typeof pdfjsLib === 'undefined') return;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.getDocument({ data: stored.data }).promise.then(pdf => {
+      bpPdf = pdf;
+      bpPageCount = pdf.numPages;
+      bpPageNum = Math.min(bpPageNum, bpPageCount);
+      bpLoadPage();
+      bpShowCanvas();
+      const fileLbl = gid('bp-file-lbl');
+      if (fileLbl) { fileLbl.textContent = stored.fileName || ''; fileLbl.style.display = stored.fileName ? '' : 'none'; }
+      const pageLbl = gid('bp-page-lbl');
+      if (pageLbl) pageLbl.textContent = `${bpPageNum} / ${bpPageCount}`;
+      bpRenderPage();
+    }).catch(() => {});
+  }
 }
 
 function bpResetAll() {
@@ -925,6 +995,7 @@ function bpResetAll() {
   if (wrap) wrap.style.display = 'none';
   const fileLbl = gid('bp-file-lbl');
   if (fileLbl) { fileLbl.style.display = 'none'; fileLbl.textContent = ''; }
+  bpSetFileSyncStatus(null);
   const fileInput = gid('bp-file-input');
   if (fileInput) fileInput.value = '';
   const zoomReadout = gid('bp-zoom-pct');
@@ -1550,6 +1621,12 @@ function bpLoadFile(input) {
   const fileLbl = gid('bp-file-lbl');
   if (fileLbl) { fileLbl.textContent = file.name; fileLbl.style.display = 'inline'; }
   bpIsImg = file.type.startsWith('image/');
+
+  // The file endpoint checks project ownership against a real saved project record, so make
+  // sure one exists server-side first — a brand-new unnamed project wouldn't have one yet
+  // otherwise (autoSaveCurrentToList skips saving until it's named).
+  if (!project.id) project.id = 'proj_' + Date.now();
+  apiSaveProject(project.id, project.name, project).then(() => bpUploadFileToServer(project.id, file));
 
   if (bpIsImg) {
     const imgReader = new FileReader();

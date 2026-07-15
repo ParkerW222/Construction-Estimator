@@ -235,6 +235,7 @@
     <label class="tool-btn orange" for="bp-file-input"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg> Open</label>
     <input type="file" id="bp-file-input" accept="application/pdf,image/*" style="display:none" onchange="bpLoadFile(this)">
     <span class="bp-file-lbl" id="bp-file-lbl" style="display:none"></span>
+    <span class="bp-file-sync" id="bp-file-sync" style="display:none"></span>
     <div class="tb-sep"></div>
     <div class="page-ctrl">
       <button onclick="bpPrevPage()">&#8249;</button>
@@ -366,7 +367,7 @@
       </div>
       <p class="help-desc">Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements push straight into the Project Estimator.</p>
       <ol class="help-steps">
-        <li>Click <strong>Open</strong> (or drag &amp; drop) to load a PDF or image drawing. If it has a printed scale note (e.g. <em>1/4" = 1'-0"</em>), BuildCalc tries to read it automatically — from the file's text if it's a digital export, or via OCR if it's a scanned drawing — and shows a <strong>Scale Detected</strong> popup for you to confirm before it's used. Nothing found? Set it manually the same way as always.</li>
+        <li>Click <strong>Open</strong> (or drag &amp; drop) to load a PDF or image drawing. The file syncs to your account (up to 20MB), so opening the project on a different computer pulls down the same drawing automatically — watch the small status next to the file name for "Syncing…", "✓ synced", or a warning if it's too large. If it has a printed scale note (e.g. <em>1/4" = 1'-0"</em>), BuildCalc tries to read it automatically — from the file's text if it's a digital export, or via OCR if it's a scanned drawing — and shows a <strong>Scale Detected</strong> popup for you to confirm before it's used. Nothing found? Set it manually the same way as always.</li>
         <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet.</li>
         <li>The <strong>Conditions panel</strong> (left) starts with 5 common conditions. Click <strong>+ Library</strong> to search and add more from a categorized list, or <strong>+ New</strong> for a fully custom one. Drag conditions to reorder them.</li>
         <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item. Hover over any marked-up shape to see which condition it belongs to.</li>
