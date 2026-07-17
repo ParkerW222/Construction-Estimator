@@ -3442,6 +3442,13 @@ function init() {
   bpRestoreFromProject();
   showPage('blueprint');
   updateNavProjectName();
+
+  // The project above came from this browser's own local cache, which only reflects whatever
+  // was last open here — it can go stale if the same account was used elsewhere since. Once
+  // logged in, reconcile with the account's authoritative copy on the server.
+  if (project.id) {
+    apiGetProject(project.id).then(fresh => { if (fresh) bpApplyLoadedProject(fresh); });
+  }
 }
 
 document.addEventListener('DOMContentLoaded', checkAuth);
