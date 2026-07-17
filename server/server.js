@@ -5,6 +5,9 @@ const path = require('path');
 const { getDb, DB_PATH } = require('./db/migrate');
 const projectsRepo = require('./db/projects');
 const projectFilesRepo = require('./db/projectFiles');
+const subcontractorsRepo = require('./db/subcontractors');
+const subShareLinksRepo = require('./db/subShareLinks');
+const { CSI_DIVISION_NAMES } = require('./csiDivisions');
 const adminRepo = require('./db/admin');
 const { registerAuthRoutes, requireAuth, requireAdmin } = require('./auth');
 const SqliteSessionStore = require('./sessionStore');
@@ -133,6 +136,82 @@ async function main() {
     try {
       await projectsRepo.unshareProject(db, req.params.id, req.session.userId);
       res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
+
+  app.get('/api/subcontractors', requireAuth, async (req, res) => {
+    try { res.json(await subcontractorsRepo.listSubcontractors(db, req.session.userId)); }
+    catch (err) { fail(res, err); }
+  });
+
+  app.post('/api/subcontractors', requireAuth, async (req, res) => {
+    try {
+      const { name, trade, contactName, contactEmail, contactPhone, notes } = req.body || {};
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+      const sub = await subcontractorsRepo.createSubcontractor(db, {
+        ownerId: req.session.userId, name: name.trim(), trade, contactName, contactEmail, contactPhone, notes,
+      });
+      res.json(sub);
+    } catch (err) { fail(res, err); }
+  });
+
+  app.put('/api/subcontractors/:id', requireAuth, async (req, res) => {
+    try {
+      const { name, trade, contactName, contactEmail, contactPhone, notes } = req.body || {};
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+      const ok = await subcontractorsRepo.updateSubcontractor(db, req.params.id, req.session.userId, {
+        name: name.trim(), trade, contactName, contactEmail, contactPhone, notes,
+      });
+      if (!ok) return res.status(404).json({ error: 'Not found' });
+      res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
+
+  app.delete('/api/subcontractors/:id', requireAuth, async (req, res) => {
+    try {
+      const ok = await subcontractorsRepo.deleteSubcontractor(db, req.params.id, req.session.userId);
+      if (!ok) return res.status(404).json({ error: 'Not found' });
+      res.status(204).end();
+    } catch (err) { fail(res, err); }
+  });
+
+  app.post('/api/projects/:id/subcontractor-link', requireAuth, async (req, res) => {
+    try {
+      const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      const { subcontractorId } = req.body || {};
+      if (!subcontractorId) return res.status(400).json({ error: 'subcontractorId is required' });
+      const token = await subShareLinksRepo.getOrCreateShareLink(db, req.params.id, subcontractorId);
+      res.json({ token });
+    } catch (err) { fail(res, err); }
+  });
+
+  // Public — deliberately not behind requireAuth. The token itself is the access control,
+  // the same way any "share link" works, so a subcontractor never needs a BuildCalc account.
+  app.get('/api/sub-view/:token', async (req, res) => {
+    try {
+      const link = await subShareLinksRepo.getShareLinkTarget(db, req.params.token);
+      if (!link) return res.status(404).json({ error: 'Link not found' });
+      const project = await projectsRepo.getProjectRawById(db, link.projectId);
+      const sub = await subcontractorsRepo.getSubcontractorRawById(db, link.subcontractorId);
+      if (!project || !sub) return res.status(404).json({ error: 'Not found' });
+
+      const bs = project.data.budgetSheet || {};
+      const items = project.data.items || [];
+      const phases = Object.entries(bs.phases || {})
+        .filter(([, row]) => row.subcontractorId === link.subcontractorId)
+        .map(([divCode, row]) => {
+          const total = items.filter(i => i.div === divCode).reduce((s, i) => s + i.qty * i.unitCost, 0);
+          const payments = row.payments || [];
+          const paid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+          return {
+            div: divCode,
+            label: `${divCode} — ${CSI_DIVISION_NAMES[divCode] || 'Division ' + divCode}`,
+            total, paid, remaining: total - paid, payments,
+          };
+        });
+
+      res.json({ projectName: project.name, subcontractorName: sub.name, subcontractorTrade: sub.trade, phases });
     } catch (err) { fail(res, err); }
   });
 

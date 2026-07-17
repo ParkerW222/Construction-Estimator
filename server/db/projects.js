@@ -10,6 +10,15 @@ async function getProject(db, id, ownerId) {
   return { id: row.id, name: row.name, savedAt: row.savedAt, clientEmail: row.clientEmail, data: JSON.parse(row.data) };
 }
 
+// Not owner-scoped — only for routes gated by a separate unguessable token (e.g. the
+// subcontractor share-view link), never expose this to a normal authenticated request.
+async function getProjectRawById(db, id) {
+  const result = await db.execute({ sql: 'SELECT id, name, data FROM projects WHERE id = ?', args: [id] });
+  const row = result.rows[0];
+  if (!row) return null;
+  return { id: row.id, name: row.name, data: JSON.parse(row.data) };
+}
+
 async function upsertProject(db, { id, name, data, ownerId }) {
   await db.execute({
     sql: `
@@ -93,7 +102,7 @@ async function getVersion(db, versionId, projectId) {
 }
 
 module.exports = {
-  listProjects, getProject, upsertProject, deleteProject,
+  listProjects, getProject, getProjectRawById, upsertProject, deleteProject,
   shareProject, unshareProject, listClientProjects, getClientProject,
   createVersion, listVersions, getVersion,
 };

@@ -498,6 +498,46 @@ async function apiSaveProject(id, name, data, createVersion) {
   } catch (e) {}
 }
 
+// ── SUBCONTRACTOR DIRECTORY ──────────────────────────────────────────
+// Subcontractors are reusable across every project (unlike everything else in Payments &
+// Scheduling, which lives inside one project's data), so they're their own small API + table.
+let bldSubcontractors = [];
+
+async function apiListSubcontractors() {
+  try {
+    const res = await fetch('/api/subcontractors');
+    bldSubcontractors = res.ok ? await res.json() : [];
+  } catch (e) { bldSubcontractors = []; }
+  return bldSubcontractors;
+}
+
+async function apiCreateSubcontractor(sub) {
+  const res = await fetch('/api/subcontractors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(sub),
+  });
+  if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'Could not save subcontractor'); }
+  return res.json();
+}
+
+async function apiUpdateSubcontractor(id, sub) {
+  const res = await fetch(`/api/subcontractors/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(sub),
+  });
+  if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || 'Could not save subcontractor'); }
+}
+
+async function apiDeleteSubcontractor(id) {
+  await fetch(`/api/subcontractors/${id}`, { method: 'DELETE' });
+}
+
+function bldGetSubcontractor(id) {
+  return bldSubcontractors.find(s => s.id === id) || null;
+}
+
 async function apiDeleteProject(id) {
   try { await fetch(`${PROJECTS_API}/${id}`, { method: 'DELETE' }); } catch (e) {}
 }
@@ -2332,10 +2372,247 @@ function bldGetRow(section, id) {
   const bs = getBudgetSheet();
   if (!bs[section][id]) {
     bs[section][id] = section === 'phases'
-      ? { startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '' }
+      ? { startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '', subcontractorId: null, payments: [] }
       : { mat: '', labor: '', combined: '', startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '' };
   }
+  if (section === 'phases' && !bs[section][id].payments) bs[section][id].payments = [];
   return bs[section][id];
+}
+
+function bldPhasePaidTotal(row) {
+  return (row.payments || []).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+}
+
+// ── SUBCONTRACTOR PAYMENTS MODAL ──────────────────────────────────────
+let bldPaymentsTargetDiv = null;
+
+function bldOpenPaymentsModal(d) {
+  bldPaymentsTargetDiv = d;
+  gid('payments-modal-title').textContent = `Payments — ${d} — ${CSI_ITEMS[d].name}`;
+  bldRenderPaymentsModal();
+  gid('pay-add-date').value = new Date().toISOString().slice(0, 10);
+  gid('pay-add-amount').value = '';
+  gid('pay-add-note').value = '';
+  gid('payments-modal').style.display = 'flex';
+}
+
+function closePaymentsModal() {
+  gid('payments-modal').style.display = 'none';
+  bldPaymentsTargetDiv = null;
+}
+
+function bldRenderPaymentsModal() {
+  const d = bldPaymentsTargetDiv;
+  if (!d) return;
+  const row = bldGetRow('phases', d);
+
+  const selEl = gid('payments-sub-sel');
+  selEl.innerHTML = '<option value="">— No subcontractor assigned —</option>' +
+    bldSubcontractors.map(s => `<option value="${s.id}"${s.id === row.subcontractorId ? ' selected' : ''}>${esc(s.name)}${s.trade ? ` (${esc(s.trade)})` : ''}</option>`).join('');
+  if (row.subcontractorId && !bldGetSubcontractor(row.subcontractorId)) {
+    selEl.innerHTML += `<option value="${row.subcontractorId}" selected>(deleted subcontractor)</option>`;
+  }
+
+  const shareBtn = gid('pay-share-link-btn');
+  if (shareBtn) shareBtn.disabled = !row.subcontractorId;
+
+  const total = divTotal(d);
+  const paid = bldPhasePaidTotal(row);
+  const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
+  gid('payments-summary').innerHTML = `
+    <div class="pay-sum-row"><span>Phase Total</span><span>${fmt(total)}</span></div>
+    <div class="pay-sum-row"><span>Paid</span><span>${fmt(paid)}</span></div>
+    <div class="pay-sum-row pay-sum-remaining"><span>Remaining</span><span>${fmt(total - paid)}</span></div>
+    <div class="pay-progress-track"><div class="pay-progress-fill" style="width:${pct}%"></div></div>
+    <div class="pay-progress-pct">${pct}% paid</div>
+  `;
+
+  const payments = [...(row.payments || [])].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  gid('payments-list').innerHTML = payments.length
+    ? payments.map(p => `
+      <div class="pay-hist-row">
+        <span class="pay-hist-date">${p.date ? new Date(p.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+        <span class="pay-hist-amt">${fmt(parseFloat(p.amount) || 0)}</span>
+        <span class="pay-hist-note">${esc(p.note || '')}</span>
+        <span class="pay-hist-del" title="Delete payment" onclick="bldDeletePayment('${p.id}')">&#10005;</span>
+      </div>`).join('')
+    : '<div class="bp-qty-empty" style="padding:.75rem 0">No payments logged yet.</div>';
+}
+
+function bldAssignSubcontractor(subId) {
+  const row = bldGetRow('phases', bldPaymentsTargetDiv);
+  row.subcontractorId = subId || null;
+  const shareBtn = gid('pay-share-link-btn');
+  if (shareBtn) shareBtn.disabled = !row.subcontractorId;
+  bldRenderTable();
+  saveProject();
+}
+
+function bldAddPayment() {
+  const amount = parseFloat(gid('pay-add-amount').value);
+  if (!amount || amount <= 0) { alert('Enter a payment amount greater than 0.'); return; }
+  const date = gid('pay-add-date').value || new Date().toISOString().slice(0, 10);
+  const note = gid('pay-add-note').value.trim();
+  const row = bldGetRow('phases', bldPaymentsTargetDiv);
+  row.payments.push({ id: 'pay_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), amount, date, note });
+  bldRenderPaymentsModal();
+  bldRenderTable();
+  saveProject();
+  gid('pay-add-amount').value = '';
+  gid('pay-add-note').value = '';
+}
+
+function bldDeletePayment(paymentId) {
+  const row = bldGetRow('phases', bldPaymentsTargetDiv);
+  row.payments = (row.payments || []).filter(p => p.id !== paymentId);
+  bldRenderPaymentsModal();
+  bldRenderTable();
+  saveProject();
+}
+
+function bldPrintPaymentReceipt() {
+  const d = bldPaymentsTargetDiv;
+  if (!d) return;
+  const row = bldGetRow('phases', d);
+  const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
+  const total = divTotal(d);
+  const paid = bldPhasePaidTotal(row);
+  const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  const payments = [...(row.payments || [])].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const rows = payments.map(p => `<tr>
+    <td>${p.date ? new Date(p.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+    <td>${esc(p.note || '')}</td>
+    <td class="r">${fmt(parseFloat(p.amount) || 0)}</td>
+  </tr>`).join('') || `<tr><td colspan="3" style="color:#999;text-align:center">No payments logged yet.</td></tr>`;
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>${project.name || 'Project'} — Payment Record</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:32px 40px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2.5px solid #1e3a5f;margin-bottom:20px}
+.brand{font-size:21px;font-weight:800;color:#1e3a5f;letter-spacing:-.4px}.brand span{color:#f97316}
+.pm{text-align:right}.pn{font-size:15px;font-weight:700;color:#1e3a5f}.ps{font-size:10px;color:#777;margin-top:3px}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px;font-size:11px}
+.meta div span{display:block;color:#777;font-size:9px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+table{width:100%;border-collapse:collapse;margin-top:6px}
+thead th{background:#f0f2f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555;padding:6px 8px;border-bottom:1px solid #dde;text-align:left}
+tbody td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10.5px}
+.r{text-align:right;font-variant-numeric:tabular-nums}
+.sw{margin-top:16px;border:1px solid #dde;border-radius:4px;overflow:hidden;width:260px;margin-left:auto}
+.sw .row{display:flex;justify-content:space-between;padding:6px 10px;font-size:11px;border-bottom:1px solid #eee}
+.sw .row:last-child{border-bottom:none;background:#1e3a5f;color:#fff;font-weight:700}
+.foot{margin-top:24px;padding-top:10px;border-top:1px solid #dde;font-size:9px;color:#bbb;display:flex;justify-content:space-between}
+</style></head><body>
+<div class="header">
+  <div><div class="brand">Build<span>Calc</span></div><div style="font-size:10px;color:#999;margin-top:3px">Subcontractor Payment Record</div></div>
+  <div class="pm"><div class="pn">${esc(project.name || 'Project')}</div><div class="ps">${today}</div></div>
+</div>
+<div class="meta">
+  <div><span>Subcontractor</span>${esc(sub ? sub.name : 'Not assigned')}${sub && sub.trade ? ` — ${esc(sub.trade)}` : ''}</div>
+  <div><span>Phase</span>${d} — ${esc(CSI_ITEMS[d].name)}</div>
+</div>
+<table><thead><tr><th>Date</th><th>Note</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
+<div class="sw">
+  <div class="row"><span>Phase Total</span><span>${fmt(total)}</span></div>
+  <div class="row"><span>Paid to Date</span><span>${fmt(paid)}</span></div>
+  <div class="row"><span>REMAINING</span><span>${fmt(total - paid)}</span></div>
+</div>
+<div class="foot"><span>BuildCalc &mdash; Payments &amp; Scheduling</span><span>This is a payment tracking record, not a financial transaction receipt.</span></div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Please allow pop-ups for this site to print the receipt.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+async function bldCopySubShareLink() {
+  const d = bldPaymentsTargetDiv;
+  if (!d) return;
+  const row = bldGetRow('phases', d);
+  if (!row.subcontractorId) { alert('Assign a subcontractor first, then you can copy their share link.'); return; }
+
+  // Mirrors the same fix needed for Blueprint file sync: the link endpoint checks project
+  // ownership against a real saved project record, so make sure one exists first.
+  if (!project.id) project.id = 'proj_' + Date.now();
+  let url;
+  try {
+    await apiSaveProject(project.id, project.name, project);
+    const res = await fetch(`/api/projects/${project.id}/subcontractor-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subcontractorId: row.subcontractorId }),
+    });
+    if (!res.ok) throw new Error();
+    const { token } = await res.json();
+    url = `${location.origin}/sub-view.html?token=${token}`;
+  } catch (e) {
+    alert('Could not create the share link. Please try again.');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(url);
+    alert('Share link copied to clipboard — send it to your subcontractor:\n\n' + url);
+  } catch (e) {
+    alert('Here is the share link (copy it manually):\n\n' + url);
+  }
+}
+
+// ── SUBCONTRACTOR DIRECTORY MODAL ─────────────────────────────────────
+function openManageSubs() {
+  bldRenderManageSubsList();
+  gid('manage-subs-modal').style.display = 'flex';
+}
+
+function closeManageSubs() { gid('manage-subs-modal').style.display = 'none'; }
+
+function bldRenderManageSubsList() {
+  const el = gid('manage-subs-list');
+  if (!bldSubcontractors.length) {
+    el.innerHTML = '<div class="bp-qty-empty" style="padding:.75rem 0">No subcontractors yet — add one below.</div>';
+    return;
+  }
+  el.innerHTML = bldSubcontractors.map(s => `
+    <div class="sub-row">
+      <div class="sub-row-main">
+        <strong>${esc(s.name)}</strong>${s.trade ? ` <span class="sub-row-trade">${esc(s.trade)}</span>` : ''}
+      </div>
+      <div class="sub-row-contact">${[s.contactPhone, s.contactEmail].filter(Boolean).map(esc).join(' · ')}</div>
+      <span class="sub-row-del" title="Delete subcontractor" onclick="bldDeleteSubcontractor('${s.id}')">&#10005;</span>
+    </div>`).join('');
+}
+
+async function bldAddSubcontractor() {
+  const name = gid('new-sub-name').value.trim();
+  if (!name) { alert('Subcontractor name is required.'); return; }
+  const sub = {
+    name,
+    trade: gid('new-sub-trade').value.trim(),
+    contactPhone: gid('new-sub-phone').value.trim(),
+    contactEmail: gid('new-sub-email').value.trim(),
+  };
+  try {
+    const created = await apiCreateSubcontractor(sub);
+    bldSubcontractors.push(created);
+    gid('new-sub-name').value = ''; gid('new-sub-trade').value = ''; gid('new-sub-phone').value = ''; gid('new-sub-email').value = '';
+    bldRenderManageSubsList();
+    if (bldPaymentsTargetDiv) bldRenderPaymentsModal();
+  } catch (e) {
+    alert(e.message || 'Could not add subcontractor.');
+  }
+}
+
+async function bldDeleteSubcontractor(id) {
+  if (!confirm('Delete this subcontractor? Phases they were assigned to will show as unassigned.')) return;
+  await apiDeleteSubcontractor(id);
+  bldSubcontractors = bldSubcontractors.filter(s => s.id !== id);
+  bldRenderManageSubsList();
+  bldRenderTable();
+  if (bldPaymentsTargetDiv) bldRenderPaymentsModal();
 }
 
 function bldCalcTotals() {
@@ -2343,11 +2620,12 @@ function bldCalcTotals() {
   let grand = 0, byOthersTotal = 0;
   const sectionTotals = {};
 
-  let phasesTotal = 0;
+  let phasesTotal = 0, paidTotal = 0;
   bldPhaseDivisions().forEach(d => {
     const row = bldGetRow('phases', d);
     const cost = divTotal(d);
     if (row.byOthers) byOthersTotal += cost; else { phasesTotal += cost; grand += cost; }
+    paidTotal += bldPhasePaidTotal(row);
   });
   sectionTotals.phases = phasesTotal;
 
@@ -2368,13 +2646,14 @@ function bldCalcTotals() {
     if (row.startDate) { const dt = new Date(row.startDate + 'T12:00:00'); if (!projectStart || dt < projectStart) projectStart = dt; }
     if (row.endDate)   { const dt = new Date(row.endDate   + 'T12:00:00'); if (!projectEnd   || dt > projectEnd)   projectEnd   = dt; }
   });
-  return { grand, byOthersTotal, sectionTotals, projectStart, projectEnd };
+  return { grand, byOthersTotal, sectionTotals, projectStart, projectEnd, paidTotal };
 }
 
 function renderBudgetBuilder() {
   const bs = getBudgetSheet();
   bldRenderTable();
   bldRenderSummary();
+  apiListSubcontractors().then(() => bldRenderTable());
   // Restore build type toggle
   const bt = bs.buildType || 'custom';
   document.querySelectorAll('[data-bt]').forEach(b => b.classList.toggle('active', b.dataset.bt === bt));
@@ -2397,7 +2676,7 @@ function bldRenderTable() {
   let html = '';
 
   const renderSection = (title, sectionKey, items, startNum, hasDuration) => {
-    html += `<tr class="bld-section-hdr"><td colspan="9">${title}</td></tr>`;
+    html += `<tr class="bld-section-hdr"><td colspan="10">${title}</td></tr>`;
     items.forEach((item, i) => {
       const row = bldGetRow(sectionKey, item.id);
       const num = startNum !== null ? (startNum + i) : '';
@@ -2446,19 +2725,24 @@ function bldRenderTable() {
             value="${(row.note||'').replace(/"/g,'&quot;')}"
             onchange="bldUpdateItem('${sectionKey}','${item.id}','note',this.value)">
         </td>
+        <td class="bld-pay-cell"></td>
       </tr>`;
     });
   };
 
   const phaseDivs = bldPhaseDivisions();
-  html += `<tr class="bld-section-hdr"><td colspan="9">Construction Phases</td></tr>`;
+  html += `<tr class="bld-section-hdr"><td colspan="10">Construction Phases</td></tr>`;
   if (!phaseDivs.length) {
-    html += `<tr><td colspan="9" class="bld-empty-msg">No costed items yet — push conditions or add line items in the Estimator, and they'll show up here as phases automatically.</td></tr>`;
+    html += `<tr><td colspan="10" class="bld-empty-msg">No costed items yet — push conditions or add line items in the Estimator, and they'll show up here as phases automatically.</td></tr>`;
   } else {
     phaseDivs.forEach((d, i) => {
       const row = bldGetRow('phases', d);
       const stCls = BLD_STATUS_CLASS[row.status] || 'bs-ns';
       const byOCls = row.byOthers ? ' by-others' : '';
+      const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
+      const paid = bldPhasePaidTotal(row);
+      const payLabel = sub ? esc(sub.name) : (row.subcontractorId ? '(deleted subcontractor)' : '+ Assign Sub');
+      const payAmt = (paid > 0 || sub) ? `${fmt(paid)} / ${fmt(divTotal(d))}` : '';
       html += `<tr class="bld-row${byOCls}" data-section="phases" data-id="${d}">
         <td class="bld-num">${i + 1}</td>
         <td class="bld-label">${d} — ${esc(CSI_ITEMS[d].name)}</td>
@@ -2484,6 +2768,12 @@ function bldRenderTable() {
           <input type="text" class="bld-note-inp" placeholder="Note…"
             value="${(row.note||'').replace(/"/g,'&quot;')}"
             onchange="bldUpdateItem('phases','${d}','note',this.value)">
+        </td>
+        <td class="bld-pay-cell">
+          <button class="bld-pay-btn" onclick="bldOpenPaymentsModal('${d}')">
+            <span class="bld-pay-sub">${payLabel}</span>
+            ${payAmt ? `<span class="bld-pay-amt">${payAmt}</span>` : ''}
+          </button>
         </td>
       </tr>`;
     });
@@ -2677,7 +2967,7 @@ function bldGanttMouseUp() {
 }
 
 function bldRenderSummary() {
-  const { grand, byOthersTotal, sectionTotals, projectStart, projectEnd } = bldCalcTotals();
+  const { grand, byOthersTotal, sectionTotals, projectStart, projectEnd, paidTotal } = bldCalcTotals();
   const el = gid('bld-summary');
   if (!el) return;
 
@@ -2702,6 +2992,7 @@ function bldRenderSummary() {
       <div class="bld-sum-divider"></div>
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(grand)}</span></div>
       ${byOthersTotal ? `<div class="bld-sum-row bld-sum-bo"><span>By Others</span><span>${fmt(byOthersTotal)}</span></div>` : ''}
+      ${paidTotal > 0 ? `<div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>` : ''}
       ${schedHtml}
     </div>`;
   bldRenderGantt();

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment History — BuildCalc</title>
+<link rel="stylesheet" href="css/styles.css">
+<style>
+  body{background:var(--bg);min-height:100vh}
+  .sv-wrap{max-width:640px;margin:0 auto;padding:2rem 1.25rem 4rem}
+  .sv-header{display:flex;align-items:center;gap:.6rem;margin-bottom:1.75rem}
+  .sv-logo{width:34px;height:34px;border-radius:8px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;flex-shrink:0}
+  .sv-title{font-size:1.3rem;font-weight:800;color:var(--navy)}
+  .sv-sub{font-size:.85rem;color:var(--muted)}
+  .sv-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.1rem 1.25rem;margin-bottom:1rem;box-shadow:var(--sh)}
+  .sv-phase-label{font-weight:700;font-size:.95rem;color:var(--text);margin-bottom:.6rem}
+  .sv-totals{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:.7rem}
+  .sv-total-box{background:var(--bg);border-radius:8px;padding:.55rem .3rem;text-align:center}
+  .sv-total-lbl{font-size:.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.2rem}
+  .sv-total-val{font-size:1rem;font-weight:800;color:var(--navy)}
+  .sv-total-box.remaining .sv-total-val{color:#f97316}
+  .sv-progress-track{height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:.8rem}
+  .sv-progress-fill{height:100%;background:#16a34a;border-radius:4px}
+  .sv-hist-row{display:flex;justify-content:space-between;gap:.6rem;font-size:.82rem;padding:.4rem 0;border-bottom:1px solid var(--border)}
+  .sv-hist-row:last-child{border-bottom:none}
+  .sv-hist-date{color:var(--muted);flex-shrink:0}
+  .sv-hist-note{flex:1;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sv-hist-amt{font-weight:700;color:var(--navy);flex-shrink:0}
+  .sv-empty,.sv-error{text-align:center;color:var(--muted);padding:3rem 1rem;font-size:.9rem}
+  .sv-disclaimer{font-size:.72rem;color:var(--muted);text-align:center;margin-top:1.5rem;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="sv-wrap">
+  <div class="sv-header">
+    <div class="sv-logo">BC</div>
+    <div>
+      <div class="sv-title">Payment History</div>
+      <div class="sv-sub" id="sv-context">Loading…</div>
+    </div>
+  </div>
+  <div id="sv-content"></div>
+</div>
+<script>
+function fmt(n) {
+  n = Number(n) || 0;
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+  return '$' + Math.round(n).toLocaleString();
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+const token = new URLSearchParams(location.search).get('token');
+const contentEl = document.getElementById('sv-content');
+const contextEl = document.getElementById('sv-context');
+
+if (!token) {
+  contextEl.textContent = '';
+  contentEl.innerHTML = '<div class="sv-error">No link token provided.</div>';
+} else {
+  fetch('/api/sub-view/' + encodeURIComponent(token))
+    .then(res => res.ok ? res.json() : Promise.reject(res.status))
+    .then(data => {
+      contextEl.textContent = `${data.subcontractorName}${data.subcontractorTrade ? ' — ' + data.subcontractorTrade : ''} · ${data.projectName}`;
+      if (!data.phases.length) {
+        contentEl.innerHTML = '<div class="sv-empty">No phases assigned to you on this project yet.</div>';
+        return;
+      }
+      contentEl.innerHTML = data.phases.map(p => {
+        const pct = p.total > 0 ? Math.min(100, Math.round((p.paid / p.total) * 100)) : 0;
+        const payments = [...p.payments].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        const histHtml = payments.length
+          ? payments.map(pay => `
+            <div class="sv-hist-row">
+              <span class="sv-hist-date">${pay.date ? new Date(pay.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+              <span class="sv-hist-note">${esc(pay.note || '')}</span>
+              <span class="sv-hist-amt">${fmt(pay.amount)}</span>
+            </div>`).join('')
+          : '<div class="sv-hist-row"><span class="sv-hist-note">No payments logged yet.</span></div>';
+        return `
+          <div class="sv-card">
+            <div class="sv-phase-label">${esc(p.label)}</div>
+            <div class="sv-totals">
+              <div class="sv-total-box"><div class="sv-total-lbl">Total</div><div class="sv-total-val">${fmt(p.total)}</div></div>
+              <div class="sv-total-box"><div class="sv-total-lbl">Paid</div><div class="sv-total-val">${fmt(p.paid)}</div></div>
+              <div class="sv-total-box remaining"><div class="sv-total-lbl">Remaining</div><div class="sv-total-val">${fmt(p.remaining)}</div></div>
+            </div>
+            <div class="sv-progress-track"><div class="sv-progress-fill" style="width:${pct}%"></div></div>
+            ${histHtml}
+          </div>`;
+      }).join('');
+    })
+    .catch(() => {
+      contextEl.textContent = '';
+      contentEl.innerHTML = '<div class="sv-error">This link is invalid or has expired. Ask your builder for a new one.</div>';
+    });
+}
+</script>
+<div class="sv-wrap" style="padding-top:0">
+  <div class="sv-disclaimer">This page shows payment records only — no money is transferred through BuildCalc. Contact your builder directly with any questions about a payment.</div>
+</div>
+</body>
+</html>

@@ -158,6 +158,7 @@
       <button class="bld-tgl-btn" id="bld-s3" onclick="bldSetStories(3)">3+</button>
     </div>
     <div class="tb-right">
+      <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="openManageSubs()">Subcontractors</button>
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="window.print()">Export PDF</button>
     </div>
   </div>
@@ -179,6 +180,7 @@
             <th class="bld-th-dur">Schedule</th>
             <th class="bld-th-by">By Others</th>
             <th class="bld-th-note">Notes</th>
+            <th class="bld-th-pay">Payments</th>
           </tr>
         </thead>
         <tbody id="bld-tbody"></tbody>
@@ -355,6 +357,8 @@
         <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
         <li>Toggle <strong>By Others</strong> on any phase handled by a subcontractor — tracked separately, excluded from your total.</li>
+        <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money.</li>
+        <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
         <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance) and <strong>Soft Costs</strong> (permits, architect, geotech) manually at the bottom of the table.</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
@@ -499,6 +503,59 @@
     </div>
     <div style="font-size:.8rem;color:var(--muted);margin-bottom:.6rem" id="copy-val-hint"></div>
     <div id="copy-val-list" style="max-height:360px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- PAYMENTS MODAL -->
+<div class="modal-overlay" id="payments-modal" style="display:none" onclick="if(event.target===this)closePaymentsModal()">
+  <div class="modal-box" style="width:460px">
+    <div class="modal-head">
+      <span class="modal-title" id="payments-modal-title">Payments</span>
+      <button class="modal-close" onclick="closePaymentsModal()">&#10005;</button>
+    </div>
+
+    <label class="fl">Subcontractor</label>
+    <div style="display:flex;gap:.4rem;margin-bottom:.75rem">
+      <select class="form-sel" id="payments-sub-sel" style="flex:1" onchange="bldAssignSubcontractor(this.value)"></select>
+      <button class="btn btn-ghost" style="font-size:.76rem;padding:.4rem .6rem" onclick="openManageSubs()">Manage</button>
+    </div>
+
+    <div class="pay-summary" id="payments-summary"></div>
+
+    <label class="fl" style="margin-top:.85rem">Payment History</label>
+    <div id="payments-list" style="max-height:180px;overflow-y:auto;margin-bottom:.6rem"></div>
+
+    <div class="pay-add-row">
+      <input type="number" id="pay-add-amount" min="0" step="0.01" placeholder="Amount ($)">
+      <input type="date" id="pay-add-date">
+      <input type="text" id="pay-add-note" placeholder="Note (optional)">
+      <button class="btn btn-orange" style="font-size:.78rem;padding:.4rem .7rem" onclick="bldAddPayment()">+ Add</button>
+    </div>
+
+    <div class="pay-modal-actions">
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;font-size:.78rem" onclick="bldPrintPaymentReceipt()">Print Receipt</button>
+      <button class="btn btn-ghost" style="flex:1;justify-content:center;font-size:.78rem" id="pay-share-link-btn" onclick="bldCopySubShareLink()">Copy Share Link</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANAGE SUBCONTRACTORS MODAL -->
+<div class="modal-overlay" id="manage-subs-modal" style="display:none" onclick="if(event.target===this)closeManageSubs()">
+  <div class="modal-box" style="width:480px">
+    <div class="modal-head">
+      <span class="modal-title">Subcontractors</span>
+      <button class="modal-close" onclick="closeManageSubs()">&#10005;</button>
+    </div>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">This list is shared across all your projects.</p>
+    <div id="manage-subs-list" style="max-height:260px;overflow-y:auto;margin-bottom:.9rem"></div>
+    <label class="fl">Add a Subcontractor</label>
+    <input type="text" id="new-sub-name" placeholder="Name (required)" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.5rem .65rem;font-size:.85rem;margin:.35rem 0">
+    <div style="display:flex;gap:.4rem;margin-bottom:.4rem">
+      <input type="text" id="new-sub-trade" placeholder="Trade (e.g. Concrete)" style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:.5rem .65rem;font-size:.85rem">
+      <input type="text" id="new-sub-phone" placeholder="Phone" style="flex:1;border:1.5px solid var(--border);border-radius:6px;padding:.5rem .65rem;font-size:.85rem">
+    </div>
+    <input type="email" id="new-sub-email" placeholder="Email" style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.5rem .65rem;font-size:.85rem;margin-bottom:.5rem">
+    <button class="btn btn-orange" style="width:100%;justify-content:center" onclick="bldAddSubcontractor()">+ Add Subcontractor</button>
   </div>
 </div>
 
