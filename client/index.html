@@ -142,21 +142,6 @@
     <input type="text" id="bld-proj-name" class="bld-proj-input" value="New Project" placeholder="Project name…"
            oninput="project.name=this.value;updateNavProjectName();bldUpdatePrintHeader()" onchange="saveProject()">
     <div class="tb-sep"></div>
-    <select id="bld-proj-type" class="bld-type-sel" onchange="getBudgetSheet().projectType=this.value;bldUpdatePrintHeader();saveProject()">
-      <option value="residential">Residential</option>
-      <option value="commercial">Commercial</option>
-      <option value="industrial">Industrial</option>
-      <option value="multifamily">Multifamily</option>
-    </select>
-    <div class="bld-tgl-group">
-      <button class="bld-tgl-btn active" data-bt="custom" onclick="bldSetBuildType('custom')">Custom</button>
-      <button class="bld-tgl-btn" data-bt="spec" onclick="bldSetBuildType('spec')">Spec</button>
-    </div>
-    <div class="bld-tgl-group">
-      <button class="bld-tgl-btn active" id="bld-s1" onclick="bldSetStories(1)">1 Story</button>
-      <button class="bld-tgl-btn" id="bld-s2" onclick="bldSetStories(2)">2 Story</button>
-      <button class="bld-tgl-btn" id="bld-s3" onclick="bldSetStories(3)">3+</button>
-    </div>
     <div class="tb-right">
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="openManageSubs()">Subcontractors</button>
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="window.print()">Export PDF</button>

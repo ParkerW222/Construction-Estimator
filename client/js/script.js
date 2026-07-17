@@ -1,7 +1,8 @@
 // ── STATE ──────────────────────────────────────────────────────────
 let project = { id: 'proj_' + Date.now(), name: 'New Project', items: [], nextId: 1 };
 let activeDiv = '03';
-let estMu = { oh: 10, profit: 8, cont: 5, matTax: 0, permit: 1.0 };
+function defaultEstMu() { return { oh: 10, profit: 8, cont: 5, matTax: 0, permit: 1.0, bond: 0, ret: 0 }; }
+let estMu = defaultEstMu();
 let currentUser = null;
 let authMode = 'login';
 let authRole = 'builder';
@@ -225,6 +226,7 @@ function updMu(field, val) {
   if (gid('sum-permit-amt')) gid('sum-permit-amt').textContent = permit > 0 ? fmt(permit) : '—';
   if (gid('sum-bid'))        gid('sum-bid').textContent        = fmt(bid);
   gid('top-total').textContent = fmt(bid);
+  saveProject();
 }
 
 function updQty(id, val) {
@@ -313,7 +315,7 @@ function exportEstimatePDF() {
     ['Overhead', estMu.oh + '%'],
     ['Profit', estMu.profit + '%'],
     ['Contingency', estMu.cont + '%'],
-    ['Bond / Insurance', estMu.bond + '%'],
+    ...(estMu.bond > 0 ? [['Bond / Insurance', estMu.bond + '%']] : []),
     ...(estMu.matTax > 0 ? [['Material Sales Tax', estMu.matTax + '%']] : []),
     ...(estMu.permit  > 0 ? [['Permit Fees', estMu.permit + '%']]        : []),
   ].map(([l,v]) => `<tr><td>${l}</td><td class="r">${v}</td></tr>`).join('');
@@ -422,6 +424,7 @@ document.addEventListener('keyup', e => {
 function newProject() {
   if (!confirm('Start a new project? Current items will be cleared.')) return;
   project = { id: 'proj_' + Date.now(), name: 'New Project', items: [], nextId: 1 };
+  estMu = defaultEstMu();
   gid('proj-name').value = 'New Project';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = 'New Project';
@@ -439,6 +442,7 @@ function bcProjKey() {
 
 function saveProject() {
   if (bpPdf || bpImg) bpSavePage();
+  project.estMu = estMu;
   project.bpState = {
     conditions: bpConditions,
     condNextId: bpCondNextId,
@@ -459,6 +463,7 @@ function loadProject() {
     const s = localStorage.getItem(bcProjKey());
     if (s) {
       project = JSON.parse(s);
+      estMu = project.estMu || defaultEstMu();
       gid('proj-name').value = project.name || 'New Project';
       const bpn = gid('bp-proj-name');
       if (bpn) bpn.value = project.name || 'New Project';
@@ -601,6 +606,7 @@ function bpApplyLoadedProject(entry) {
   bpResetAll();
   project = entry.data;
   project.id = entry.id;
+  estMu = project.estMu || defaultEstMu();
   gid('proj-name').value = project.name || 'New Project';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = project.name || 'New Project';
@@ -627,6 +633,7 @@ function startNewProjectFromDD() {
   if (!confirm('Start a new project? Current items will be cleared.')) return;
   bpResetAll();
   project = { id: 'proj_' + Date.now(), name: 'New Project', items: [], nextId: 1 };
+  estMu = defaultEstMu();
   gid('proj-name').value = 'New Project';
   const bpn = gid('bp-proj-name');
   if (bpn) bpn.value = 'New Project';
@@ -667,6 +674,7 @@ function importProject(input) {
         input.value = ''; return;
       }
       project = data;
+      estMu = project.estMu || defaultEstMu();
       gid('proj-name').value = project.name || 'New Project';
       const bpn = gid('bp-proj-name');
       if (bpn) bpn.value = project.name || 'New Project';
@@ -2352,8 +2360,6 @@ const BLD_STATUS_CLASS = { 'Not Started': 'bs-ns', 'Bid Needed': 'bs-bid', 'In P
 function getBudgetSheet() {
   if (!project.budgetSheet) {
     project.budgetSheet = {
-      buildType: 'custom',
-      stories: '1',
       phases: {},
       overhead: {},
       soft: {},
@@ -2650,24 +2656,11 @@ function bldCalcTotals() {
 }
 
 function renderBudgetBuilder() {
-  const bs = getBudgetSheet();
   bldRenderTable();
   bldRenderSummary();
   apiListSubcontractors().then(() => bldRenderTable());
-  // Restore build type toggle
-  const bt = bs.buildType || 'custom';
-  document.querySelectorAll('[data-bt]').forEach(b => b.classList.toggle('active', b.dataset.bt === bt));
-  // Restore stories toggle
-  const stories = String(bs.stories || '1');
-  ['bld-s1','bld-s2','bld-s3'].forEach((id, i) => {
-    const btn = gid(id);
-    if (btn) btn.classList.toggle('active', String(i + 1) === stories);
-  });
   const projNameEl = gid('bld-proj-name');
   if (projNameEl) projNameEl.value = project.name || 'New Project';
-  // Restore project type select
-  const ptEl = gid('bld-proj-type');
-  if (ptEl) ptEl.value = bs.projectType || 'residential';
   bldUpdatePrintHeader();
 }
 
@@ -3043,34 +3036,12 @@ function bldSetProjName(val) {
   saveProject();
 }
 
-function bldSetBuildType(val) {
-  getBudgetSheet().buildType = val;
-  document.querySelectorAll('[data-bt]').forEach(b => b.classList.toggle('active', b.dataset.bt === val));
-  bldUpdatePrintHeader();
-  saveProject();
-}
-
-function bldSetStories(val) {
-  getBudgetSheet().stories = String(val);
-  ['bld-s1','bld-s2','bld-s3'].forEach((id, i) => {
-    const btn = gid(id);
-    if (btn) btn.classList.toggle('active', (i + 1) === +val);
-  });
-  bldUpdatePrintHeader();
-  saveProject();
-}
-
 function bldUpdatePrintHeader() {
-  const bs = getBudgetSheet();
-  const typeLabels = { residential: 'Residential', commercial: 'Commercial', industrial: 'Industrial', multifamily: 'Multifamily' };
   const titleEl = gid('bld-ph-title');
   const metaEl  = gid('bld-ph-meta');
   if (titleEl) titleEl.textContent = project.name || 'New Project';
   if (metaEl) {
     const parts = [];
-    if (bs.projectType) parts.push(typeLabels[bs.projectType] || bs.projectType);
-    if (bs.buildType)   parts.push(bs.buildType.charAt(0).toUpperCase() + bs.buildType.slice(1));
-    if (bs.stories)     parts.push(bs.stories === '3' ? '3+ Stories' : bs.stories + (bs.stories === '1' ? ' Story' : ' Stories'));
     const { projectStart, projectEnd } = bldCalcTotals();
     if (projectStart) parts.push('Start: ' + projectStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
     if (projectEnd)   parts.push('Est. Completion: ' + projectEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));

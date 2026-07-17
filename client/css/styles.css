@@ -477,11 +477,6 @@ body.admin-mode #admin-app{display:block}
 }
 #bld-start-date{border:1px solid var(--border);border-radius:6px;padding:.28rem .55rem;font-size:.81rem;color:var(--text);background:var(--surface);font-family:inherit;cursor:pointer}
 #bld-start-date:focus{outline:none;border-color:var(--orange);box-shadow:var(--focus-ring)}
-.bld-tgl-group{display:flex;border:1.5px solid var(--border);border-radius:6px;overflow:hidden;flex-shrink:0}
-.bld-tgl-btn{background:var(--surface);border:none;padding:.28rem .7rem;font-size:.77rem;font-weight:600;cursor:pointer;color:var(--muted);transition:.12s;font-family:inherit;white-space:nowrap}
-.bld-tgl-btn:hover{background:var(--bg);color:var(--navy)}
-.bld-tgl-btn.active{background:var(--navy);color:#fff}
-.bld-tgl-btn + .bld-tgl-btn{border-left:1.5px solid var(--border)}
 
 .bld-body{flex:1;display:flex;gap:0;overflow:hidden;min-height:0}
 .bld-table-wrap{flex:1;overflow:auto;min-width:0}
