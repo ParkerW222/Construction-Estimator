@@ -47,6 +47,26 @@ function grandTotal() {
   return Object.keys(CSI_ITEMS).reduce((sum, d) => sum + divTotal(d), 0);
 }
 
+// A project can rename any division's label — shown in place of the CSI default everywhere
+// that division appears (Estimator sidebar, Payments & Scheduling phases, PDFs, receipts).
+function divName(d) {
+  return (project.divisionNames && project.divisionNames[d]) || (CSI_ITEMS[d] ? CSI_ITEMS[d].name : d);
+}
+
+function renameDivision(d, event) {
+  if (event) event.stopPropagation();
+  const current = divName(d);
+  const next = prompt('Rename this division — shown in the Estimator and Payments & Scheduling:', current);
+  if (next === null) return;
+  const trimmed = next.trim();
+  if (!project.divisionNames) project.divisionNames = {};
+  if (trimmed) project.divisionNames[d] = trimmed;
+  else delete project.divisionNames[d];
+  saveProject();
+  renderAll();
+  bldRenderTable();
+}
+
 const COMMON_UNITS = ['EA', 'SF', 'LF'];
 function unitCell(i) {
   if (!i.custom) return i.unit;
@@ -65,11 +85,12 @@ function renderDivNav() {
     <span class="dni-name">See All</span>
     ${allTotal > 0 ? `<span class="dni-sub">${fmt(allTotal)}</span>` : ''}
   </div><div class="dni-sep"></div>`;
-  gid('div-nav').innerHTML = seeAllRow + Object.entries(CSI_ITEMS).map(([d, info]) => {
+  gid('div-nav').innerHTML = seeAllRow + Object.entries(CSI_ITEMS).map(([d]) => {
     const sub = divTotal(d);
     return `<div class="dni${d === activeDiv ? ' active' : ''}" onclick="setDiv('${d}')">
       <span class="dni-num">${d}</span>
-      <span class="dni-name">${info.name}</span>
+      <span class="dni-name">${esc(divName(d))}</span>
+      <button class="dni-edit" title="Rename this division" onclick="renameDivision('${d}',event)">&#9998;</button>
       ${sub > 0 ? `<span class="dni-sub">${fmt(sub)}</span>` : ''}
     </div>`;
   }).join('');
@@ -96,7 +117,7 @@ function renderTable() {
     <th style="min-width:108px;text-align:right">Total</th>
     <th style="width:34px"></th>
   </tr>`;
-  gid('center-title').textContent = `Division ${activeDiv} — ${CSI_ITEMS[activeDiv].name}`;
+  gid('center-title').textContent = `Division ${activeDiv} — ${divName(activeDiv)}`;
   const items = divItems(activeDiv);
 
   if (!items.length) {
@@ -143,7 +164,7 @@ function renderAllItemsTable() {
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
     return `<tr>
-      <td style="width:60px;font-size:.72rem;color:var(--muted);cursor:pointer" title="${esc(CSI_ITEMS[i.div] ? CSI_ITEMS[i.div].name : '')} — click to open this division" onclick="setDiv('${i.div}')">${i.div}</td>
+      <td style="width:60px;font-size:.72rem;color:var(--muted);cursor:pointer" title="${esc(divName(i.div))} — click to open this division" onclick="setDiv('${i.div}')">${i.div}</td>
       <td style="min-width:170px;font-weight:500">${descCell}</td>
       <td>${unitCell(i)}</td>
       <td style="min-width:100px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
@@ -164,9 +185,9 @@ function renderSum() {
   const bid = direct + ohAmt + prAmt + coAmt + taxAmt + permitAmt;
 
   let html = `<div class="sum-head">Division Subtotals</div>`;
-  Object.entries(CSI_ITEMS).forEach(([d, info]) => {
+  Object.keys(CSI_ITEMS).forEach(d => {
     const sub = divTotal(d);
-    if (sub > 0) html += `<div class="sum-row"><span class="sum-row-label">${d} ${info.name}</span><span class="sum-row-val">${fmt(sub)}</span></div>`;
+    if (sub > 0) html += `<div class="sum-row"><span class="sum-row-label">${d} ${esc(divName(d))}</span><span class="sum-row-val">${fmt(sub)}</span></div>`;
   });
 
   html += `
@@ -267,7 +288,7 @@ function exportEstimatePDF() {
   const today   = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 
   let divSections = '';
-  Object.entries(CSI_ITEMS).forEach(([d, info]) => {
+  Object.keys(CSI_ITEMS).forEach(d => {
     const items = divItems(d);
     if (!items.length) return;
     const rows = items.map(i => {
@@ -279,7 +300,7 @@ function exportEstimatePDF() {
       </tr>`;
     }).join('');
     divSections += `<div class="ds">
-      <div class="dh">Division ${d} — ${info.name}</div>
+      <div class="dh">Division ${d} — ${esc(divName(d))}</div>
       <table><thead><tr><th>Description</th><th class="c">Unit</th><th class="r">Qty</th><th class="r">Unit Cost</th><th class="r">Total</th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="4" class="r fw">Division Total</td><td class="r fw">${fmt(divTotal(d))}</td></tr></tfoot>
@@ -1581,8 +1602,8 @@ function bpSendCondToEst(condId) {
   gid('modal-meas-lbl').textContent = `${cond.name} — ${fmtN(Math.round(total * 10) / 10)} ${cond.unit}`;
   const existing = cond.estItemId ? project.items.find(i => i.id === cond.estItemId) : null;
   const guessedDiv = existing ? existing.div : bpGuessDivision(cond.name);
-  gid('modal-div').innerHTML = Object.entries(CSI_ITEMS)
-    .map(([d, info]) => `<option value="${d}"${d === guessedDiv ? ' selected' : ''}>${d} — ${info.name}</option>`)
+  gid('modal-div').innerHTML = Object.keys(CSI_ITEMS)
+    .map(d => `<option value="${d}"${d === guessedDiv ? ' selected' : ''}>${d} — ${esc(divName(d))}</option>`)
     .join('');
   gid('modal-desc').value = existing ? existing.desc : cond.name;
   gid('modal-cost').value = existing ? existing.unitCost : '';
@@ -1630,7 +1651,7 @@ function bpPushAllToEst() {
   gid('push-all-rows').innerHTML = bpPaConds.map((c, i) => {
     const total = bpCondTotal(c.id);
     const guessed = bpPaRows[i].div;
-    const divOpts = Object.entries(CSI_ITEMS).map(([d, info]) => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${info.name}</option>`).join('');
+    const divOpts = Object.keys(CSI_ITEMS).map(d => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${esc(divName(d))}</option>`).join('');
     return `<tr>
       <td style="padding:.45rem .5rem">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c.color};vertical-align:middle;margin-right:.35rem"></span>
@@ -2472,7 +2493,7 @@ let bldPhaseDetailDiv = null;
 
 function bldOpenPhaseDetail(d) {
   bldPhaseDetailDiv = d;
-  gid('phase-detail-title').textContent = `${d} — ${CSI_ITEMS[d].name}`;
+  gid('phase-detail-title').textContent = `${d} — ${divName(d)}`;
   const items = divItems(d);
   gid('phase-detail-list').innerHTML = !items.length
     ? `<div class="empty-msg">No line items found for this division.</div>`
@@ -2514,7 +2535,7 @@ let bldPaymentsTargetDiv = null;
 
 function bldOpenPaymentsModal(d) {
   bldPaymentsTargetDiv = d;
-  gid('payments-modal-title').textContent = `Payments — ${d} — ${CSI_ITEMS[d].name}`;
+  gid('payments-modal-title').textContent = `Payments — ${d} — ${divName(d)}`;
   bldRenderPaymentsModal();
   gid('pay-add-date').value = new Date().toISOString().slice(0, 10);
   gid('pay-add-amount').value = '';
@@ -2637,7 +2658,7 @@ tbody td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10.5px}
 </div>
 <div class="meta">
   <div><span>Subcontractor</span>${esc(sub ? sub.name : 'Not assigned')}${sub && sub.trade ? ` — ${esc(sub.trade)}` : ''}</div>
-  <div><span>Phase</span>${d} — ${esc(CSI_ITEMS[d].name)}</div>
+  <div><span>Phase</span>${d} — ${esc(divName(d))}</div>
 </div>
 <table><thead><tr><th>Date</th><th>Note</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="sw">
@@ -2860,7 +2881,7 @@ function bldRenderTable() {
         draggable="true" ondragstart="bldPhaseDragStart(event,'${d}')" ondragover="bldPhaseDragOver(event)"
         ondragleave="bldPhaseDragLeave(event)" ondrop="bldPhaseDrop(event,'${d}')" ondragend="bldPhaseDragEnd(event)">
         <td class="bld-num" title="Drag to reorder">${i + 1}</td>
-        <td class="bld-label bld-label-click" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${d} — ${esc(CSI_ITEMS[d].name)}</td>
+        <td class="bld-label bld-label-click" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${d} — ${esc(divName(d))}<button class="dni-edit bld-label-edit" title="Rename this division" onclick="renameDivision('${d}',event)">&#9998;</button></td>
         <td class="bld-cell bld-cost-readonly" colspan="3" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${fmt(divTotal(d))}</td>
         <td class="bld-status-cell">
           <select class="bld-status-sel ${stCls}" onchange="bldSetStatus('phases','${d}',this.value)">
@@ -2908,7 +2929,7 @@ function bldGanttPhases() {
     const s = new Date(row.startDate + 'T12:00:00');
     const e = new Date(row.endDate   + 'T12:00:00');
     if (e <= s) return null;
-    return { div: d, label: `${d} — ${CSI_ITEMS[d].name}`, status: row.status, s, e };
+    return { div: d, label: `${d} — ${divName(d)}`, status: row.status, s, e };
   }).filter(Boolean);
 }
 

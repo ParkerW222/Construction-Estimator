@@ -205,9 +205,10 @@ async function main() {
           const total = items.filter(i => i.div === divCode).reduce((s, i) => s + i.qty * i.unitCost, 0);
           const payments = row.payments || [];
           const paid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+          const customName = (project.data.divisionNames || {})[divCode];
           return {
             div: divCode,
-            label: `${divCode} — ${CSI_DIVISION_NAMES[divCode] || 'Division ' + divCode}`,
+            label: `${divCode} — ${customName || CSI_DIVISION_NAMES[divCode] || 'Division ' + divCode}`,
             total, paid, remaining: total - paid, payments,
           };
         });
