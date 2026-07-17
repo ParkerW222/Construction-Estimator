@@ -30,6 +30,11 @@ async function createSubcontractor(db, { ownerId, name, trade, contactName, cont
   return { id, name, trade: trade || '', contactName: contactName || '', contactEmail: contactEmail || '', contactPhone: contactPhone || '', notes: notes || '' };
 }
 
+async function getSubcontractor(db, id, ownerId) {
+  const result = await db.execute({ sql: 'SELECT id FROM subcontractors WHERE id = ? AND owner_id = ?', args: [id, ownerId] });
+  return result.rows[0] || null;
+}
+
 async function updateSubcontractor(db, id, ownerId, { name, trade, contactName, contactEmail, contactPhone, notes }) {
   const result = await db.execute({
     sql: `UPDATE subcontractors SET name = ?, trade = ?, contact_name = ?, contact_email = ?, contact_phone = ?, notes = ?, updated_at = datetime('now')
@@ -51,4 +56,4 @@ async function getSubcontractorRawById(db, id) {
   return result.rows[0] || null;
 }
 
-module.exports = { listSubcontractors, createSubcontractor, updateSubcontractor, deleteSubcontractor, getSubcontractorRawById };
+module.exports = { listSubcontractors, createSubcontractor, getSubcontractor, updateSubcontractor, deleteSubcontractor, getSubcontractorRawById };

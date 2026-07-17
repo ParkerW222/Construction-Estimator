@@ -60,6 +60,11 @@ nav{background:linear-gradient(to right,var(--navy-d) 0%,var(--navy) 100%);posit
 .dni-edit{opacity:0;flex-shrink:0;width:20px;height:20px;line-height:20px;padding:0;border:none;background:transparent;color:rgba(255,255,255,.55);font-size:.72rem;cursor:pointer;border-radius:4px;transition:opacity .12s,background .12s,color .12s}
 .dni:hover .dni-edit{opacity:1}
 .dni-edit:hover{background:rgba(255,255,255,.15);color:#fff}
+.dni-add{color:rgba(255,255,255,.55)}
+.dni-add:hover{color:rgba(255,255,255,.85)}
+.dni-add .dni-num{color:var(--orange);font-size:.9rem;text-align:center}
+.dni.drag-over{background:rgba(249,115,22,.18)!important;box-shadow:inset 0 0 0 1.5px var(--orange)}
+.dni[draggable="true"]{cursor:grab}
 .bld-label-edit{color:rgba(0,0,0,.3);vertical-align:middle;margin-left:.3rem}
 .bld-row:hover .bld-label-edit{opacity:1}
 .bld-label-edit:hover{background:rgba(0,0,0,.08);color:var(--text)}
@@ -83,6 +88,9 @@ table.items{width:100%;border-collapse:collapse}
 table.items th{position:sticky;top:0;background:var(--surface);font-size:.7rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:.45rem .55rem;border-bottom:2px solid var(--border);text-align:left;z-index:10}
 table.items td{padding:.38rem .55rem;border-bottom:1px solid var(--border);font-size:.8rem;vertical-align:middle}
 table.items tr:hover td{background:#f8fafc}
+table.items tbody tr[draggable="true"]{cursor:grab}
+table.items tbody tr.dragging td{opacity:.4}
+table.items tbody tr.drag-over td{box-shadow:inset 0 2px 0 var(--orange)}
 .inp-qty,.inp-cost{width:100%;border:1px solid transparent;border-radius:4px;padding:.18rem .3rem;font-size:.8rem;text-align:right;background:transparent;transition:.12s}
 .inp-qty:focus,.inp-cost:focus{outline:none;border-color:var(--orange);background:#fff}
 .inp-qty::-webkit-outer-spin-button,.inp-qty::-webkit-inner-spin-button,

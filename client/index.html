@@ -337,12 +337,12 @@
       <p class="help-desc">Construction Phases aren't typed in by hand — every CSI division you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead and Soft Costs stay manual, since those aren't Estimator line items.</p>
       <ol class="help-steps">
         <li>Set a <strong>project name</strong> at the top.</li>
-        <li><strong>Construction Phases</strong> populate on their own from whatever's been costed in the Project Estimator. Add or change a cost there, and the matching phase (and its dollar figure) updates here — nothing to enter twice. Click a phase's name or <strong>Total</strong> to see every Estimator line item behind that number, or drag the row by its number to reorder phases however you like.</li>
+        <li><strong>Construction Phases</strong> populate on their own from whatever's been costed in the Project Estimator. Add or change a cost there, and the matching phase (and its dollar figure) updates here — nothing to enter twice. Click a phase's name or <strong>Total</strong> to see every Estimator line item behind that number (click <strong>Open in Estimator</strong> from there to jump straight to that division), or drag the row by its number to reorder phases however you like.</li>
         <li>Use the <strong>Status</strong> dropdown per phase to track progress: Not Started → Bid Needed → In Progress → Complete.</li>
         <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
         <li>Toggle <strong>By Others</strong> on any phase handled by a subcontractor — tracked separately, excluded from your total.</li>
-        <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money.</li>
+        <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
         <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
         <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance) and <strong>Soft Costs</strong> (permits, architect, geotech) manually at the bottom of the table.</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
@@ -357,13 +357,13 @@
       <p class="help-desc">Upload a PDF or image of a drawing and measure linear footage, square footage, and counts directly on screen. Measurements push straight into the Project Estimator.</p>
       <ol class="help-steps">
         <li>Click <strong>Open</strong> (or drag &amp; drop) to load a PDF or image drawing. The file syncs to your account (up to 20MB), so opening the project on a different computer pulls down the same drawing automatically — watch the small status next to the file name for "Syncing…", "✓ synced", or a warning if it's too large. If it has a printed scale note (e.g. <em>1/4" = 1'-0"</em>), BuildCalc tries to read it automatically — from the file's text if it's a digital export, or via OCR if it's a scanned drawing — and shows a <strong>Scale Detected</strong> popup for you to confirm before it's used. Nothing found? Set it manually the same way as always.</li>
-        <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet.</li>
-        <li>The <strong>Conditions panel</strong> (left) starts with 5 common conditions. Click <strong>+ Library</strong> to search and add more from a categorized list, or <strong>+ New</strong> for a fully custom one. Drag conditions to reorder them.</li>
+        <li>Click <strong>Set Scale</strong>, click two known points on the drawing, then enter their real-world distance in feet. Use the <strong>+/−</strong> zoom controls to scale the view, or hold <strong>Shift</strong> and drag to pan, or hold <strong>Shift</strong> and scroll to zoom, at any time.</li>
+        <li>The <strong>Conditions panel</strong> (left) starts with 5 common conditions. Click <strong>+ Library</strong> to search and add more from a categorized list, or <strong>+ New</strong> for a fully custom one. Click the <strong>pencil icon</strong> on any condition to rename it or change its type and color later, or drag conditions to reorder them.</li>
         <li>Click a condition to select it, then draw directly on the drawing. <strong>Linear:</strong> click points, double-click to finish. <strong>Area:</strong> click corners, double-click to close. <strong>Count:</strong> single click per item. Hover over any marked-up shape to see which condition it belongs to.</li>
         <li>Already have a matching measurement elsewhere (e.g. Slab and Hardwood Floors cover the same area)? Click the <strong>copy icon</strong> next to a condition's Send to Estimator button to copy another condition's value straight in — no re-drawing needed. Works across every page of the file, not just the one you're on.</li>
-        <li>Click the <strong>clear icon</strong> next to a condition to wipe every measurement for just that condition, on every page — it asks for confirmation first, and the condition itself stays (only its markup is removed).</li>
-        <li>Use <strong>Hide Layer</strong> to click and hide a layer on the drawing, or <strong>Erase</strong> to click and delete a single measurement.</li>
-        <li>Use <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs for every measured condition at once, then send to the Project Estimator. Conditions with nothing measured yet are skipped automatically, and totals combine across every page a condition was marked up on.</li>
+        <li>Click the <strong>clear icon</strong> next to a condition to wipe every measurement for just that condition, on every page — it asks for confirmation first, and the condition itself stays (only its markup is removed). Click the <strong>✕ icon</strong> instead to delete the condition outright, along with its measurements and any Estimator line item it was pushed to — this also asks for confirmation first.</li>
+        <li>Use <strong>Hide Layer</strong> to click and hide a layer on the drawing — click a hidden condition again in the Conditions panel to bring it back — or <strong>Erase</strong> to click and delete a single measurement.</li>
+        <li>Ready to send just one condition? Click its <strong>Send to Estimator</strong> button to pick a CSI division, description, and unit cost for that condition alone. To do them all at once, use <strong>Push All to Estimator</strong> to assign CSI divisions and unit costs for every measured condition, then send to the Project Estimator. Conditions with nothing measured yet are skipped automatically, and totals combine across every page a condition was marked up on.</li>
         <li>Use the <strong>Undo/Redo</strong> buttons (or <strong>Ctrl+Z</strong> / <strong>Ctrl+Shift+Z</strong>) to step back or forward through any change — measurements, conditions, or reordering, on any page. <strong>Backspace</strong> removes the last point while drawing, <strong>Escape</strong> cancels.</li>
       </ol>
     </div>
@@ -377,15 +377,20 @@
       <ol class="help-steps">
         <li>Set your <strong>project name</strong> in the top bar.</li>
         <li>Click a <strong>CSI division</strong> in the left panel (e.g. 03 Concrete) to open it, or click <strong>See All</strong> at the top of that list to view every division's items together in one table. Hover a division and click the <strong>pencil icon</strong> to rename it to whatever you want — the new name shows everywhere that division appears, including its matching phase in Payments & Scheduling.</li>
-        <li>Click <strong>+ Custom</strong> to add a blank row and enter your own description, unit, and cost (needs a specific division selected, not See All).</li>
-        <li>Enter <strong>quantities</strong> for each item — extended costs update instantly.</li>
+        <li>Need a division the CSI list doesn't cover? Click <strong>Add Division</strong> at the bottom of the left panel to create your own. Custom divisions work exactly like the standard ones — click the <strong>trash icon</strong> next to one to delete it (this also deletes any items still in it, after confirming).</li>
+        <li>Click <strong>+ Custom</strong> to add a blank row and enter your own description, unit, and cost (needs a specific division selected, not See All). Click the <strong>✕</strong> next to any item to remove it.</li>
+        <li>Enter <strong>quantities</strong> for each item — extended costs update instantly. Drag an item's row to reorder it within its division, or drop it onto a row from a different division to move it there.</li>
         <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel, plus <strong>Mat. Sales Tax %</strong> and <strong>Permit Fees %</strong>.</li>
+        <li>Click <strong>Export PDF</strong> to generate a full bid document broken out by division, with your markup, tax, and permit fees applied.</li>
       </ol>
     </div>
 
     <p style="font-size:.78rem;color:var(--muted);margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
       <strong style="color:var(--text)">Tip:</strong> every time you click Save, a version of the whole project is kept.
       Open the <strong>project dropdown</strong> at the top and choose <strong>Version History</strong> to review or restore an earlier save.
+    </p>
+    <p style="font-size:.78rem;color:var(--muted);margin-top:.5rem">
+      <strong style="color:var(--text)">Tip:</strong> click <strong>Share</strong> in the project dropdown and enter a client's email to give them a read-only budget summary — they'll see it after logging into their own Client account.
     </p>
 
   </div>

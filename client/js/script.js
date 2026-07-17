@@ -43,14 +43,26 @@ function divItems(d) { return project.items.filter(i => i.div === d); }
 function divTotal(d) {
   return divItems(d).reduce((sum, i) => sum + i.qty * i.unitCost, 0);
 }
+// A project can add its own divisions on top of the standard CSI list (e.g. for a scope of
+// work the CSI MasterFormat doesn't cover cleanly) — stored per-project as { code: name }.
+function allDivCodes() {
+  return [...Object.keys(CSI_ITEMS), ...Object.keys(project.customDivisions || {})];
+}
+function isCustomDivision(d) {
+  return !!(project.customDivisions && project.customDivisions[d] !== undefined);
+}
+
 function grandTotal() {
-  return Object.keys(CSI_ITEMS).reduce((sum, d) => sum + divTotal(d), 0);
+  return allDivCodes().reduce((sum, d) => sum + divTotal(d), 0);
 }
 
 // A project can rename any division's label — shown in place of the CSI default everywhere
 // that division appears (Estimator sidebar, Payments & Scheduling phases, PDFs, receipts).
 function divName(d) {
-  return (project.divisionNames && project.divisionNames[d]) || (CSI_ITEMS[d] ? CSI_ITEMS[d].name : d);
+  if (project.divisionNames && project.divisionNames[d]) return project.divisionNames[d];
+  if (CSI_ITEMS[d]) return CSI_ITEMS[d].name;
+  if (project.customDivisions && project.customDivisions[d]) return project.customDivisions[d];
+  return d;
 }
 
 function renameDivision(d, event) {
@@ -62,6 +74,40 @@ function renameDivision(d, event) {
   if (!project.divisionNames) project.divisionNames = {};
   if (trimmed) project.divisionNames[d] = trimmed;
   else delete project.divisionNames[d];
+  saveProject();
+  renderAll();
+  bldRenderTable();
+}
+
+function addCustomDivision() {
+  const name = prompt('Name for the new division:', '');
+  if (name === null) return;
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  if (!project.customDivisions) project.customDivisions = {};
+  if (!project.nextCustomDivId) project.nextCustomDivId = 1;
+  const code = 'C' + project.nextCustomDivId++;
+  project.customDivisions[code] = trimmed;
+  saveProject();
+  activeDiv = code;
+  renderAll();
+}
+
+function deleteCustomDivision(d, event) {
+  if (event) event.stopPropagation();
+  if (!isCustomDivision(d)) return;
+  const itemCount = divItems(d).length;
+  const msg = itemCount > 0
+    ? `Delete "${divName(d)}"? This will also delete its ${itemCount} item${itemCount === 1 ? '' : 's'}.`
+    : `Delete "${divName(d)}"?`;
+  if (!confirm(msg)) return;
+  project.items = project.items.filter(i => i.div !== d);
+  delete project.customDivisions[d];
+  if (project.divisionNames) delete project.divisionNames[d];
+  const bs = getBudgetSheet();
+  if (bs.phases && bs.phases[d]) delete bs.phases[d];
+  if (bs.phaseOrder) bs.phaseOrder = bs.phaseOrder.filter(x => x !== d);
+  if (activeDiv === d) activeDiv = 'ALL';
   saveProject();
   renderAll();
   bldRenderTable();
@@ -85,15 +131,23 @@ function renderDivNav() {
     <span class="dni-name">See All</span>
     ${allTotal > 0 ? `<span class="dni-sub">${fmt(allTotal)}</span>` : ''}
   </div><div class="dni-sep"></div>`;
-  gid('div-nav').innerHTML = seeAllRow + Object.entries(CSI_ITEMS).map(([d]) => {
+  const divRow = d => {
     const sub = divTotal(d);
-    return `<div class="dni${d === activeDiv ? ' active' : ''}" onclick="setDiv('${d}')">
+    return `<div class="dni${d === activeDiv ? ' active' : ''}" onclick="setDiv('${d}')"
+      ondragover="estDivDragOver(event)" ondragleave="estDivDragLeave(event)" ondrop="estDivDrop(event,'${d}')">
       <span class="dni-num">${d}</span>
       <span class="dni-name">${esc(divName(d))}</span>
       <button class="dni-edit" title="Rename this division" onclick="renameDivision('${d}',event)">&#9998;</button>
+      ${isCustomDivision(d) ? `<button class="dni-edit" title="Delete this division" onclick="deleteCustomDivision('${d}',event)">&#128465;</button>` : ''}
       ${sub > 0 ? `<span class="dni-sub">${fmt(sub)}</span>` : ''}
     </div>`;
-  }).join('');
+  };
+  const customRows = Object.keys(project.customDivisions || {}).map(divRow).join('');
+  const addRow = `<div class="dni-sep"></div><div class="dni dni-add" onclick="addCustomDivision()">
+    <span class="dni-num">+</span>
+    <span class="dni-name">Add Division</span>
+  </div>`;
+  gid('div-nav').innerHTML = seeAllRow + Object.keys(CSI_ITEMS).map(divRow).join('') + customRows + addRow;
 }
 
 function renderTable() {
@@ -121,7 +175,7 @@ function renderTable() {
   const items = divItems(activeDiv);
 
   if (!items.length) {
-    gid('items-tbody').innerHTML = `<tr><td colspan="6" class="empty-msg">No items yet — add from the library or create a custom item.</td></tr>`;
+    gid('items-tbody').innerHTML = `<tr><td colspan="6" class="empty-msg">No items yet — click + Custom to add one.</td></tr>`;
     return;
   }
 
@@ -130,7 +184,9 @@ function renderTable() {
     const descCell = i.custom
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
-    return `<tr>
+    return `<tr draggable="true" data-id="${i.id}" title="Drag to reorder, or drop onto another division to move it there"
+      ondragstart="estItemDragStart(event,${i.id})" ondragover="estItemDragOver(event)"
+      ondragleave="estItemDragLeave(event)" ondrop="estItemDrop(event,${i.id})" ondragend="estItemDragEnd(event)">
       <td style="min-width:170px;font-weight:500">${descCell}</td>
       <td>${unitCell(i)}</td>
       <td style="min-width:100px;text-align:right"><input class="inp-qty" type="number" value="${i.qty}" min="0" step="0.01" oninput="updQty(${i.id},this.value)"></td>
@@ -154,7 +210,7 @@ function renderAllItemsTable() {
   const items = [...project.items].sort((a, b) => a.div.localeCompare(b.div));
 
   if (!items.length) {
-    gid('items-tbody').innerHTML = `<tr><td colspan="7" class="empty-msg">No items yet — select a division to add from the library or create a custom item.</td></tr>`;
+    gid('items-tbody').innerHTML = `<tr><td colspan="7" class="empty-msg">No items yet — select a division and click + Custom to add one.</td></tr>`;
     return;
   }
 
@@ -163,7 +219,9 @@ function renderAllItemsTable() {
     const descCell = i.custom
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
-    return `<tr>
+    return `<tr draggable="true" data-id="${i.id}" title="Drag to reorder, or drop onto a row from another division to move it there"
+      ondragstart="estItemDragStart(event,${i.id})" ondragover="estItemDragOver(event)"
+      ondragleave="estItemDragLeave(event)" ondrop="estItemDrop(event,${i.id})" ondragend="estItemDragEnd(event)">
       <td style="width:60px;font-size:.72rem;color:var(--muted);cursor:pointer" title="${esc(divName(i.div))} — click to open this division" onclick="setDiv('${i.div}')">${i.div}</td>
       <td style="min-width:170px;font-weight:500">${descCell}</td>
       <td>${unitCell(i)}</td>
@@ -173,6 +231,69 @@ function renderAllItemsTable() {
       <td style="width:34px;text-align:center"><button class="btn btn-red" style="padding:.2rem .4rem;font-size:.72rem" onclick="delItem(${i.id})">✕</button></td>
     </tr>`;
   }).join('');
+}
+
+// ── ESTIMATOR ITEM DRAG-AND-DROP ────────────────────────────────────
+// Drop an item onto another item's row to reorder it there (same division) or move it to
+// that item's division (different division). Drop onto a division in the left sidebar to
+// move it there directly without needing to open the "See All" view.
+let estDragItemId = null;
+
+function estItemDragStart(e, id) {
+  estDragItemId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging');
+}
+function estItemDragOver(e) {
+  if (estDragItemId == null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+function estItemDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function estItemDrop(e, targetId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (estDragItemId == null || estDragItemId === targetId) return;
+  const items = project.items;
+  const fromIdx = items.findIndex(i => i.id === estDragItemId);
+  const toIdx = items.findIndex(i => i.id === targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const targetDiv = items[toIdx].div;
+  const [moved] = items.splice(fromIdx, 1);
+  moved.div = targetDiv;
+  items.splice(toIdx, 0, moved);
+  saveProject();
+  renderAll();
+}
+function estItemDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.items tbody tr.drag-over').forEach(el => el.classList.remove('drag-over'));
+  estDragItemId = null;
+}
+
+function estDivDragOver(e) {
+  if (estDragItemId == null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+function estDivDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function estDivDrop(e, targetDiv) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (estDragItemId == null) return;
+  const item = project.items.find(i => i.id === estDragItemId);
+  if (item && item.div !== targetDiv) {
+    item.div = targetDiv;
+    saveProject();
+    renderAll();
+  }
+  estDragItemId = null;
 }
 
 function renderSum() {
@@ -185,7 +306,7 @@ function renderSum() {
   const bid = direct + ohAmt + prAmt + coAmt + taxAmt + permitAmt;
 
   let html = `<div class="sum-head">Division Subtotals</div>`;
-  Object.keys(CSI_ITEMS).forEach(d => {
+  allDivCodes().forEach(d => {
     const sub = divTotal(d);
     if (sub > 0) html += `<div class="sum-row"><span class="sum-row-label">${d} ${esc(divName(d))}</span><span class="sum-row-val">${fmt(sub)}</span></div>`;
   });
@@ -288,7 +409,7 @@ function exportEstimatePDF() {
   const today   = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 
   let divSections = '';
-  Object.keys(CSI_ITEMS).forEach(d => {
+  allDivCodes().forEach(d => {
     const items = divItems(d);
     if (!items.length) return;
     const rows = items.map(i => {
@@ -970,9 +1091,15 @@ function bpUploadFileToServer(projId, file) {
     if (!res.ok) { bpSetFileSyncStatus('⚠ sync failed', true); return; }
     const body = await res.json().catch(() => ({}));
     if (body.updatedAt) {
-      bpFileVersion = body.updatedAt;
       bpSetLocalFileVersion(projId, body.updatedAt);
-      saveProject();
+      // Only stamp the in-memory project/global version if we're still looking at the same
+      // project this upload was for — the user may have switched projects while it was in
+      // flight, and saveProject() would otherwise persist this file's version onto whatever
+      // project happens to be active now.
+      if (project.id === projId) {
+        bpFileVersion = body.updatedAt;
+        saveProject();
+      }
     }
     bpSetFileSyncStatus('✓ synced');
   }).catch(() => bpSetFileSyncStatus('⚠ sync failed', true));
@@ -1001,7 +1128,13 @@ function bpDownloadFileFromServer(projId) {
   }).catch(() => null);
 }
 
+// Bumped on every call so overlapping restores (e.g. init()'s immediate local-cache restore
+// racing its own background server reconciliation) can tell whether they've been superseded
+// before touching shared canvas state — mirrors the bpRenderToken pattern used for page renders.
+let bpRestoreToken = 0;
+
 function bpRestoreFromProject() {
+  const myToken = ++bpRestoreToken;
   const state = project.bpState;
   // Restore conditions immediately — don't gate on file existence
   if (state) {
@@ -1014,7 +1147,9 @@ function bpRestoreFromProject() {
   bpUpdateActiveIndicator();
   bpResetUndoHistory();
   if (!state || !project.id) return;
-  bpLoadStoredFile(project.id).then(stored => {
+  const projId = project.id;
+  bpLoadStoredFile(projId).then(stored => {
+    if (myToken !== bpRestoreToken) return; // superseded by a newer restore
     // Only trust the local cache if it's stamped with the same version last synced to the
     // server. Otherwise it's stale — e.g. left over from testing, or from before the file was
     // replaced on a different computer — so re-download the current copy instead.
@@ -1023,7 +1158,8 @@ function bpRestoreFromProject() {
       return;
     }
     bpSetFileSyncStatus('Downloading drawing…');
-    bpDownloadFileFromServer(project.id).then(downloaded => {
+    bpDownloadFileFromServer(projId).then(downloaded => {
+      if (myToken !== bpRestoreToken) return; // superseded by a newer restore
       if (!downloaded) {
         // Server has nothing (or is unreachable) — fall back to whatever's cached locally.
         if (stored) { bpSetFileSyncStatus(null); bpRenderStoredFile(stored, state); }
@@ -1034,9 +1170,9 @@ function bpRestoreFromProject() {
       const forStorage = downloaded.type === 'pdf'
         ? { ...downloaded, data: downloaded.data.slice(0), version: downloaded.updatedAt }
         : { ...downloaded, version: downloaded.updatedAt };
-      bpStoreFile(project.id, forStorage);
+      bpStoreFile(projId, forStorage);
       bpRenderStoredFile(downloaded, state);
-      if (downloaded.updatedAt) { bpFileVersion = downloaded.updatedAt; saveProject(); }
+      if (downloaded.updatedAt && project.id === projId) { bpFileVersion = downloaded.updatedAt; saveProject(); }
     }).catch(() => bpSetFileSyncStatus(null));
   }).catch(() => {});
 }
@@ -1602,7 +1738,7 @@ function bpSendCondToEst(condId) {
   gid('modal-meas-lbl').textContent = `${cond.name} — ${fmtN(Math.round(total * 10) / 10)} ${cond.unit}`;
   const existing = cond.estItemId ? project.items.find(i => i.id === cond.estItemId) : null;
   const guessedDiv = existing ? existing.div : bpGuessDivision(cond.name);
-  gid('modal-div').innerHTML = Object.keys(CSI_ITEMS)
+  gid('modal-div').innerHTML = allDivCodes()
     .map(d => `<option value="${d}"${d === guessedDiv ? ' selected' : ''}>${d} — ${esc(divName(d))}</option>`)
     .join('');
   gid('modal-desc').value = existing ? existing.desc : cond.name;
@@ -1651,7 +1787,7 @@ function bpPushAllToEst() {
   gid('push-all-rows').innerHTML = bpPaConds.map((c, i) => {
     const total = bpCondTotal(c.id);
     const guessed = bpPaRows[i].div;
-    const divOpts = Object.keys(CSI_ITEMS).map(d => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${esc(divName(d))}</option>`).join('');
+    const divOpts = allDivCodes().map(d => `<option value="${d}"${d === guessed ? ' selected' : ''}>${d} — ${esc(divName(d))}</option>`).join('');
     return `<tr>
       <td style="padding:.45rem .5rem">
         <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${c.color};vertical-align:middle;margin-right:.35rem"></span>
@@ -1725,13 +1861,17 @@ function bpLoadFile(input) {
   // sure one exists server-side first — a brand-new unnamed project wouldn't have one yet
   // otherwise (autoSaveCurrentToList skips saving until it's named).
   if (!project.id) project.id = 'proj_' + Date.now();
-  apiSaveProject(project.id, project.name, project).then(() => bpUploadFileToServer(project.id, file));
+  // Capture the target project id now — the async work below spans multiple await/callback
+  // boundaries, and `project.id` could point at a different project by the time they run if
+  // the user switches projects mid-upload.
+  const targetProjId = project.id;
+  apiSaveProject(targetProjId, project.name, project).then(() => bpUploadFileToServer(targetProjId, file));
 
   if (bpIsImg) {
     const imgReader = new FileReader();
     imgReader.onload = ie => {
       const dataUrl = ie.target.result;
-      bpStoreFile(project.id, { type: 'image', dataUrl, fileName: file.name });
+      bpStoreFile(targetProjId, { type: 'image', dataUrl, fileName: file.name });
       bpImg = new Image();
       bpImg.onload = () => { bpPageCount = 1; bpPageNum = 1; bpShowCanvas(); bpRenderImg(); };
       bpImg.src = dataUrl;
@@ -1743,7 +1883,7 @@ function bpLoadFile(input) {
     const reader = new FileReader();
     reader.onload = e => {
       const ab = e.target.result;
-      bpStoreFile(project.id, { type: 'pdf', data: ab.slice(0), fileName: file.name });
+      bpStoreFile(targetProjId, { type: 'pdf', data: ab.slice(0), fileName: file.name });
       pdfjsLib.getDocument({ data: ab }).promise.then(pdf => {
         bpPdf = pdf;
         bpPageCount = pdf.numPages;
@@ -2425,7 +2565,7 @@ function getBudgetSheet() {
 // gain cost for the first time land at the end, sorted, until the user drags them somewhere.
 function bldPhaseDivisions() {
   const bs = getBudgetSheet();
-  const active = Object.keys(CSI_ITEMS).filter(d => divTotal(d) > 0);
+  const active = allDivCodes().filter(d => divTotal(d) > 0);
   const order = bs.phaseOrder || [];
   const ordered = order.filter(d => active.includes(d));
   const remaining = active.filter(d => !ordered.includes(d)).sort();
@@ -2685,10 +2825,13 @@ async function bldCopySubShareLink() {
   // Mirrors the same fix needed for Blueprint file sync: the link endpoint checks project
   // ownership against a real saved project record, so make sure one exists first.
   if (!project.id) project.id = 'proj_' + Date.now();
+  // Capture the id now — if the user switches projects during the awaits below, we still want
+  // this link created against the project the phase/subcontractor actually belong to.
+  const projId = project.id;
   let url;
   try {
-    await apiSaveProject(project.id, project.name, project);
-    const res = await fetch(`/api/projects/${project.id}/subcontractor-link`, {
+    await apiSaveProject(projId, project.name, project);
+    const res = await fetch(`/api/projects/${projId}/subcontractor-link`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subcontractorId: row.subcontractorId }),
@@ -3316,8 +3459,10 @@ async function clientShowProject(id) {
   const sectionTotals = {};
 
   // Construction Phases are Estimator-driven — their cost is the division's items, not
-  // fields stored on the phase row itself, so this section is computed separately.
-  const phaseDivisions = Object.keys(CSI_ITEMS).filter(d => (data.items || []).some(i => i.div === d));
+  // fields stored on the phase row itself, so this section is computed separately. Derived
+  // straight from the items themselves (rather than filtering the CSI list) so a project's
+  // own custom divisions are included too, not just the standard CSI ones.
+  const phaseDivisions = [...new Set((data.items || []).map(i => i.div))];
   let phasesTotal = 0;
   phaseDivisions.forEach(d => {
     const row = (bs.phases || {})[d] || {};
@@ -3466,9 +3611,19 @@ function init() {
 
   // The project above came from this browser's own local cache, which only reflects whatever
   // was last open here — it can go stale if the same account was used elsewhere since. Once
-  // logged in, reconcile with the account's authoritative copy on the server.
+  // logged in, reconcile with the account's authoritative copy on the server. Guarded against
+  // the user already having made an edit (or switched projects) while this fetch was in
+  // flight — applying a same-vintage server copy over a newer local edit would silently
+  // revert it, and a later save would then push that reverted state back to the server.
   if (project.id) {
-    apiGetProject(project.id).then(fresh => { if (fresh) bpApplyLoadedProject(fresh); });
+    const idAtFetchStart = project.id;
+    const snapshotAtFetchStart = JSON.stringify(project);
+    apiGetProject(idAtFetchStart).then(fresh => {
+      if (!fresh) return;
+      if (project.id !== idAtFetchStart) return;
+      if (JSON.stringify(project) !== snapshotAtFetchStart) return;
+      bpApplyLoadedProject(fresh);
+    });
   }
 }
 

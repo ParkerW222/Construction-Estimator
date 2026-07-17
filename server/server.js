@@ -182,6 +182,8 @@ async function main() {
       if (!project) return res.status(404).json({ error: 'Not found' });
       const { subcontractorId } = req.body || {};
       if (!subcontractorId) return res.status(400).json({ error: 'subcontractorId is required' });
+      const sub = await subcontractorsRepo.getSubcontractor(db, subcontractorId, req.session.userId);
+      if (!sub) return res.status(404).json({ error: 'Subcontractor not found' });
       const token = await subShareLinksRepo.getOrCreateShareLink(db, req.params.id, subcontractorId);
       res.json({ token });
     } catch (err) { fail(res, err); }
