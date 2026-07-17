@@ -1,20 +1,22 @@
 async function getProjectFile(db, projectId) {
   const result = await db.execute({
-    sql: 'SELECT file_name AS fileName, mime_type AS mimeType, data FROM project_files WHERE project_id = ?',
+    sql: 'SELECT file_name AS fileName, mime_type AS mimeType, data, updated_at AS updatedAt FROM project_files WHERE project_id = ?',
     args: [projectId],
   });
   return result.rows[0] || null;
 }
 
 async function upsertProjectFile(db, { projectId, fileName, mimeType, data }) {
+  const updatedAt = new Date().toISOString();
   await db.execute({
     sql: `
       INSERT INTO project_files (project_id, file_name, mime_type, data, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now'))
+      VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(project_id) DO UPDATE SET file_name = excluded.file_name, mime_type = excluded.mime_type, data = excluded.data, updated_at = excluded.updated_at
     `,
-    args: [projectId, fileName, mimeType, data],
+    args: [projectId, fileName, mimeType, data, updatedAt],
   });
+  return updatedAt;
 }
 
 async function deleteProjectFile(db, projectId) {

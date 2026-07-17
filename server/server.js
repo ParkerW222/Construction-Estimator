@@ -96,8 +96,8 @@ async function main() {
       if (req.body.length > MAX_FILE_BYTES) return res.status(413).json({ error: `File too large — max ${MAX_FILE_BYTES / (1024 * 1024)}MB` });
       const fileName = req.get('X-File-Name') ? decodeURIComponent(req.get('X-File-Name')) : 'drawing';
       const mimeType = req.get('Content-Type') || 'application/octet-stream';
-      await projectFilesRepo.upsertProjectFile(db, { projectId: req.params.id, fileName, mimeType, data: req.body });
-      res.status(204).end();
+      const updatedAt = await projectFilesRepo.upsertProjectFile(db, { projectId: req.params.id, fileName, mimeType, data: req.body });
+      res.json({ updatedAt });
     } catch (err) { fail(res, err); }
   });
 
@@ -109,6 +109,7 @@ async function main() {
       if (!file) return res.status(404).json({ error: 'No file stored' });
       res.set('Content-Type', file.mimeType || 'application/octet-stream');
       res.set('X-File-Name', encodeURIComponent(file.fileName || 'drawing'));
+      res.set('X-Updated-At', file.updatedAt || '');
       res.send(Buffer.from(file.data));
     } catch (err) { fail(res, err); }
   });

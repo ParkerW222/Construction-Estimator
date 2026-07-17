@@ -452,6 +452,7 @@ function saveProject() {
     isImg: bpIsImg,
     zoomPct: bpZoomPct,
     fileName: gid('bp-file-lbl') ? gid('bp-file-lbl').textContent : '',
+    fileVersion: bpFileVersion,
   };
   try { localStorage.setItem(bcProjKey(), JSON.stringify(project)); } catch (e) {}
   autoSaveCurrentToList();
@@ -870,6 +871,7 @@ let bpDragCondId = null;
 let bpIsImg = false, bpImg = null;
 let bpUndoStack = [], bpRedoStack = [];
 const BP_UNDO_LIMIT = 50;
+let bpFileVersion = null; // server's updated_at for the currently-loaded file — used to detect a stale local cache
 
 // ── BLUEPRINT INDEXEDDB PERSISTENCE ────────────────────────────────
 const BP_DB_NAME = 'buildcalc_bp', BP_DB_VERSION = 1, BP_STORE = 'files';
@@ -922,6 +924,13 @@ function bpSetFileSyncStatus(text, warn) {
   el.style.display = 'inline';
 }
 
+function bpSetLocalFileVersion(projId, version) {
+  bpLoadStoredFile(projId).then(stored => {
+    if (!stored) return;
+    bpStoreFile(projId, { ...stored, version });
+  }).catch(() => {});
+}
+
 function bpUploadFileToServer(projId, file) {
   if (!projId || !file) return;
   if (file.size > BP_MAX_FILE_BYTES) {
@@ -936,8 +945,15 @@ function bpUploadFileToServer(projId, file) {
       'X-File-Name': encodeURIComponent(file.name || 'drawing'),
     },
     body: file,
-  }).then(res => {
-    bpSetFileSyncStatus(res.ok ? '✓ synced' : '⚠ sync failed', !res.ok);
+  }).then(async res => {
+    if (!res.ok) { bpSetFileSyncStatus('⚠ sync failed', true); return; }
+    const body = await res.json().catch(() => ({}));
+    if (body.updatedAt) {
+      bpFileVersion = body.updatedAt;
+      bpSetLocalFileVersion(projId, body.updatedAt);
+      saveProject();
+    }
+    bpSetFileSyncStatus('✓ synced');
   }).catch(() => bpSetFileSyncStatus('⚠ sync failed', true));
 }
 
@@ -948,6 +964,7 @@ function bpDownloadFileFromServer(projId) {
     const contentType = res.headers.get('Content-Type') || '';
     const fileNameHeader = res.headers.get('X-File-Name');
     const fileName = fileNameHeader ? decodeURIComponent(fileNameHeader) : '';
+    const updatedAt = res.headers.get('X-Updated-At') || null;
     if (contentType.startsWith('image/')) {
       const blob = await res.blob();
       const dataUrl = await new Promise((resolve, reject) => {
@@ -956,10 +973,10 @@ function bpDownloadFileFromServer(projId) {
         fr.onerror = reject;
         fr.readAsDataURL(blob);
       });
-      return { type: 'image', dataUrl, fileName };
+      return { type: 'image', dataUrl, fileName, updatedAt };
     }
     const data = await res.arrayBuffer();
-    return { type: 'pdf', data, fileName };
+    return { type: 'pdf', data, fileName, updatedAt };
   }).catch(() => null);
 }
 
@@ -971,21 +988,34 @@ function bpRestoreFromProject() {
     if (state.condNextId)   bpCondNextId   = state.condNextId;
     if (state.activeCondId) bpActiveCondId = state.activeCondId;
   }
+  bpFileVersion = (state && state.fileVersion) || null;
   bpRenderConditions();
   bpUpdateActiveIndicator();
   bpResetUndoHistory();
   if (!state || !project.id) return;
   bpLoadStoredFile(project.id).then(stored => {
-    if (stored) { bpRenderStoredFile(stored, state); return; }
-    // Not cached in this browser — e.g. the project was opened on a different computer than
-    // the one the file was uploaded from. Pull a copy from the server and cache it locally.
+    // Only trust the local cache if it's stamped with the same version last synced to the
+    // server. Otherwise it's stale — e.g. left over from testing, or from before the file was
+    // replaced on a different computer — so re-download the current copy instead.
+    if (stored && bpFileVersion && stored.version === bpFileVersion) {
+      bpRenderStoredFile(stored, state);
+      return;
+    }
     bpSetFileSyncStatus('Downloading drawing…');
     bpDownloadFileFromServer(project.id).then(downloaded => {
-      if (!downloaded) { bpSetFileSyncStatus(null); return; }
+      if (!downloaded) {
+        // Server has nothing (or is unreachable) — fall back to whatever's cached locally.
+        if (stored) { bpSetFileSyncStatus(null); bpRenderStoredFile(stored, state); }
+        else bpSetFileSyncStatus(null);
+        return;
+      }
       bpSetFileSyncStatus('✓ synced');
-      const forStorage = downloaded.type === 'pdf' ? { ...downloaded, data: downloaded.data.slice(0) } : downloaded;
+      const forStorage = downloaded.type === 'pdf'
+        ? { ...downloaded, data: downloaded.data.slice(0), version: downloaded.updatedAt }
+        : { ...downloaded, version: downloaded.updatedAt };
       bpStoreFile(project.id, forStorage);
       bpRenderStoredFile(downloaded, state);
+      if (downloaded.updatedAt) { bpFileVersion = downloaded.updatedAt; saveProject(); }
     }).catch(() => bpSetFileSyncStatus(null));
   }).catch(() => {});
 }
