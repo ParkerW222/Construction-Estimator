@@ -93,7 +93,7 @@ function renderTable() {
     <th style="width:50px">Unit</th>
     <th style="min-width:100px;text-align:right">Qty</th>
     <th style="min-width:108px;text-align:right">Unit Cost</th>
-    <th style="min-width:108px;text-align:right">Extended</th>
+    <th style="min-width:108px;text-align:right">Total</th>
     <th style="width:34px"></th>
   </tr>`;
   gid('center-title').textContent = `Division ${activeDiv} — ${CSI_ITEMS[activeDiv].name}`;
@@ -127,7 +127,7 @@ function renderAllItemsTable() {
     <th style="width:50px">Unit</th>
     <th style="min-width:100px;text-align:right">Qty</th>
     <th style="min-width:108px;text-align:right">Unit Cost</th>
-    <th style="min-width:108px;text-align:right">Extended</th>
+    <th style="min-width:108px;text-align:right">Total</th>
     <th style="width:34px"></th>
   </tr>`;
   const items = [...project.items].sort((a, b) => a.div.localeCompare(b.div));
@@ -280,7 +280,7 @@ function exportEstimatePDF() {
     }).join('');
     divSections += `<div class="ds">
       <div class="dh">Division ${d} — ${info.name}</div>
-      <table><thead><tr><th>Description</th><th class="c">Unit</th><th class="r">Qty</th><th class="r">Unit Cost</th><th class="r">Extended</th></tr></thead>
+      <table><thead><tr><th>Description</th><th class="c">Unit</th><th class="r">Qty</th><th class="r">Unit Cost</th><th class="r">Total</th></tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="4" class="r fw">Division Total</td><td class="r fw">${fmt(divTotal(d))}</td></tr></tfoot>
       </table></div>`;
@@ -2370,8 +2370,56 @@ function getBudgetSheet() {
 
 // Construction Phases are no longer a fixed list — each CSI division with cost pushed
 // from the Estimator becomes its own phase, so the two tools stay in sync automatically.
+// Display order is user-customizable (drag-and-drop) via bs.phaseOrder; new divisions that
+// gain cost for the first time land at the end, sorted, until the user drags them somewhere.
 function bldPhaseDivisions() {
-  return Object.keys(CSI_ITEMS).filter(d => divTotal(d) > 0).sort();
+  const bs = getBudgetSheet();
+  const active = Object.keys(CSI_ITEMS).filter(d => divTotal(d) > 0);
+  const order = bs.phaseOrder || [];
+  const ordered = order.filter(d => active.includes(d));
+  const remaining = active.filter(d => !ordered.includes(d)).sort();
+  return [...ordered, ...remaining];
+}
+
+// ── PHASE DRAG-AND-DROP REORDERING ────────────────────────────────────
+let bldDragPhaseDiv = null;
+
+function bldPhaseDragStart(e, d) {
+  bldDragPhaseDiv = d;
+  e.dataTransfer.effectAllowed = 'move';
+  e.currentTarget.classList.add('dragging');
+}
+
+function bldPhaseDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (e.currentTarget.dataset.id !== bldDragPhaseDiv) e.currentTarget.classList.add('drag-over');
+}
+
+function bldPhaseDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function bldPhaseDrop(e, targetDiv) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (bldDragPhaseDiv == null || bldDragPhaseDiv === targetDiv) return;
+  const order = bldPhaseDivisions();
+  const fromIdx = order.indexOf(bldDragPhaseDiv);
+  const toIdx = order.indexOf(targetDiv);
+  if (fromIdx === -1 || toIdx === -1) return;
+  const newOrder = [...order];
+  const [moved] = newOrder.splice(fromIdx, 1);
+  newOrder.splice(toIdx, 0, moved);
+  getBudgetSheet().phaseOrder = newOrder;
+  bldRenderTable();
+  saveProject();
+}
+
+function bldPhaseDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  document.querySelectorAll('.bld-row.drag-over').forEach(el => el.classList.remove('drag-over'));
+  bldDragPhaseDiv = null;
 }
 
 function bldGetRow(section, id) {
@@ -2387,6 +2435,48 @@ function bldGetRow(section, id) {
 
 function bldPhasePaidTotal(row) {
   return (row.payments || []).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+}
+
+// ── PHASE DETAIL MODAL ─────────────────────────────────────────────────
+let bldPhaseDetailDiv = null;
+
+function bldOpenPhaseDetail(d) {
+  bldPhaseDetailDiv = d;
+  gid('phase-detail-title').textContent = `${d} — ${CSI_ITEMS[d].name}`;
+  const items = divItems(d);
+  gid('phase-detail-list').innerHTML = !items.length
+    ? `<div class="empty-msg">No line items found for this division.</div>`
+    : `<table class="items" style="width:100%">
+        <thead><tr>
+          <th>Description</th>
+          <th style="width:50px">Unit</th>
+          <th style="min-width:80px;text-align:right">Qty</th>
+          <th style="min-width:90px;text-align:right">Unit Cost</th>
+          <th style="min-width:90px;text-align:right">Total</th>
+        </tr></thead>
+        <tbody>${items.map(i => `<tr>
+          <td>${esc(i.desc)}</td>
+          <td>${i.unit}</td>
+          <td style="text-align:right">${fmtN(i.qty)}</td>
+          <td style="text-align:right">${fmt(i.unitCost)}</td>
+          <td style="text-align:right;font-weight:600">${fmt(i.qty * i.unitCost)}</td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Division Total</td><td style="text-align:right;font-weight:700">${fmt(divTotal(d))}</td></tr></tfoot>
+      </table>`;
+  gid('phase-detail-modal').style.display = 'flex';
+}
+
+function closePhaseDetailModal() {
+  gid('phase-detail-modal').style.display = 'none';
+  bldPhaseDetailDiv = null;
+}
+
+function bldGoToPhaseInEstimator() {
+  const d = bldPhaseDetailDiv;
+  if (!d) return;
+  closePhaseDetailModal();
+  showPage('estimator');
+  setDiv(d);
 }
 
 // ── SUBCONTRACTOR PAYMENTS MODAL ──────────────────────────────────────
@@ -2736,10 +2826,12 @@ function bldRenderTable() {
       const paid = bldPhasePaidTotal(row);
       const payLabel = sub ? esc(sub.name) : (row.subcontractorId ? '(deleted subcontractor)' : '+ Assign Sub');
       const payAmt = (paid > 0 || sub) ? `${fmt(paid)} / ${fmt(divTotal(d))}` : '';
-      html += `<tr class="bld-row${byOCls}" data-section="phases" data-id="${d}">
-        <td class="bld-num">${i + 1}</td>
-        <td class="bld-label">${d} — ${esc(CSI_ITEMS[d].name)}</td>
-        <td class="bld-cell bld-cost-readonly" colspan="3" title="From the Estimator — division ${d} total">${fmt(divTotal(d))}</td>
+      html += `<tr class="bld-row${byOCls}" data-section="phases" data-id="${d}"
+        draggable="true" ondragstart="bldPhaseDragStart(event,'${d}')" ondragover="bldPhaseDragOver(event)"
+        ondragleave="bldPhaseDragLeave(event)" ondrop="bldPhaseDrop(event,'${d}')" ondragend="bldPhaseDragEnd(event)">
+        <td class="bld-num" title="Drag to reorder">${i + 1}</td>
+        <td class="bld-label bld-label-click" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${d} — ${esc(CSI_ITEMS[d].name)}</td>
+        <td class="bld-cell bld-cost-readonly" colspan="3" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${fmt(divTotal(d))}</td>
         <td class="bld-status-cell">
           <select class="bld-status-sel ${stCls}" onchange="bldSetStatus('phases','${d}',this.value)">
             ${BLD_STATUSES.map(s => `<option value="${s}"${row.status===s?' selected':''}>${s}</option>`).join('')}

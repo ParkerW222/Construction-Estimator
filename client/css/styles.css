@@ -501,6 +501,9 @@ body.admin-mode #admin-app{display:block}
 
 .bld-section-hdr td{background:var(--bg);color:var(--navy);font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:.42rem .65rem;border-top:2px solid var(--border)}
 .bld-num{color:var(--muted);font-size:.73rem;font-weight:600;padding:.48rem .4rem .48rem .65rem;text-align:center}
+.bld-row[draggable="true"] .bld-num{cursor:grab}
+.bld-row.dragging{opacity:.4}
+.bld-row.drag-over{background:rgba(249,115,22,.1)!important;box-shadow:inset 0 2px 0 var(--orange)}
 .bld-label{padding:.48rem .6rem;font-weight:500;color:var(--text)}
 .bld-row.by-others .bld-label{color:var(--muted);text-decoration:line-through}
 .bld-row.by-others .bld-combined{color:var(--muted);font-style:italic}
@@ -612,7 +615,9 @@ body.admin-mode #admin-app{display:block}
 .bld-gantt-handle{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}
 .bld-gantt-handle-l{left:0}
 .bld-gantt-handle-r{right:0}
-.bld-cost-readonly{padding:.35rem .45rem;text-align:right;font-weight:600;color:var(--navy);font-size:.82rem}
+.bld-cost-readonly{padding:.35rem .45rem;text-align:right;font-weight:600;color:var(--navy);font-size:.82rem;cursor:pointer}
+.bld-label-click{cursor:pointer}
+.bld-label-click:hover,.bld-cost-readonly:hover{text-decoration:underline}
 .bld-empty-msg{text-align:center;padding:1.5rem 1rem;color:var(--muted);font-size:.82rem}
 
 /* PRINT */
