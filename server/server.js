@@ -204,7 +204,9 @@ async function main() {
       const phases = Object.entries(bs.phases || {})
         .filter(([, row]) => row.subcontractorId === link.subcontractorId)
         .map(([divCode, row]) => {
-          const total = items.filter(i => i.div === divCode).reduce((s, i) => s + i.qty * i.unitCost, 0);
+          const estTotal = items.filter(i => i.div === divCode).reduce((s, i) => s + i.qty * i.unitCost, 0);
+          const contractAmt = parseFloat(row.contractAmount);
+          const total = contractAmt > 0 ? contractAmt : estTotal;
           const payments = row.payments || [];
           const paid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
           const customName = (project.data.divisionNames || {})[divCode];

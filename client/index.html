@@ -342,7 +342,7 @@
         <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
         <li>Toggle <strong>By Others</strong> on any phase handled by a subcontractor — tracked separately, excluded from your total.</li>
-        <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
+        <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. If a subcontractor's actual quote differs from the Estimator's number, enter it as the <strong>Contract Amount</strong> — that becomes the number used for payments and progress, while the original Estimator estimate stays visible for comparison. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
         <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
         <li>Fill in <strong>Overhead</strong> (taxes, loan, insurance) and <strong>Soft Costs</strong> (permits, architect, geotech) manually at the bottom of the table.</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
@@ -509,6 +509,12 @@
       <select class="form-sel" id="payments-sub-sel" style="flex:1" onchange="bldAssignSubcontractor(this.value)"></select>
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.4rem .6rem" onclick="openManageSubs()">Manage</button>
     </div>
+
+    <label class="fl">Contract Amount</label>
+    <input type="number" id="pay-contract-amount" min="0" step="0.01" placeholder="Uses the Estimator total unless set"
+      style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.42rem .65rem;font-size:.85rem;margin-bottom:.2rem"
+      onchange="bldUpdateContractAmount(this.value)">
+    <div id="pay-contract-note" style="font-size:.72rem;color:var(--muted);margin-bottom:.75rem"></div>
 
     <div class="pay-summary" id="payments-summary"></div>
 

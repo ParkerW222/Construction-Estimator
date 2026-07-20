@@ -2617,7 +2617,7 @@ function bldGetRow(section, id) {
   const bs = getBudgetSheet();
   if (!bs[section][id]) {
     bs[section][id] = section === 'phases'
-      ? { startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '', subcontractorId: null, payments: [] }
+      ? { startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '', subcontractorId: null, payments: [], contractAmount: '' }
       : { mat: '', labor: '', combined: '', startDate: '', endDate: '', status: 'Not Started', byOthers: false, note: '' };
   }
   if (section === 'phases' && !bs[section][id].payments) bs[section][id].payments = [];
@@ -2628,6 +2628,14 @@ function bldPhasePaidTotal(row) {
   return (row.payments || []).reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
 }
 
+// The Estimator total is a takeoff-based estimate — once a subcontractor gives a real number,
+// that contracted amount (not the estimate) is what should drive payments/progress tracking.
+// Leaving it blank keeps the phase fully Estimator-driven, same as before this existed.
+function bldPhaseAmount(d) {
+  const contract = parseFloat(bldGetRow('phases', d).contractAmount);
+  return contract > 0 ? contract : divTotal(d);
+}
+
 // ── PHASE DETAIL MODAL ─────────────────────────────────────────────────
 let bldPhaseDetailDiv = null;
 
@@ -2635,7 +2643,12 @@ function bldOpenPhaseDetail(d) {
   bldPhaseDetailDiv = d;
   gid('phase-detail-title').textContent = `${d} — ${divName(d)}`;
   const items = divItems(d);
-  gid('phase-detail-list').innerHTML = !items.length
+  const row = bldGetRow('phases', d);
+  const hasContract = parseFloat(row.contractAmount) > 0;
+  const contractNote = hasContract
+    ? `<p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">This phase is using a <strong>Contract Amount</strong> of ${fmt(bldPhaseAmount(d))} for payments — the Estimator total below is the original estimate it's based on.</p>`
+    : '';
+  gid('phase-detail-list').innerHTML = contractNote + (!items.length
     ? `<div class="empty-msg">No line items found for this division.</div>`
     : `<table class="items" style="width:100%">
         <thead><tr>
@@ -2652,8 +2665,8 @@ function bldOpenPhaseDetail(d) {
           <td style="text-align:right">${fmt(i.unitCost)}</td>
           <td style="text-align:right;font-weight:600">${fmt(i.qty * i.unitCost)}</td>
         </tr>`).join('')}</tbody>
-        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Division Total</td><td style="text-align:right;font-weight:700">${fmt(divTotal(d))}</td></tr></tfoot>
-      </table>`;
+        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Estimator Total</td><td style="text-align:right;font-weight:700">${fmt(divTotal(d))}</td></tr></tfoot>
+      </table>`);
   gid('phase-detail-modal').style.display = 'flex';
 }
 
@@ -2703,7 +2716,13 @@ function bldRenderPaymentsModal() {
   const shareBtn = gid('pay-share-link-btn');
   if (shareBtn) shareBtn.disabled = !row.subcontractorId;
 
-  const total = divTotal(d);
+  const estTotal = divTotal(d);
+  gid('pay-contract-amount').value = row.contractAmount || '';
+  gid('pay-contract-note').textContent = parseFloat(row.contractAmount) > 0
+    ? `Estimator estimate for this phase: ${fmt(estTotal)}`
+    : `Currently using the Estimator total (${fmt(estTotal)}) — enter an amount above once you have a real quote.`;
+
+  const total = bldPhaseAmount(d);
   const paid = bldPhasePaidTotal(row);
   const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
   gid('payments-summary').innerHTML = `
@@ -2735,6 +2754,14 @@ function bldAssignSubcontractor(subId) {
   saveProject();
 }
 
+function bldUpdateContractAmount(val) {
+  const row = bldGetRow('phases', bldPaymentsTargetDiv);
+  row.contractAmount = val;
+  bldRenderPaymentsModal();
+  bldRenderTable();
+  saveProject();
+}
+
 function bldAddPayment() {
   const amount = parseFloat(gid('pay-add-amount').value);
   if (!amount || amount <= 0) { alert('Enter a payment amount greater than 0.'); return; }
@@ -2762,7 +2789,7 @@ function bldPrintPaymentReceipt() {
   if (!d) return;
   const row = bldGetRow('phases', d);
   const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
-  const total = divTotal(d);
+  const total = bldPhaseAmount(d);
   const paid = bldPhasePaidTotal(row);
   const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   const payments = [...(row.payments || [])].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -2913,7 +2940,7 @@ function bldCalcTotals() {
   let phasesTotal = 0, paidTotal = 0;
   bldPhaseDivisions().forEach(d => {
     const row = bldGetRow('phases', d);
-    const cost = divTotal(d);
+    const cost = bldPhaseAmount(d);
     if (row.byOthers) byOthersTotal += cost; else { phasesTotal += cost; grand += cost; }
     paidTotal += bldPhasePaidTotal(row);
   });
@@ -3019,13 +3046,18 @@ function bldRenderTable() {
       const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
       const paid = bldPhasePaidTotal(row);
       const payLabel = sub ? esc(sub.name) : (row.subcontractorId ? '(deleted subcontractor)' : '+ Assign Sub');
-      const payAmt = (paid > 0 || sub) ? `${fmt(paid)} / ${fmt(divTotal(d))}` : '';
+      const effTotal = bldPhaseAmount(d);
+      const estTotal = divTotal(d);
+      const hasContract = parseFloat(row.contractAmount) > 0;
+      const payAmt = (paid > 0 || sub) ? `${fmt(paid)} / ${fmt(effTotal)}` : '';
       html += `<tr class="bld-row${byOCls}" data-section="phases" data-id="${d}"
         draggable="true" ondragstart="bldPhaseDragStart(event,'${d}')" ondragover="bldPhaseDragOver(event)"
         ondragleave="bldPhaseDragLeave(event)" ondrop="bldPhaseDrop(event,'${d}')" ondragend="bldPhaseDragEnd(event)">
         <td class="bld-num" title="Drag to reorder">${i + 1}</td>
         <td class="bld-label bld-label-click" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${d} — ${esc(divName(d))}<button class="dni-edit bld-label-edit" title="Rename this division" onclick="renameDivision('${d}',event)">&#9998;</button></td>
-        <td class="bld-cell bld-cost-readonly" colspan="3" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${fmt(divTotal(d))}</td>
+        <td class="bld-cell bld-cost-readonly" colspan="3" title="${hasContract ? 'Contract amount — click to see the Estimator estimate this phase is based on' : 'Click to see the Estimator line items behind this total'}" onclick="bldOpenPhaseDetail('${d}')">
+          ${fmt(effTotal)}${hasContract ? `<span class="bld-cost-est">Est. ${fmt(estTotal)}</span>` : ''}
+        </td>
         <td class="bld-status-cell">
           <select class="bld-status-sel ${stCls}" onchange="bldSetStatus('phases','${d}',this.value)">
             ${BLD_STATUSES.map(s => `<option value="${s}"${row.status===s?' selected':''}>${s}</option>`).join('')}
@@ -3466,7 +3498,9 @@ async function clientShowProject(id) {
   let phasesTotal = 0;
   phaseDivisions.forEach(d => {
     const row = (bs.phases || {})[d] || {};
-    const cost = (data.items || []).filter(i => i.div === d).reduce((s, i) => s + i.qty * i.unitCost, 0);
+    const estCost = (data.items || []).filter(i => i.div === d).reduce((s, i) => s + i.qty * i.unitCost, 0);
+    const contractAmt = parseFloat(row.contractAmount);
+    const cost = contractAmt > 0 ? contractAmt : estCost;
     if (!row.byOthers) { phasesTotal += cost; grand += cost; }
   });
   sectionTotals.phases = phasesTotal;

@@ -630,6 +630,7 @@ body.admin-mode #admin-app{display:block}
 .bld-gantt-handle-l{left:0}
 .bld-gantt-handle-r{right:0}
 .bld-cost-readonly{padding:.35rem .45rem;text-align:right;font-weight:600;color:var(--navy);font-size:.82rem;cursor:pointer}
+.bld-cost-est{display:block;font-weight:500;color:var(--muted);font-size:.68rem}
 .bld-label-click{cursor:pointer}
 .bld-label-click:hover,.bld-cost-readonly:hover{text-decoration:underline}
 .bld-empty-msg{text-align:center;padding:1.5rem 1rem;color:var(--muted);font-size:.82rem}
