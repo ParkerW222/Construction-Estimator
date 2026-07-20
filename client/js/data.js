@@ -1,5 +1,6 @@
 // ── CSI MASTERFORMAT DIVISIONS ────────────────────────────────────
 const CSI_ITEMS = {
+  '01': { name: 'General Requirements' },
   '02': { name: 'Existing Conditions' },
   '03': { name: 'Concrete' },
   '04': { name: 'Masonry' },
@@ -9,12 +10,22 @@ const CSI_ITEMS = {
   '08': { name: 'Openings' },
   '09': { name: 'Finishes' },
   '10': { name: 'Specialties' },
+  '11': { name: 'Equipment' },
+  '12': { name: 'Furnishings' },
+  '13': { name: 'Special Construction' },
+  '14': { name: 'Conveying Equipment' },
+  '21': { name: 'Fire Suppression' },
   '22': { name: 'Plumbing' },
   '23': { name: 'HVAC' },
+  '25': { name: 'Integrated Automation' },
   '26': { name: 'Electrical' },
+  '27': { name: 'Communications' },
+  '28': { name: 'Electronic Safety & Security' },
   '31': { name: 'Earthwork' },
   '32': { name: 'Exterior Improvements' },
   '33': { name: 'Utilities' },
+  '34': { name: 'Transportation' },
+  '44': { name: 'Pollution & Waste Control' },
 };
 
 // ── BLUEPRINT CONDITION COLORS ─────────────────────────────────────
