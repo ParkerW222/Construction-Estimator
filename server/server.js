@@ -75,6 +75,18 @@ async function main() {
     } catch (err) { fail(res, err); }
   });
 
+  // Read-only — lets a version's contents be inspected (e.g. to check whether its Blueprint
+  // markups are intact) without touching the live project the way restoring would.
+  app.get('/api/projects/:id/versions/:versionId', requireAuth, async (req, res) => {
+    try {
+      const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
+      if (!project) return res.status(404).json({ error: 'Not found' });
+      const version = await projectsRepo.getVersion(db, req.params.versionId, req.params.id);
+      if (!version) return res.status(404).json({ error: 'Version not found' });
+      res.json(version);
+    } catch (err) { fail(res, err); }
+  });
+
   app.post('/api/projects/:id/versions/:versionId/restore', requireAuth, async (req, res) => {
     try {
       const project = await projectsRepo.getProject(db, req.params.id, req.session.userId);
