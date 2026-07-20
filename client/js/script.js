@@ -2547,21 +2547,20 @@ function bpClearAll() {
 
 // ── BUDGET BUILDER ─────────────────────────────────────────────────
 // Construction Phases are driven live by whatever's been costed in the Estimator
-// (see bldPhaseDivisions) rather than a fixed list — see BLD_OVERHEAD/SOFT/OTHER below
-// for the sections that are still manually maintained.
-
-const BLD_OVERHEAD = [
+// (see bldPhaseDivisions) rather than a fixed list — see BLD_SOFT below for the
+// items that are still manually maintained. Overhead lives in the Estimator only
+// (it's a bid-price markup, not an actual bill), so there's no manual Overhead
+// section here anymore — its old manual entries (taxes, loan, insurance,
+// contingency) are folded into Soft Costs instead of being dropped.
+const BLD_SOFT = [
   { id: 'taxes',       label: 'Taxes' },
   { id: 'loan',        label: 'Bank Loan Interest' },
   { id: 'insurance',   label: 'Insurance' },
   { id: 'contingency', label: 'Contingency' },
-];
-
-const BLD_SOFT = [
-  { id: 'architect',  label: 'Architect / Designer' },
-  { id: 'geotech',    label: 'Geotech / Survey' },
-  { id: 'struct',     label: 'Structural Engineer' },
-  { id: 'consultant', label: 'Project Consultant' },
+  { id: 'architect',   label: 'Architect / Designer' },
+  { id: 'geotech',     label: 'Geotech / Survey' },
+  { id: 'struct',      label: 'Structural Engineer' },
+  { id: 'consultant',  label: 'Project Consultant' },
 ];
 
 const BLD_STATUSES = ['Not Started', 'Bid Needed', 'In Progress', 'Complete'];
@@ -2575,7 +2574,16 @@ function getBudgetSheet() {
       soft: {},
     };
   }
-  return project.budgetSheet;
+  const bs = project.budgetSheet;
+  // One-time migration: the manual Overhead section was folded into Soft Costs — move any
+  // already-entered rows over instead of leaving them stranded and invisible.
+  if (bs.overhead && Object.keys(bs.overhead).length) {
+    Object.entries(bs.overhead).forEach(([id, row]) => {
+      if (!bs.soft[id]) bs.soft[id] = row;
+    });
+    bs.overhead = {};
+  }
+  return bs;
 }
 
 // Grouping by CSI division didn't hold up in practice — e.g. Roofing and Insulation can share
@@ -3134,28 +3142,24 @@ function bldCalcTotals() {
 
   // Permit Fees % is set once in the Estimator and pulled in here as a reference amount,
   // rather than needing to be typed into Soft Costs too. Overhead % stays Estimator-only —
-  // it's a bid-price component, not an actual bill anyone sends you, so it doesn't belong in
-  // this section's total (see estimatorMarkupBreakdown()/bldRenderSummary() for the Estimator's
+  // it's a bid-price component, not an actual bill anyone sends you, so there's no Overhead
+  // section here at all (see estimatorMarkupBreakdown()/bldRenderSummary() for the Estimator's
   // full bid price, shown separately as a reference figure rather than folded in here).
   const markup = estimatorMarkupBreakdown();
-  const sectionAutoAmounts = { soft: markup.permitAmt };
-  // Only count rows for line items that still exist (BLD_OVERHEAD/BLD_SOFT) — if one's ever
-  // removed (like the old manual "Permits & Fees", now replaced by the Estimator reference
-  // row above), any leftover stored value for it is ignored instead of silently double-counted.
-  const sectionItemIds = { overhead: BLD_OVERHEAD.map(i => i.id), soft: BLD_SOFT.map(i => i.id) };
-  ['overhead', 'soft'].forEach(sec => {
-    let t = sectionAutoAmounts[sec] || 0;
-    grand += sectionAutoAmounts[sec] || 0;
-    sectionItemIds[sec].forEach(id => {
-      const row = (bs[sec] || {})[id];
-      if (!row) return;
-      const mat = parseFloat(row.mat) || 0;
-      const labor = parseFloat(row.labor) || 0;
-      const combined = parseFloat(row.combined) || (mat + labor);
-      if (row.byOthers) { byOthersTotal += combined; } else { t += combined; grand += combined; }
-    });
-    sectionTotals[sec] = t;
+  let softTotal = markup.permitAmt;
+  grand += markup.permitAmt;
+  // Only count rows for line items that still exist (BLD_SOFT) — if one's ever removed (like
+  // the old manual "Permits & Fees", now replaced by the Estimator reference row above), any
+  // leftover stored value for it is ignored instead of silently double-counted.
+  BLD_SOFT.map(i => i.id).forEach(id => {
+    const row = (bs.soft || {})[id];
+    if (!row) return;
+    const mat = parseFloat(row.mat) || 0;
+    const labor = parseFloat(row.labor) || 0;
+    const combined = parseFloat(row.combined) || (mat + labor);
+    if (row.byOthers) { byOthersTotal += combined; } else { softTotal += combined; grand += combined; }
   });
+  sectionTotals.soft = softTotal;
 
   let projectStart = null, projectEnd = null;
   bldPhaseDivisions().forEach(d => {
@@ -3286,7 +3290,6 @@ function bldRenderTable() {
   }
 
   const markup = estimatorMarkupBreakdown();
-  renderSection('Overhead', 'overhead', BLD_OVERHEAD, null, false);
   renderSection('Soft Costs', 'soft', BLD_SOFT, null, false, [{ label: 'Permit Fees', amount: markup.permitAmt }]);
 
   gid('bld-tbody').innerHTML = html;
@@ -3512,7 +3515,6 @@ function bldRenderSummary() {
   el.innerHTML = `
     <div class="bld-sum-block">
       <div class="bld-sum-row"><span>Construction</span><span>${fmt(sectionTotals.phases||0)}</span></div>
-      <div class="bld-sum-row"><span>Overhead</span><span>${fmt(sectionTotals.overhead||0)}</span></div>
       <div class="bld-sum-row"><span>Soft Costs</span><span>${fmt(sectionTotals.soft||0)}</span></div>
       <div class="bld-sum-divider"></div>
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(grand)}</span></div>
@@ -3690,8 +3692,8 @@ async function clientShowProject(id) {
   gid('client-detail-name').textContent = data.name || 'Project';
 
   const bs = data.budgetSheet || {};
-  const sections = ['phases', 'overhead', 'soft'];
-  const sectionLabels = { phases: 'Construction', overhead: 'Overhead', soft: 'Soft Costs' };
+  const sections = ['phases', 'soft'];
+  const sectionLabels = { phases: 'Construction', soft: 'Soft Costs' };
   let grand = 0;
   const sectionTotals = {};
 
@@ -3724,8 +3726,8 @@ async function clientShowProject(id) {
   // Mirrors estimatorMarkupBreakdown()/bldCalcTotals() — this project's own Permit Fees % is
   // shown as a builder-set reference row in Payments & Scheduling's Soft Costs, so the
   // client's summary needs to add it in here too rather than only counting manual entries.
-  // Overhead % stays Estimator-only (a bid-price component, not an actual bill), so it isn't
-  // added to the Overhead section total here either.
+  // Overhead % stays Estimator-only (a bid-price component, not an actual bill), so it's
+  // never added here at all — Overhead no longer has its own section here.
   const estMuData = data.estMu || defaultEstMu();
   const directCost = (data.items || []).reduce((s, i) => s + i.qty * i.unitCost, 0);
   const ohAmtData = directCost * estMuData.oh / 100;
@@ -3733,19 +3735,20 @@ async function clientShowProject(id) {
   const coAmtData = (directCost + ohAmtData + prAmtData) * estMuData.cont / 100;
   const taxAmtData = directCost * 0.55 * estMuData.matTax / 100;
   const permitAmtData = (directCost + ohAmtData + prAmtData + coAmtData + taxAmtData) * estMuData.permit / 100;
-  const sectionAutoAmountsData = { soft: permitAmtData };
 
-  ['overhead', 'soft'].forEach(sec => {
-    let t = sectionAutoAmountsData[sec] || 0;
-    grand += sectionAutoAmountsData[sec] || 0;
-    Object.values(bs[sec] || {}).forEach(row => {
-      const mat = parseFloat(row.mat) || 0;
-      const labor = parseFloat(row.labor) || 0;
-      const combined = parseFloat(row.combined) || (mat + labor);
-      if (!row.byOthers) { t += combined; grand += combined; }
-    });
-    sectionTotals[sec] = t;
+  let softTotal = permitAmtData;
+  grand += permitAmtData;
+  // Include any not-yet-migrated old manual Overhead entries too — the migration that folds
+  // them into Soft Costs (see getBudgetSheet()) only runs live in the builder's own browser,
+  // next time they open the project, not retroactively on already-saved data like this.
+  const softRows = { ...(bs.overhead || {}), ...(bs.soft || {}) };
+  Object.values(softRows).forEach(row => {
+    const mat = parseFloat(row.mat) || 0;
+    const labor = parseFloat(row.labor) || 0;
+    const combined = parseFloat(row.combined) || (mat + labor);
+    if (!row.byOthers) { softTotal += combined; grand += combined; }
   });
+  sectionTotals.soft = softTotal;
 
   gid('client-summary-grid').innerHTML = `
     <div class="client-summary-card client-summary-total">
