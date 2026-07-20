@@ -1173,6 +1173,13 @@ function bpRestoreFromProject() {
     bpZoomPct  = state.zoomPct  || 100;
     bpIsImg    = state.isImg    || false;
     bpPageNum  = state.pageNum  || 1;
+    // Sync bpMeasurements (the active page's working array) from bpPageData right away, in
+    // the same tick. bpSavePage()/saveProject() always writes bpMeasurements back into
+    // bpPageData[bpPageNum] on every save, no matter what triggered it — so if anything saves
+    // during the gap before the drawing file finishes loading (which is when this used to run),
+    // it would silently overwrite the current page's real measurements with an empty array.
+    // This is the actual mechanism that corrupted individual pages' data in the past.
+    bpLoadPage();
     const zoomReadout = gid('bp-zoom-pct');
     if (zoomReadout) zoomReadout.textContent = bpZoomPct + '%';
   }
