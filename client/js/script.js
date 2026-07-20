@@ -776,8 +776,12 @@ function bpApplyLoadedProject(entry) {
   const bbn = gid('bld-proj-name');
   if (bbn) bbn.value = project.name || 'New Project';
   activeDiv = '03';
-  renderAll();
-  renderBudgetBuilder();
+  // Estimator/Payments & Scheduling rendering and Blueprint restoration are independent —
+  // a bug in one (e.g. an unexpected shape in older project data) must never be able to stop
+  // the other from running, since that would silently hide Blueprint markups that are
+  // actually saved and fine.
+  try { renderAll(); } catch (e) { console.error('renderAll failed:', e); }
+  try { renderBudgetBuilder(); } catch (e) { console.error('renderBudgetBuilder failed:', e); }
   try { localStorage.setItem(bcProjKey(), JSON.stringify(project)); } catch(e) {}
   updateNavProjectName();
   bpRestoreFromProject();
@@ -3878,8 +3882,12 @@ async function shareCurrentProject() {
 // ── INIT ───────────────────────────────────────────────────────────
 function init() {
   loadProject();
-  renderAll();
-  renderBudgetBuilder();
+  // Estimator/Payments & Scheduling rendering and Blueprint restoration are independent — a
+  // bug in one (e.g. an unexpected shape in older project data) must never be able to stop
+  // the other from running, since that would silently hide Blueprint markups that are
+  // actually saved and fine.
+  try { renderAll(); } catch (e) { console.error('renderAll failed:', e); }
+  try { renderBudgetBuilder(); } catch (e) { console.error('renderBudgetBuilder failed:', e); }
   bpRestoreFromProject();
   showPage('blueprint');
   updateNavProjectName();
