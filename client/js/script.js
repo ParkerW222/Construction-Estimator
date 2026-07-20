@@ -1156,11 +1156,21 @@ let bpRestoreToken = 0;
 function bpRestoreFromProject() {
   const myToken = ++bpRestoreToken;
   const state = project.bpState;
-  // Restore conditions immediately — don't gate on file existence
+  // Restore conditions AND page/measurement data immediately — none of this is gated on the
+  // drawing file itself successfully loading below. It's plain JSON that was saved correctly
+  // regardless of whether the file load/download that follows succeeds, fails, or is slow —
+  // it used to live inside bpRenderStoredFile() and would silently never get applied if that
+  // file step didn't complete, even though the markups had nothing to do with the file itself.
   if (state) {
     if (state.conditions)   bpConditions   = state.conditions;
     if (state.condNextId)   bpCondNextId   = state.condNextId;
     if (state.activeCondId) bpActiveCondId = state.activeCondId;
+    bpPageData = state.pageData || {};
+    bpZoomPct  = state.zoomPct  || 100;
+    bpIsImg    = state.isImg    || false;
+    bpPageNum  = state.pageNum  || 1;
+    const zoomReadout = gid('bp-zoom-pct');
+    if (zoomReadout) zoomReadout.textContent = bpZoomPct + '%';
   }
   bpFileVersion = (state && state.fileVersion) || null;
   bpRenderConditions();
@@ -1174,7 +1184,7 @@ function bpRestoreFromProject() {
     // server. Otherwise it's stale — e.g. left over from testing, or from before the file was
     // replaced on a different computer — so re-download the current copy instead.
     if (stored && bpFileVersion && stored.version === bpFileVersion) {
-      bpRenderStoredFile(stored, state);
+      bpRenderStoredFile(stored);
       return;
     }
     bpSetFileSyncStatus('Downloading drawing…');
@@ -1182,7 +1192,7 @@ function bpRestoreFromProject() {
       if (myToken !== bpRestoreToken) return; // superseded by a newer restore
       if (!downloaded) {
         // Server has nothing (or is unreachable) — fall back to whatever's cached locally.
-        if (stored) { bpSetFileSyncStatus(null); bpRenderStoredFile(stored, state); }
+        if (stored) { bpSetFileSyncStatus(null); bpRenderStoredFile(stored); }
         else bpSetFileSyncStatus(null);
         return;
       }
@@ -1191,19 +1201,16 @@ function bpRestoreFromProject() {
         ? { ...downloaded, data: downloaded.data.slice(0), version: downloaded.updatedAt }
         : { ...downloaded, version: downloaded.updatedAt };
       bpStoreFile(projId, forStorage);
-      bpRenderStoredFile(downloaded, state);
+      bpRenderStoredFile(downloaded);
       if (downloaded.updatedAt && project.id === projId) { bpFileVersion = downloaded.updatedAt; saveProject(); }
     }).catch(() => bpSetFileSyncStatus(null));
   }).catch(() => {});
 }
 
-function bpRenderStoredFile(stored, state) {
-  bpPageData = state.pageData || {};
-  bpZoomPct  = state.zoomPct  || 100;
-  bpIsImg    = state.isImg    || false;
-  bpPageNum  = state.pageNum  || 1;
-  const zoomReadout = gid('bp-zoom-pct');
-  if (zoomReadout) zoomReadout.textContent = bpZoomPct + '%';
+// Just the drawing file itself (PDF/image) — bpPageData/conditions/zoom/page are already
+// restored by bpRestoreFromProject() before this is ever called, independent of whether this
+// succeeds, so a slow or failed file load never costs you your actual markups.
+function bpRenderStoredFile(stored) {
   if (stored.type === 'image') {
     bpImg = new Image();
     bpImg.onload = () => {
