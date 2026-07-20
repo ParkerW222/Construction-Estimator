@@ -201,18 +201,30 @@ async function main() {
 
       const bs = project.data.budgetSheet || {};
       const items = project.data.items || [];
+      // A phase is either a whole division, or a custom phase some items were explicitly
+      // tagged into (see project.customPhases / item.phaseKey) — mirrors the client's grouping.
+      const customPhases = project.data.customPhases || {};
+      const itemsForPhaseId = phaseId => (customPhases[phaseId] !== undefined)
+        ? items.filter(i => i.phaseKey === phaseId)
+        : items.filter(i => i.div === phaseId && !i.phaseKey);
       const phases = Object.entries(bs.phases || {})
         .filter(([, row]) => row.subcontractorId === link.subcontractorId)
-        .map(([divCode, row]) => {
-          const estTotal = items.filter(i => i.div === divCode).reduce((s, i) => s + i.qty * i.unitCost, 0);
+        .map(([phaseId, row]) => {
+          const estTotal = itemsForPhaseId(phaseId).reduce((s, i) => s + i.qty * i.unitCost, 0);
           const contractAmt = parseFloat(row.contractAmount);
           const total = contractAmt > 0 ? contractAmt : estTotal;
           const payments = row.payments || [];
           const paid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-          const customName = (project.data.divisionNames || {})[divCode];
+          let label;
+          if (customPhases[phaseId] !== undefined) {
+            label = customPhases[phaseId];
+          } else {
+            const customName = (project.data.divisionNames || {})[phaseId];
+            label = `${phaseId} — ${customName || CSI_DIVISION_NAMES[phaseId] || 'Division ' + phaseId}`;
+          }
           return {
-            div: divCode,
-            label: `${divCode} — ${customName || CSI_DIVISION_NAMES[divCode] || 'Division ' + divCode}`,
+            div: phaseId,
+            label,
             total, paid, remaining: total - paid, payments,
           };
         });

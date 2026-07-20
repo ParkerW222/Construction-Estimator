@@ -43,10 +43,17 @@ function divItems(d) { return project.items.filter(i => i.div === d); }
 function divTotal(d) {
   return divItems(d).reduce((sum, i) => sum + i.qty * i.unitCost, 0);
 }
+// Object key order isn't reliable here — JS always iterates numeric-looking keys ("10", "44")
+// in ascending numeric order ahead of any key with a leading zero ("01"-"09"), regardless of
+// insertion order, so this needs an explicit sort to display in true division-number order.
+function sortedCsiCodes() {
+  return Object.keys(CSI_ITEMS).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
 // A project can add its own divisions on top of the standard CSI list (e.g. for a scope of
 // work the CSI MasterFormat doesn't cover cleanly) — stored per-project as { code: name }.
 function allDivCodes() {
-  return [...Object.keys(CSI_ITEMS), ...Object.keys(project.customDivisions || {})];
+  return [...sortedCsiCodes(), ...Object.keys(project.customDivisions || {})];
 }
 function isCustomDivision(d) {
   return !!(project.customDivisions && project.customDivisions[d] !== undefined);
@@ -147,7 +154,7 @@ function renderDivNav() {
     <span class="dni-num">+</span>
     <span class="dni-name">Add Division</span>
   </div>`;
-  gid('div-nav').innerHTML = seeAllRow + Object.keys(CSI_ITEMS).map(divRow).join('') + customRows + addRow;
+  gid('div-nav').innerHTML = seeAllRow + sortedCsiCodes().map(divRow).join('') + customRows + addRow;
 }
 
 function renderTable() {
@@ -2559,17 +2566,171 @@ function getBudgetSheet() {
   return project.budgetSheet;
 }
 
+// Most builds don't split cleanly along CSI division lines — a phase is usually a handful of
+// items from ONE division, but sometimes it's items pulled from several. So a "phase" here is
+// either a whole division (the default, zero-setup case) or a named custom phase a user has
+// explicitly tagged specific items into via the phase drill-down modal — items keep their own
+// division for Estimator purposes either way, this only affects Payments & Scheduling grouping.
+function itemsForPhase(phaseId) {
+  if (project.customPhases && project.customPhases[phaseId] !== undefined) {
+    return project.items.filter(i => i.phaseKey === phaseId);
+  }
+  return project.items.filter(i => i.div === phaseId && !i.phaseKey);
+}
+function phaseTotal(phaseId) {
+  return itemsForPhase(phaseId).reduce((s, i) => s + i.qty * i.unitCost, 0);
+}
+function phaseLabel(phaseId) {
+  if (project.customPhases && project.customPhases[phaseId] !== undefined) {
+    return project.customPhases[phaseId];
+  }
+  return `${phaseId} — ${divName(phaseId)}`;
+}
+function isCustomPhase(phaseId) {
+  return !!(project.customPhases && project.customPhases[phaseId] !== undefined);
+}
+
 // Construction Phases are no longer a fixed list — each CSI division with cost pushed
-// from the Estimator becomes its own phase, so the two tools stay in sync automatically.
-// Display order is user-customizable (drag-and-drop) via bs.phaseOrder; new divisions that
-// gain cost for the first time land at the end, sorted, until the user drags them somewhere.
+// from the Estimator becomes its own phase, so the two tools stay in sync automatically
+// (plus any custom phases the user has split off). Display order is user-customizable
+// (drag-and-drop) via bs.phaseOrder; new phases land at the end, sorted, until dragged.
 function bldPhaseDivisions() {
   const bs = getBudgetSheet();
-  const active = allDivCodes().filter(d => divTotal(d) > 0);
+  const divIds = allDivCodes().filter(d => phaseTotal(d) > 0);
+  const customIds = Object.keys(project.customPhases || {}).filter(id => phaseTotal(id) > 0);
+  const active = [...divIds, ...customIds];
   const order = bs.phaseOrder || [];
-  const ordered = order.filter(d => active.includes(d));
-  const remaining = active.filter(d => !ordered.includes(d)).sort();
+  const ordered = order.filter(id => active.includes(id));
+  const remaining = active.filter(id => !ordered.includes(id)).sort();
   return [...ordered, ...remaining];
+}
+
+// ── MOVE AN ITEM TO ANY DIVISION, OR TAG IT INTO A CUSTOM PHASE ───────────────────────
+// One combined control: picking a division actually moves the item there (same as dragging
+// it between divisions in the Estimator); picking a custom phase just groups it for
+// scheduling here without touching its division.
+function bldItemGroupingOptions(item) {
+  const currentPhaseKey = item.phaseKey || '';
+  let opts = '<optgroup label="Move to Division">';
+  allDivCodes().forEach(d => {
+    const selected = !currentPhaseKey && d === item.div;
+    opts += `<option value="div:${d}"${selected ? ' selected' : ''}>${d} — ${esc(divName(d))}</option>`;
+  });
+  opts += '</optgroup>';
+  const phases = project.customPhases || {};
+  if (Object.keys(phases).length) {
+    opts += '<optgroup label="Custom Phases">';
+    Object.entries(phases).forEach(([key, name]) => {
+      opts += `<option value="phase:${key}"${currentPhaseKey === key ? ' selected' : ''}>${esc(name)}</option>`;
+    });
+    opts += '</optgroup>';
+  }
+  opts += '<option value="__new__">+ New Phase…</option>';
+  return opts;
+}
+
+function bldRefreshOpenPhaseViews() {
+  if (bldPhaseDetailDiv) bldOpenPhaseDetail(bldPhaseDetailDiv);
+  if (bldAllItemsModalOpen) bldRenderAllItemsModal();
+}
+
+function bldSetItemGrouping(itemId, value) {
+  const item = project.items.find(i => i.id === itemId);
+  if (!item) return;
+  if (value === '__new__') {
+    const name = prompt('Name for the new phase (it can include items from more than one division):', '');
+    const trimmed = name == null ? '' : name.trim();
+    if (!trimmed) { bldRefreshOpenPhaseViews(); return; } // re-render to reset the dropdown
+    if (!project.customPhases) project.customPhases = {};
+    if (!project.nextCustomPhaseId) project.nextCustomPhaseId = 1;
+    const key = 'P' + project.nextCustomPhaseId++;
+    project.customPhases[key] = trimmed;
+    item.phaseKey = key;
+  } else if (value.startsWith('div:')) {
+    item.div = value.slice(4);
+    delete item.phaseKey;
+  } else if (value.startsWith('phase:')) {
+    item.phaseKey = value.slice(6);
+  }
+  saveProject();
+  renderAll();
+  bldRenderTable();
+  bldRefreshOpenPhaseViews();
+}
+
+// ── ALL ITEMS MODAL (Payments & Scheduling) ───────────────────────────
+let bldAllItemsModalOpen = false;
+
+function bldOpenAllItemsModal() {
+  bldAllItemsModalOpen = true;
+  bldRenderAllItemsModal();
+  gid('bld-all-items-modal').style.display = 'flex';
+}
+
+function closeBldAllItemsModal() {
+  gid('bld-all-items-modal').style.display = 'none';
+  bldAllItemsModalOpen = false;
+}
+
+function bldRenderAllItemsModal() {
+  const items = [...project.items].sort((a, b) => a.div.localeCompare(b.div));
+  const grand = items.reduce((s, i) => s + i.qty * i.unitCost, 0);
+  gid('bld-all-items-list').innerHTML = !items.length
+    ? `<div class="empty-msg">No items yet — add some in the Estimator first.</div>`
+    : `<table class="items" style="width:100%">
+        <thead><tr>
+          <th style="width:50px">Div</th>
+          <th>Description</th>
+          <th style="width:50px">Unit</th>
+          <th style="min-width:70px;text-align:right">Qty</th>
+          <th style="min-width:85px;text-align:right">Unit Cost</th>
+          <th style="min-width:85px;text-align:right">Total</th>
+          <th style="min-width:190px">Division / Phase</th>
+        </tr></thead>
+        <tbody>${items.map(i => `<tr>
+          <td style="font-size:.72rem;color:var(--muted)">${i.div}</td>
+          <td>${esc(i.desc)}</td>
+          <td>${i.unit}</td>
+          <td style="text-align:right">${fmtN(i.qty)}</td>
+          <td style="text-align:right">${fmt(i.unitCost)}</td>
+          <td style="text-align:right;font-weight:600">${fmt(i.qty * i.unitCost)}</td>
+          <td><select class="form-sel" style="font-size:.75rem;padding:.2rem .3rem;width:100%" onchange="bldSetItemGrouping(${i.id},this.value)">${bldItemGroupingOptions(i)}</select></td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700">Grand Total</td><td style="text-align:right;font-weight:700">${fmt(grand)}</td><td></td></tr></tfoot>
+      </table>`;
+}
+
+function bldRenamePhase(phaseId, event) {
+  if (event) event.stopPropagation();
+  if (isCustomPhase(phaseId)) {
+    const next = prompt('Rename this phase:', project.customPhases[phaseId]);
+    if (next === null) return;
+    const trimmed = next.trim();
+    if (trimmed) project.customPhases[phaseId] = trimmed;
+    saveProject();
+    bldRenderTable();
+    if (bldAllItemsModalOpen) bldRenderAllItemsModal();
+  } else {
+    renameDivision(phaseId, event);
+  }
+}
+
+function bldDeletePhase(phaseId, event) {
+  if (event) event.stopPropagation();
+  if (!isCustomPhase(phaseId)) return;
+  const itemCount = itemsForPhase(phaseId).length;
+  const msg = itemCount > 0
+    ? `Delete "${project.customPhases[phaseId]}"? Its ${itemCount} item${itemCount === 1 ? '' : 's'} will move back to their division's default phase.`
+    : `Delete "${project.customPhases[phaseId]}"?`;
+  if (!confirm(msg)) return;
+  project.items.forEach(i => { if (i.phaseKey === phaseId) delete i.phaseKey; });
+  delete project.customPhases[phaseId];
+  const bs = getBudgetSheet();
+  if (bs.phases && bs.phases[phaseId]) delete bs.phases[phaseId];
+  if (bs.phaseOrder) bs.phaseOrder = bs.phaseOrder.filter(x => x !== phaseId);
+  saveProject();
+  bldRenderTable();
+  if (bldAllItemsModalOpen) bldRenderAllItemsModal();
 }
 
 // ── PHASE DRAG-AND-DROP REORDERING ────────────────────────────────────
@@ -2631,9 +2792,9 @@ function bldPhasePaidTotal(row) {
 // The Estimator total is a takeoff-based estimate — once a subcontractor gives a real number,
 // that contracted amount (not the estimate) is what should drive payments/progress tracking.
 // Leaving it blank keeps the phase fully Estimator-driven, same as before this existed.
-function bldPhaseAmount(d) {
-  const contract = parseFloat(bldGetRow('phases', d).contractAmount);
-  return contract > 0 ? contract : divTotal(d);
+function bldPhaseAmount(phaseId) {
+  const contract = parseFloat(bldGetRow('phases', phaseId).contractAmount);
+  return contract > 0 ? contract : phaseTotal(phaseId);
 }
 
 // ── PHASE DETAIL MODAL ─────────────────────────────────────────────────
@@ -2641,15 +2802,19 @@ let bldPhaseDetailDiv = null;
 
 function bldOpenPhaseDetail(d) {
   bldPhaseDetailDiv = d;
-  gid('phase-detail-title').textContent = `${d} — ${divName(d)}`;
-  const items = divItems(d);
+  gid('phase-detail-title').textContent = phaseLabel(d);
+  const items = itemsForPhase(d);
   const row = bldGetRow('phases', d);
   const hasContract = parseFloat(row.contractAmount) > 0;
-  const contractNote = hasContract
-    ? `<p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">This phase is using a <strong>Contract Amount</strong> of ${fmt(bldPhaseAmount(d))} for payments — the Estimator total below is the original estimate it's based on.</p>`
-    : '';
-  gid('phase-detail-list').innerHTML = contractNote + (!items.length
-    ? `<div class="empty-msg">No line items found for this division.</div>`
+  let noteHtml = '';
+  if (hasContract) {
+    noteHtml += `<p style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">This phase is using a <strong>Contract Amount</strong> of ${fmt(bldPhaseAmount(d))} for payments — the total below is the original estimate it's based on.</p>`;
+  }
+  if (!isCustomPhase(d) && divTotal(d) !== phaseTotal(d)) {
+    noteHtml += `<p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">Some items in ${esc(divName(d))} have been moved to another division or phase — use the <strong>Division / Phase</strong> column below to move items in or out.</p>`;
+  }
+  gid('phase-detail-list').innerHTML = noteHtml + (!items.length
+    ? `<div class="empty-msg">No line items in this phase yet.</div>`
     : `<table class="items" style="width:100%">
         <thead><tr>
           <th>Description</th>
@@ -2657,6 +2822,7 @@ function bldOpenPhaseDetail(d) {
           <th style="min-width:80px;text-align:right">Qty</th>
           <th style="min-width:90px;text-align:right">Unit Cost</th>
           <th style="min-width:90px;text-align:right">Total</th>
+          <th style="min-width:190px">Division / Phase</th>
         </tr></thead>
         <tbody>${items.map(i => `<tr>
           <td>${esc(i.desc)}</td>
@@ -2664,8 +2830,9 @@ function bldOpenPhaseDetail(d) {
           <td style="text-align:right">${fmtN(i.qty)}</td>
           <td style="text-align:right">${fmt(i.unitCost)}</td>
           <td style="text-align:right;font-weight:600">${fmt(i.qty * i.unitCost)}</td>
+          <td><select class="form-sel" style="font-size:.75rem;padding:.2rem .3rem;width:100%" onchange="bldSetItemGrouping(${i.id},this.value)">${bldItemGroupingOptions(i)}</select></td>
         </tr>`).join('')}</tbody>
-        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Estimator Total</td><td style="text-align:right;font-weight:700">${fmt(divTotal(d))}</td></tr></tfoot>
+        <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Total</td><td style="text-align:right;font-weight:700">${fmt(phaseTotal(d))}</td><td></td></tr></tfoot>
       </table>`);
   gid('phase-detail-modal').style.display = 'flex';
 }
@@ -2680,7 +2847,9 @@ function bldGoToPhaseInEstimator() {
   if (!d) return;
   closePhaseDetailModal();
   showPage('estimator');
-  setDiv(d);
+  // A custom phase can span multiple divisions, so there's no single division to jump to —
+  // show every item instead.
+  setDiv(isCustomPhase(d) ? 'ALL' : d);
 }
 
 // ── SUBCONTRACTOR PAYMENTS MODAL ──────────────────────────────────────
@@ -2688,7 +2857,7 @@ let bldPaymentsTargetDiv = null;
 
 function bldOpenPaymentsModal(d) {
   bldPaymentsTargetDiv = d;
-  gid('payments-modal-title').textContent = `Payments — ${d} — ${divName(d)}`;
+  gid('payments-modal-title').textContent = `Payments — ${phaseLabel(d)}`;
   bldRenderPaymentsModal();
   gid('pay-add-date').value = new Date().toISOString().slice(0, 10);
   gid('pay-add-amount').value = '';
@@ -2716,7 +2885,7 @@ function bldRenderPaymentsModal() {
   const shareBtn = gid('pay-share-link-btn');
   if (shareBtn) shareBtn.disabled = !row.subcontractorId;
 
-  const estTotal = divTotal(d);
+  const estTotal = phaseTotal(d);
   gid('pay-contract-amount').value = row.contractAmount || '';
   gid('pay-contract-note').textContent = parseFloat(row.contractAmount) > 0
     ? `Estimator estimate for this phase: ${fmt(estTotal)}`
@@ -2825,7 +2994,7 @@ tbody td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10.5px}
 </div>
 <div class="meta">
   <div><span>Subcontractor</span>${esc(sub ? sub.name : 'Not assigned')}${sub && sub.trade ? ` — ${esc(sub.trade)}` : ''}</div>
-  <div><span>Phase</span>${d} — ${esc(divName(d))}</div>
+  <div><span>Phase</span>${esc(phaseLabel(d))}</div>
 </div>
 <table><thead><tr><th>Date</th><th>Note</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="sw">
@@ -3047,15 +3216,15 @@ function bldRenderTable() {
       const paid = bldPhasePaidTotal(row);
       const payLabel = sub ? esc(sub.name) : (row.subcontractorId ? '(deleted subcontractor)' : '+ Assign Sub');
       const effTotal = bldPhaseAmount(d);
-      const estTotal = divTotal(d);
+      const estTotal = phaseTotal(d);
       const hasContract = parseFloat(row.contractAmount) > 0;
       const payAmt = (paid > 0 || sub) ? `${fmt(paid)} / ${fmt(effTotal)}` : '';
       html += `<tr class="bld-row${byOCls}" data-section="phases" data-id="${d}"
         draggable="true" ondragstart="bldPhaseDragStart(event,'${d}')" ondragover="bldPhaseDragOver(event)"
         ondragleave="bldPhaseDragLeave(event)" ondrop="bldPhaseDrop(event,'${d}')" ondragend="bldPhaseDragEnd(event)">
         <td class="bld-num" title="Drag to reorder">${i + 1}</td>
-        <td class="bld-label bld-label-click" title="Click to see the Estimator line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${d} — ${esc(divName(d))}<button class="dni-edit bld-label-edit" title="Rename this division" onclick="renameDivision('${d}',event)">&#9998;</button></td>
-        <td class="bld-cell bld-cost-readonly" colspan="3" title="${hasContract ? 'Contract amount — click to see the Estimator estimate this phase is based on' : 'Click to see the Estimator line items behind this total'}" onclick="bldOpenPhaseDetail('${d}')">
+        <td class="bld-label bld-label-click" title="Click to see the line items behind this total" onclick="bldOpenPhaseDetail('${d}')">${esc(phaseLabel(d))}<button class="dni-edit bld-label-edit" title="Rename this phase" onclick="bldRenamePhase('${d}',event)">&#9998;</button>${isCustomPhase(d) ? `<button class="dni-edit bld-label-edit" title="Delete this phase" onclick="bldDeletePhase('${d}',event)">&#128465;</button>` : ''}</td>
+        <td class="bld-cell bld-cost-readonly" colspan="3" title="${hasContract ? 'Contract amount — click to see the estimate this phase is based on' : 'Click to see the line items behind this total'}" onclick="bldOpenPhaseDetail('${d}')">
           ${fmt(effTotal)}${hasContract ? `<span class="bld-cost-est">Est. ${fmt(estTotal)}</span>` : ''}
         </td>
         <td class="bld-status-cell">
@@ -3104,7 +3273,7 @@ function bldGanttPhases() {
     const s = new Date(row.startDate + 'T12:00:00');
     const e = new Date(row.endDate   + 'T12:00:00');
     if (e <= s) return null;
-    return { div: d, label: `${d} — ${divName(d)}`, status: row.status, s, e };
+    return { div: d, label: phaseLabel(d), status: row.status, s, e };
   }).filter(Boolean);
 }
 
@@ -3490,15 +3659,22 @@ async function clientShowProject(id) {
   let grand = 0;
   const sectionTotals = {};
 
-  // Construction Phases are Estimator-driven — their cost is the division's items, not
-  // fields stored on the phase row itself, so this section is computed separately. Derived
-  // straight from the items themselves (rather than filtering the CSI list) so a project's
-  // own custom divisions are included too, not just the standard CSI ones.
-  const phaseDivisions = [...new Set((data.items || []).map(i => i.div))];
+  // Construction Phases are Estimator-driven — their cost is the phase's items, not fields
+  // stored on the phase row itself, so this section is computed separately. A "phase" is
+  // either a whole division (default) or a custom phase some items were explicitly tagged
+  // into (see project.customPhases / item.phaseKey) — derived from the items themselves
+  // (rather than filtering the CSI list) so custom divisions and custom phases both count.
+  const customPhases = data.customPhases || {};
+  const itemsForPhaseData = phaseId => (customPhases[phaseId] !== undefined)
+    ? (data.items || []).filter(i => i.phaseKey === phaseId)
+    : (data.items || []).filter(i => i.div === phaseId && !i.phaseKey);
+  const divIdsWithItems = [...new Set((data.items || []).filter(i => !i.phaseKey).map(i => i.div))];
+  const customIdsWithItems = Object.keys(customPhases).filter(id => itemsForPhaseData(id).length);
+  const phaseDivisions = [...divIdsWithItems, ...customIdsWithItems];
   let phasesTotal = 0;
   phaseDivisions.forEach(d => {
     const row = (bs.phases || {})[d] || {};
-    const estCost = (data.items || []).filter(i => i.div === d).reduce((s, i) => s + i.qty * i.unitCost, 0);
+    const estCost = itemsForPhaseData(d).reduce((s, i) => s + i.qty * i.unitCost, 0);
     const contractAmt = parseFloat(row.contractAmount);
     const cost = contractAmt > 0 ? contractAmt : estCost;
     if (!row.byOthers) { phasesTotal += cost; grand += cost; }
