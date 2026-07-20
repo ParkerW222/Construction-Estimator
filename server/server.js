@@ -7,7 +7,6 @@ const projectsRepo = require('./db/projects');
 const projectFilesRepo = require('./db/projectFiles');
 const subcontractorsRepo = require('./db/subcontractors');
 const subShareLinksRepo = require('./db/subShareLinks');
-const { CSI_DIVISION_NAMES } = require('./csiDivisions');
 const adminRepo = require('./db/admin');
 const { registerAuthRoutes, requireAuth, requireAdmin } = require('./auth');
 const SqliteSessionStore = require('./sessionStore');
@@ -201,27 +200,30 @@ async function main() {
 
       const bs = project.data.budgetSheet || {};
       const items = project.data.items || [];
-      // A phase is either a whole division, or a custom phase some items were explicitly
-      // tagged into (see project.customPhases / item.phaseKey) — mirrors the client's grouping.
+      // A phase is either a single costed item (the default) or a custom phase some items
+      // were explicitly tagged into (see project.customPhases / item.phaseKey) — mirrors the
+      // client's grouping. Divisions are no longer a grouping level here.
       const customPhases = project.data.customPhases || {};
-      const itemsForPhaseId = phaseId => (customPhases[phaseId] !== undefined)
-        ? items.filter(i => i.phaseKey === phaseId)
-        : items.filter(i => i.div === phaseId && !i.phaseKey);
+      const itemsForPhaseId = phaseId => {
+        if (customPhases[phaseId] !== undefined) return items.filter(i => i.phaseKey === phaseId);
+        if (phaseId.startsWith('item:')) {
+          const itemId = parseInt(phaseId.slice(5), 10);
+          return items.filter(i => i.id === itemId && !i.phaseKey);
+        }
+        return [];
+      };
       const phases = Object.entries(bs.phases || {})
         .filter(([, row]) => row.subcontractorId === link.subcontractorId)
         .map(([phaseId, row]) => {
-          const estTotal = itemsForPhaseId(phaseId).reduce((s, i) => s + i.qty * i.unitCost, 0);
+          const phaseItems = itemsForPhaseId(phaseId);
+          const estTotal = phaseItems.reduce((s, i) => s + i.qty * i.unitCost, 0);
           const contractAmt = parseFloat(row.contractAmount);
           const total = contractAmt > 0 ? contractAmt : estTotal;
           const payments = row.payments || [];
           const paid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-          let label;
-          if (customPhases[phaseId] !== undefined) {
-            label = customPhases[phaseId];
-          } else {
-            const customName = (project.data.divisionNames || {})[phaseId];
-            label = `${phaseId} — ${customName || CSI_DIVISION_NAMES[phaseId] || 'Division ' + phaseId}`;
-          }
+          const label = customPhases[phaseId] !== undefined
+            ? customPhases[phaseId]
+            : (phaseItems[0] ? phaseItems[0].desc : phaseId);
           return {
             div: phaseId,
             label,

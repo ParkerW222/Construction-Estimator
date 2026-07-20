@@ -333,18 +333,19 @@
         <span class="help-num">1</span>
         <div><div class="help-tool-name">Payments & Scheduling</div><div class="help-tool-sub">Critical-path project schedule and contractor payments, driven by the Estimator</div></div>
       </div>
-      <p class="help-desc">Construction Phases aren't typed in by hand — every CSI division you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead and Soft Costs stay manual, since those aren't Estimator line items.</p>
+      <p class="help-desc">Construction Phases aren't typed in by hand — every item you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead and Soft Costs stay manual, since those aren't Estimator line items.</p>
       <ol class="help-steps">
         <li>Set a <strong>project name</strong> at the top.</li>
-        <li><strong>Construction Phases</strong> populate on their own from whatever's been costed in the Project Estimator — one phase per division by default. Add or change a cost there, and the matching phase (and its dollar figure) updates here — nothing to enter twice. Click a phase's name or <strong>Total</strong> to see every line item behind that number (click <strong>Open in Estimator</strong> from there to jump straight to that division), or drag the row by its number to reorder phases however you like.</li>
-        <li>Real builds don't always split cleanly by CSI division. In a phase's drill-down, use the <strong>Division / Phase</strong> dropdown on any item to move it to a different division outright, or split it into its own custom phase instead (name it anything — a custom phase can pull items from more than one division, and doesn't change the item's actual division in the Estimator). Rename or delete a custom phase from its row the same way as any other. Click <strong>All Items</strong> in the top bar to see and re-assign every item across every division in one list, instead of opening each phase one at a time.</li>
+        <li><strong>Construction Phases</strong> populate on their own from whatever's been costed in the Project Estimator — every costed item gets its own phase, so items in the same CSI division (like Roofing and Insulation, both under Thermal & Moisture) can still run on completely different schedules with different subs. Add or change a cost in the Estimator, and the matching phase (and its dollar figure) updates here — nothing to enter twice. Click a phase's name or <strong>Total</strong> to see the line item behind it (click <strong>Open in Estimator</strong> from there to jump to its division), or drag the row by its number to reorder phases however you like.</li>
+        <li>Need several items scheduled together instead (same sub, same dates)? In a phase's drill-down, use the <strong>Phase</strong> dropdown on any item to group it into a named custom phase — it can pull items from more than one division. Set it back to <strong>— Its own phase —</strong> to split it out again. Rename or delete a custom phase from its row the same way as any other. Click <strong>All Items</strong> in the top bar to see and re-group every item in one list, instead of opening each phase one at a time.</li>
         <li>Use the <strong>Status</strong> dropdown per phase to track progress: Not Started → Bid Needed → In Progress → Complete.</li>
         <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
         <li>Toggle <strong>By Others</strong> on any phase handled by a subcontractor — tracked separately, excluded from your total.</li>
         <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. If a subcontractor's actual quote differs from the Estimator's number, enter it as the <strong>Contract Amount</strong> — that becomes the number used for payments and progress, while the original Estimator estimate stays visible for comparison. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
         <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
-        <li><strong>Overhead</strong> and <strong>Soft Costs</strong> each start with a highlighted <strong>Estimator</strong> row — your Overhead % and Permit Fees % markup, pulled straight from the Estimator so that number is never entered twice. Click it to jump to the Estimator and change the percentage there. Below that, fill in whatever else applies manually: taxes, loan interest, and insurance under Overhead; architect, geotech, and other consultants under Soft Costs.</li>
+        <li>Fill in <strong>Overhead</strong> (taxes, loan interest, insurance, contingency) manually. <strong>Soft Costs</strong> starts with a highlighted <strong>Estimator</strong> row for Permit Fees — pulled straight from the Estimator's Permit Fees % so that number is never entered twice — plus whatever else applies manually: architect, geotech, and other consultants.</li>
+        <li>Total Budget here tracks actual costs and payments, not your bid price — it won't include Profit or the Estimator's Overhead % markup, since those aren't real bills. To see the full number you'd quote a client, check <strong>Estimator Bid Price</strong> at the bottom of the summary panel (click it to jump to the Estimator).</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
     </div>
@@ -542,7 +543,7 @@
       <span class="modal-title" id="phase-detail-title">Phase Detail</span>
       <button class="modal-close" onclick="closePhaseDetailModal()">&#10005;</button>
     </div>
-    <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">Every line item that makes up this phase's total. Use the <strong>Division / Phase</strong> column to move an item to a different division, or split it into its own custom phase.</p>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">The line item behind this phase's total. Use the <strong>Phase</strong> column to group it into a named custom phase with other items, or split it back out on its own.</p>
     <div id="phase-detail-list" style="max-height:360px;overflow-y:auto;margin-bottom:.75rem"></div>
     <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="bldGoToPhaseInEstimator()">Open in Estimator</button>
   </div>
@@ -555,7 +556,7 @@
       <span class="modal-title">All Items</span>
       <button class="modal-close" onclick="closeBldAllItemsModal()">&#10005;</button>
     </div>
-    <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">Every item across every division, in one place. Use the <strong>Division / Phase</strong> column to move any of them to a different division, or split them into their own custom phase for scheduling.</p>
+    <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">Every item across every division, in one place. Use the <strong>Phase</strong> column to group any of them into a named custom phase for scheduling, or split them back out on their own.</p>
     <div id="bld-all-items-list" style="max-height:440px;overflow-y:auto"></div>
   </div>
 </div>
