@@ -342,6 +342,7 @@
         <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
         <li>Toggle <strong>By Others</strong> on any phase handled by a subcontractor — tracked separately, excluded from your total.</li>
+        <li>The <strong>Notes</strong> field is one line, so long notes can get cut off — click the small <strong>expand icon</strong> next to it to read or edit the full note in a larger box.</li>
         <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. If a subcontractor's actual quote differs from the Estimator's number, enter it as the <strong>Contract Amount</strong> — that becomes the number used for payments and progress, while the original Estimator estimate stays visible for comparison. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
         <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
         <li><strong>Soft Costs</strong> starts with a highlighted <strong>Estimator</strong> row for Permit Fees — pulled straight from the Estimator's Permit Fees % so that number is never entered twice — plus whatever else applies manually: taxes, loan interest, insurance, contingency, architect, geotech, and other consultants. Overhead lives only in the Estimator now, since it's part of your bid price rather than a real bill.</li>
@@ -558,6 +559,19 @@
     </div>
     <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">Every item across every division, in one place. Use the <strong>Phase</strong> column to group any of them into a named custom phase for scheduling, or split them back out on their own.</p>
     <div id="bld-all-items-list" style="max-height:440px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- NOTE MODAL (Payments & Scheduling) -->
+<div class="modal-overlay" id="bld-note-modal" style="display:none" onclick="if(event.target===this)closeBldNoteModal()">
+  <div class="modal-box" style="width:480px">
+    <div class="modal-head">
+      <span class="modal-title">Note</span>
+      <button class="modal-close" onclick="closeBldNoteModal()">&#10005;</button>
+    </div>
+    <textarea id="bld-note-modal-textarea" rows="8" placeholder="Note…"
+      style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.6rem .7rem;font-size:.85rem;font-family:inherit;color:var(--text);resize:vertical"></textarea>
+    <button class="btn btn-orange" style="width:100%;justify-content:center;margin-top:.75rem" onclick="bldSaveNoteModal()">Save</button>
   </div>
 </div>
 

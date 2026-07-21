@@ -3241,6 +3241,7 @@ function bldRenderTable() {
           <input type="text" class="bld-note-inp" placeholder="Note…"
             value="${(row.note||'').replace(/"/g,'&quot;')}"
             onchange="bldUpdateItem('${sectionKey}','${item.id}','note',this.value)">
+          <button class="bld-note-expand" title="View/edit full note" onclick="bldOpenNoteModal('${sectionKey}','${item.id}')">&#9974;</button>
         </td>
         <td class="bld-pay-cell"></td>
       </tr>`;
@@ -3296,6 +3297,7 @@ function bldRenderTable() {
           <input type="text" class="bld-note-inp" placeholder="Note…"
             value="${(row.note||'').replace(/"/g,'&quot;')}"
             onchange="bldUpdateItem('phases','${d}','note',this.value)">
+          <button class="bld-note-expand" title="View/edit full note" onclick="bldOpenNoteModal('phases','${d}')">&#9974;</button>
         </td>
         <td class="bld-pay-cell">
           <button class="bld-pay-btn" onclick="bldOpenPaymentsModal('${d}')">
@@ -3553,6 +3555,30 @@ function bldUpdateItem(section, id, field, val) {
     bldRenderSummary();
   }
   saveProject();
+}
+
+// ── NOTE MODAL (Payments & Scheduling) — the inline field is one line, so long notes get
+// cut off; this shows/edits the full text in a resizable textarea instead. ──────────────
+let bldNoteModalTarget = null;
+
+function bldOpenNoteModal(section, id) {
+  bldNoteModalTarget = { section, id };
+  gid('bld-note-modal-textarea').value = bldGetRow(section, id).note || '';
+  gid('bld-note-modal').style.display = 'flex';
+  gid('bld-note-modal-textarea').focus();
+}
+
+function closeBldNoteModal() {
+  gid('bld-note-modal').style.display = 'none';
+  bldNoteModalTarget = null;
+}
+
+function bldSaveNoteModal() {
+  if (!bldNoteModalTarget) return;
+  const { section, id } = bldNoteModalTarget;
+  bldUpdateItem(section, id, 'note', gid('bld-note-modal-textarea').value);
+  bldRenderTable();
+  closeBldNoteModal();
 }
 
 function bldSetStatus(section, id, val) {

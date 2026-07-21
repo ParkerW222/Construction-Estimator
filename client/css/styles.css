@@ -553,10 +553,12 @@ body.admin-mode #admin-app{display:block}
 .bld-bo-tgl input:checked + .bld-bo-chk::after{content:'✓';position:absolute;top:-1px;left:1px;color:#fff;font-size:.7rem;font-weight:900}
 
 /* NOTE */
-.bld-note-cell{padding:.35rem .45rem;vertical-align:middle}
-.bld-note-inp{width:100%;border:1.5px solid transparent;border-radius:5px;padding:.32rem .5rem;font-size:.77rem;font-family:inherit;color:var(--text);background:transparent;transition:.12s}
+.bld-note-cell{padding:.35rem .45rem;vertical-align:middle;display:flex;align-items:center;gap:.25rem}
+.bld-note-inp{flex:1;min-width:0;border:1.5px solid transparent;border-radius:5px;padding:.32rem .5rem;font-size:.77rem;font-family:inherit;color:var(--text);background:transparent;transition:.12s}
 .bld-note-inp:focus{outline:none;border-color:var(--orange);background:var(--surface);box-shadow:var(--focus-ring)}
 .bld-note-inp:not(:placeholder-shown){border-color:#e2e8f0;background:#fafbfc}
+.bld-note-expand{flex-shrink:0;border:none;background:transparent;color:var(--muted);font-size:.85rem;line-height:1;cursor:pointer;padding:.25rem;border-radius:4px;opacity:.5;transition:.12s}
+.bld-note-expand:hover{opacity:1;background:rgba(0,0,0,.06);color:var(--text)}
 
 /* PAYMENTS COLUMN + MODAL */
 .bld-pay-cell{padding:.35rem .45rem;vertical-align:middle}
