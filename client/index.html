@@ -162,7 +162,6 @@
             <th class="bld-th-money">Total</th>
             <th class="bld-th-status">Status</th>
             <th class="bld-th-dur">Schedule</th>
-            <th class="bld-th-by" title="Excluded from Budget">Excluded</th>
             <th class="bld-th-note">Notes</th>
             <th class="bld-th-pay">Payments</th>
           </tr>
@@ -341,11 +340,10 @@
         <li>Use the <strong>Status</strong> dropdown per phase to track progress: Not Started → Bid Needed → In Progress → Complete.</li>
         <li>Set a <strong>Start</strong> and <strong>End</strong> date per phase to build your schedule — once both are set for at least one phase, a colored <strong>Schedule</strong> timeline appears below the table (click its header to expand/collapse).</li>
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. Snaps to whole days and saves automatically.</li>
-        <li>Toggle <strong>Excluded</strong> on any phase someone other than you is paying for (owner-furnished, handled by a separate contractor, etc.) — it stays visible and tracked, but drops out of your Total Budget.</li>
         <li>The <strong>Notes</strong> field is one line, so long notes can get cut off — click the small <strong>expand icon</strong> next to it to read or edit the full note in a larger box.</li>
         <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. If a subcontractor's actual quote differs from the Estimator's number, enter it as the <strong>Contract Amount</strong> — that becomes the number used for payments and progress, while the original Estimator estimate stays visible for comparison. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
         <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
-        <li>Total Budget here is just your Construction Phases — it won't include Profit, Overhead, or any of the additional costs (taxes, loan interest, insurance, architect, geotech, etc.), since those all live in the Estimator now and aren't real payments to track here. To see the full number you'd quote a client, check <strong>Estimator Bid Price</strong> at the bottom of the summary panel (click it to jump to the Estimator).</li>
+        <li>The summary panel breaks your budget down the same way the Estimator does: <strong>Direct Cost</strong> (your Construction Phases, including Contingency) plus <strong>Soft Cost</strong> (permits, insurance, architect, loan interest, etc.) add up to <strong>Total Budget</strong> — the real cost of the job, with no markup. <strong>Profit</strong> (Overhead + Profit combined) is shown separately, and Profit plus Total Budget is the <strong>Estimator Bid Price</strong> — the number you'd actually quote a client. Click it to jump to the Estimator.</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
     </div>
@@ -381,9 +379,10 @@
         <li>Need a division the CSI list doesn't cover? Click <strong>Add Division</strong> at the bottom of the left panel to create your own. Custom divisions work exactly like the standard ones — click the <strong>trash icon</strong> next to one to delete it (this also deletes any items still in it, after confirming).</li>
         <li>Click <strong>+ Custom</strong> to add a blank row and enter your own description, unit, and cost (needs a specific division selected, not See All). Click the <strong>✕</strong> next to any item to remove it.</li>
         <li>Enter <strong>quantities</strong> for each item — extended costs update instantly. Drag an item's row to reorder it within its division, or drop it onto a row from a different division to move it there.</li>
-        <li><strong>Markup &amp; Fees</strong> in the right panel covers every percentage-based rate: <strong>Overhead, Profit, Contingency, Mat. Sales Tax,</strong> and <strong>Permit Fees</strong>, each applied as a % of cost.</li>
-        <li><strong>Soft Costs</strong> below that covers real fixed dollar costs that don't scale with the size of the job: bank loan interest, insurance, architect/designer, geotech/survey, structural engineer, and project consultant. Enter a dollar amount for whichever apply — leave the rest blank.</li>
-        <li>Click <strong>Export PDF</strong> to generate a full bid document broken out by division, with your markup, fees, and soft costs applied.</li>
+        <li><strong>Contingency %</strong> sits at the bottom of your division subtotals, as the last item feeding your cost — enter a percentage and it's added straight into <strong>Total Direct Cost</strong>.</li>
+        <li><strong>Markup &amp; Fees</strong> covers <strong>Overhead %</strong> and <strong>Profit %</strong>, each applied as a % of cost, rolling up to a <strong>Total Markup &amp; Fees</strong> line.</li>
+        <li><strong>Soft Costs</strong> covers real fixed dollar costs that don't scale with the size of the job: <strong>Permit Fees,</strong> bank loan interest, insurance, architect/designer, geotech/survey, structural engineer, and project consultant. Enter a dollar amount for whichever apply — leave the rest blank — and they roll up to a <strong>Total Soft Costs</strong> line.</li>
+        <li>Click <strong>Export PDF</strong> to generate a full bid document broken out by division, with your contingency, markup, and soft costs applied.</li>
       </ol>
     </div>
 
