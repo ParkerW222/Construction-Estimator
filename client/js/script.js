@@ -3191,6 +3191,22 @@ async function bldDeleteSubcontractor(id) {
   if (bldPaymentsTargetDiv) bldRenderPaymentsModal();
 }
 
+// Mirrors estimatorMarkupBreakdown(), but sources Direct Cost from each phase's actual
+// bldPhaseAmount() (a subcontractor's real Contract Amount where one's been entered, falling
+// back to the Estimator's number otherwise) instead of the Estimator's own item costs. That
+// way overriding a Contract Amount here updates this tab's own summary without ever touching
+// the Estimator tab's estimate-based figures.
+function bldMarkupBreakdown() {
+  const rawDirect = bldPhaseDivisions().reduce((s, d) => s + bldPhaseAmount(d), 0);
+  const coAmt  = rawDirect * estMu.cont / 100;
+  const direct = rawDirect + coAmt;
+  const ohAmt  = direct * estMu.oh / 100;
+  const prAmt  = (direct + ohAmt) * estMu.profit / 100;
+  const softCostsAmt = estSoftCostsTotal();
+  const bid = direct + ohAmt + prAmt + softCostsAmt;
+  return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
+}
+
 function bldCalcTotals() {
   let paidTotal = 0;
   bldPhaseDivisions().forEach(d => {
@@ -3475,10 +3491,11 @@ function bldRenderSummary() {
       ${bldSchedBars()}`;
   }
 
-  // Mirrors the Estimator exactly: Direct Cost (incl. Contingency) + Soft Cost = Total Budget
-  // (the real cost of the job, no markup), and Profit (Overhead + Profit combined) on top of
-  // Total Budget is the Estimator Bid Price — the number actually quoted to a client.
-  const { direct, softCostsAmt, ohAmt, prAmt, bid } = estimatorMarkupBreakdown();
+  // Direct Cost (incl. Contingency) + Soft Cost = Total Budget (the real cost of the job, no
+  // markup), and Profit (Overhead + Profit combined) on top of Total Budget is the bid/sales
+  // price. Uses bldMarkupBreakdown(), not estimatorMarkupBreakdown() — so a Contract Amount
+  // override on a phase here updates this summary live without touching the Estimator tab.
+  const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
   const totalBudget = direct + softCostsAmt;
   const profitCombined = ohAmt + prAmt;
 
@@ -3489,7 +3506,7 @@ function bldRenderSummary() {
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(totalBudget)}</span></div>
       <div class="bld-sum-row"><span>Profit</span><span>${fmt(profitCombined)}</span></div>
       ${paidTotal > 0 ? `<div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>` : ''}
-      <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Profit + Total Budget from the Estimator — click to view in the Estimator">
+      <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Profit + Total Budget, using each phase's real Contract Amount where set — click to view the Estimator">
         <span>Estimator Bid Price</span><span>${fmt(bid)}</span>
       </div>
       ${schedHtml}
