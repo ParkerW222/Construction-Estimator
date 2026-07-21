@@ -3259,7 +3259,7 @@ function bldRenderTable() {
             onchange="bldUpdateItem('phases','${d}','endDate',this.value)">
         </td>
         <td class="bld-bo-cell">
-          <label class="bld-bo-tgl" title="By Others — tracked but excluded from your total">
+          <label class="bld-bo-tgl" title="Excluded from Budget — tracked but not counted in your total">
             <input type="checkbox" onchange="bldToggleByOthers('phases','${d}',this.checked)"${row.byOthers?' checked':''}>
             <span class="bld-bo-chk"></span>
           </label>
@@ -3487,7 +3487,7 @@ function bldRenderSummary() {
   el.innerHTML = `
     <div class="bld-sum-block">
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(grand)}</span></div>
-      ${byOthersTotal ? `<div class="bld-sum-row bld-sum-bo"><span>By Others</span><span>${fmt(byOthersTotal)}</span></div>` : ''}
+      ${byOthersTotal ? `<div class="bld-sum-row bld-sum-bo"><span>Excluded from Budget</span><span>${fmt(byOthersTotal)}</span></div>` : ''}
       ${paidTotal > 0 ? `<div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>` : ''}
       <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Full bid price from the Estimator (includes Overhead, Profit, Contingency, Tax, and Permit Fees markup) — click to view in the Estimator">
         <span>Estimator Bid Price</span><span>${fmt(bidPrice)}</span>
