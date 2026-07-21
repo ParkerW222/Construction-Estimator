@@ -118,6 +118,10 @@ table.items tbody tr.drag-over td{box-shadow:inset 0 2px 0 var(--orange)}
 .sum-pct,.pa-cost-inp{-moz-appearance:textfield}
 .sum-pct-sym{color:var(--muted);font-size:.74rem}
 .sum-pct-amt{font-size:.74rem;font-weight:600;color:var(--navy);margin-left:auto}
+.sum-cost-inp{width:88px;border:1px solid var(--border);border-radius:4px;padding:.22rem .35rem;font-size:.78rem;text-align:right;margin-left:auto}
+.sum-cost-inp:focus{outline:none;border-color:var(--orange)}
+.sum-cost-inp::-webkit-outer-spin-button,.sum-cost-inp::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.sum-cost-inp{-moz-appearance:textfield}
 .bid-box{background:linear-gradient(135deg,var(--navy-d) 0%,var(--navy-l) 100%);border-radius:10px;padding:.9rem .7rem;margin-top:.75rem;text-align:center;box-shadow:0 3px 12px rgba(30,58,95,.3);border:1px solid rgba(255,255,255,.08)}
 .bid-box-lbl{font-size:.68rem;color:rgba(255,255,255,.55);letter-spacing:.07em;text-transform:uppercase;font-weight:600}
 .bid-box-val{font-size:1.65rem;font-weight:800;color:#fff;margin-top:.1rem;letter-spacing:-.03em}

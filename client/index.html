@@ -333,7 +333,7 @@
         <span class="help-num">1</span>
         <div><div class="help-tool-name">Payments & Scheduling</div><div class="help-tool-sub">Critical-path project schedule and contractor payments, driven by the Estimator</div></div>
       </div>
-      <p class="help-desc">Construction Phases aren't typed in by hand — every item you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead and Soft Costs stay manual, since those aren't Estimator line items.</p>
+      <p class="help-desc">Construction Phases aren't typed in by hand — every item you've costed out in the Project Estimator becomes its own phase here automatically, with the dollar amount pulled live from the Estimator. Overhead and Soft Costs live entirely in the Estimator now, so this tab is just Construction Phases and scheduling.</p>
       <ol class="help-steps">
         <li>Set a <strong>project name</strong> at the top.</li>
         <li><strong>Construction Phases</strong> populate on their own from whatever's been costed in the Project Estimator — every costed item gets its own phase, so items in the same CSI division (like Roofing and Insulation, both under Thermal & Moisture) can still run on completely different schedules with different subs. Add or change a cost in the Estimator, and the matching phase (and its dollar figure) updates here — nothing to enter twice. Click a phase's name or <strong>Total</strong> to see the line item behind it (click <strong>Open in Estimator</strong> from there to jump to its division), or drag the row by its number to reorder phases however you like.</li>
@@ -345,8 +345,7 @@
         <li>The <strong>Notes</strong> field is one line, so long notes can get cut off — click the small <strong>expand icon</strong> next to it to read or edit the full note in a larger box.</li>
         <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. If a subcontractor's actual quote differs from the Estimator's number, enter it as the <strong>Contract Amount</strong> — that becomes the number used for payments and progress, while the original Estimator estimate stays visible for comparison. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
         <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
-        <li><strong>Soft Costs</strong> starts with a highlighted <strong>Estimator</strong> row for Permit Fees — pulled straight from the Estimator's Permit Fees % so that number is never entered twice — plus whatever else applies manually: taxes, loan interest, insurance, contingency, architect, geotech, and other consultants. Overhead lives only in the Estimator now, since it's part of your bid price rather than a real bill.</li>
-        <li>Total Budget here tracks actual costs and payments, not your bid price — it won't include Profit or the Estimator's Overhead % markup, since those aren't real bills. To see the full number you'd quote a client, check <strong>Estimator Bid Price</strong> at the bottom of the summary panel (click it to jump to the Estimator).</li>
+        <li>Total Budget here is just your Construction Phases — it won't include Profit, Overhead, or any of the additional costs (taxes, loan interest, insurance, architect, geotech, etc.), since those all live in the Estimator now and aren't real payments to track here. To see the full number you'd quote a client, check <strong>Estimator Bid Price</strong> at the bottom of the summary panel (click it to jump to the Estimator).</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
     </div>
@@ -383,7 +382,8 @@
         <li>Click <strong>+ Custom</strong> to add a blank row and enter your own description, unit, and cost (needs a specific division selected, not See All). Click the <strong>✕</strong> next to any item to remove it.</li>
         <li>Enter <strong>quantities</strong> for each item — extended costs update instantly. Drag an item's row to reorder it within its division, or drop it onto a row from a different division to move it there.</li>
         <li>Adjust <strong>Overhead, Profit, and Contingency %</strong> in the right panel, plus <strong>Mat. Sales Tax %</strong> and <strong>Permit Fees %</strong>.</li>
-        <li>Click <strong>Export PDF</strong> to generate a full bid document broken out by division, with your markup, tax, and permit fees applied.</li>
+        <li>Below that, <strong>Additional Costs</strong> covers real fixed costs that don't scale with the size of the job: taxes, bank loan interest, insurance, architect/designer, geotech/survey, structural engineer, and project consultant. Enter a dollar amount for whichever apply — leave the rest blank.</li>
+        <li>Click <strong>Export PDF</strong> to generate a full bid document broken out by division, with your markup, tax, permit fees, and additional costs applied.</li>
       </ol>
     </div>
 

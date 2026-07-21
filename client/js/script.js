@@ -303,9 +303,31 @@ function estDivDrop(e, targetDiv) {
   estDragItemId = null;
 }
 
+// Real fixed costs that don't scale with the size of the job (unlike Overhead/Profit/
+// Contingency, which are percentages) — moved here from Payments & Scheduling so every cost
+// that feeds into the bid price lives in one place instead of being split across two tabs.
+const EST_SOFT_COST_ITEMS = [
+  { id: 'taxes',      label: 'Taxes' },
+  { id: 'loan',       label: 'Bank Loan Interest' },
+  { id: 'insurance',  label: 'Insurance' },
+  { id: 'architect',  label: 'Architect / Designer' },
+  { id: 'geotech',    label: 'Geotech / Survey' },
+  { id: 'struct',     label: 'Structural Engineer' },
+  { id: 'consultant', label: 'Project Consultant' },
+];
+
+function getSoftCosts() {
+  if (!project.softCosts) project.softCosts = {};
+  return project.softCosts;
+}
+
+function estSoftCostsTotal() {
+  const sc = getSoftCosts();
+  return EST_SOFT_COST_ITEMS.reduce((s, item) => s + (parseFloat(sc[item.id]) || 0), 0);
+}
+
 // Shared by the Estimator's own summary panel, the exported PDF, and Payments & Scheduling's
-// Overhead/Soft Costs sections (which pull the Overhead and Permit Fees dollar amounts in as
-// read-only reference rows, so that markup only ever needs to be set in one place).
+// "Estimator Bid Price" reference line.
 function estimatorMarkupBreakdown() {
   const direct = grandTotal();
   const ohAmt  = direct * estMu.oh / 100;
@@ -313,12 +335,14 @@ function estimatorMarkupBreakdown() {
   const coAmt  = (direct + ohAmt + prAmt) * estMu.cont / 100;
   const taxAmt = direct * 0.55 * estMu.matTax / 100;
   const permitAmt = (direct + ohAmt + prAmt + coAmt + taxAmt) * estMu.permit / 100;
-  const bid = direct + ohAmt + prAmt + coAmt + taxAmt + permitAmt;
-  return { direct, ohAmt, prAmt, coAmt, taxAmt, permitAmt, bid };
+  const softCostsAmt = estSoftCostsTotal();
+  const bid = direct + ohAmt + prAmt + coAmt + taxAmt + permitAmt + softCostsAmt;
+  return { direct, ohAmt, prAmt, coAmt, taxAmt, permitAmt, softCostsAmt, bid };
 }
 
 function renderSum() {
   const { direct, ohAmt, prAmt, coAmt, taxAmt, permitAmt, bid } = estimatorMarkupBreakdown();
+  const sc = getSoftCosts();
 
   let html = `<div class="sum-head">Division Subtotals</div>`;
   allDivCodes().forEach(d => {
@@ -358,6 +382,13 @@ function renderSum() {
       <input class="sum-pct" type="number" value="${estMu.permit}" min="0" step="0.25" oninput="updMu('permit',this.value)">
       <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-permit-amt">${permitAmt > 0 ? fmt(permitAmt) : '—'}</span>
     </div>
+    <hr class="sum-sep" style="margin:.55rem 0">
+    <div class="sum-head" style="margin-top:.2rem;font-size:.66rem;letter-spacing:.06em">Additional Costs</div>
+    ${EST_SOFT_COST_ITEMS.map(item => `
+    <div class="sum-mu-row">
+      <span class="sum-mu-label">${item.label}</span>
+      <input class="sum-cost-inp" type="number" value="${sc[item.id] || ''}" min="0" step="100" placeholder="—" oninput="updSoftCost('${item.id}',this.value)">
+    </div>`).join('')}
     <div class="bid-box">
       <div class="bid-box-lbl">Bid Price</div>
       <div class="bid-box-val" id="sum-bid">${fmt(bid)}</div>
@@ -375,13 +406,21 @@ function updMu(field, val) {
   const co  = (direct + oh + pr) * estMu.cont / 100;
   const tax = direct * 0.55 * estMu.matTax / 100;
   const permit = (direct + oh + pr + co + tax) * estMu.permit / 100;
-  const bid = direct + oh + pr + co + tax + permit;
+  const bid = direct + oh + pr + co + tax + permit + estSoftCostsTotal();
   if (gid('sum-oh-amt'))     gid('sum-oh-amt').textContent     = fmt(oh);
   if (gid('sum-pr-amt'))     gid('sum-pr-amt').textContent     = fmt(pr);
   if (gid('sum-co-amt'))     gid('sum-co-amt').textContent     = fmt(co);
   if (gid('sum-tax-amt'))    gid('sum-tax-amt').textContent    = tax > 0 ? fmt(tax) : '—';
   if (gid('sum-permit-amt')) gid('sum-permit-amt').textContent = permit > 0 ? fmt(permit) : '—';
   if (gid('sum-bid'))        gid('sum-bid').textContent        = fmt(bid);
+  gid('top-total').textContent = fmt(bid);
+  saveProject();
+}
+
+function updSoftCost(id, val) {
+  getSoftCosts()[id] = val;
+  const bid = estimatorMarkupBreakdown().bid;
+  if (gid('sum-bid')) gid('sum-bid').textContent = fmt(bid);
   gid('top-total').textContent = fmt(bid);
   saveProject();
 }
@@ -453,6 +492,7 @@ function exportEstimatePDF() {
       </tr></tfoot></table></div>`;
   }
 
+  const sc = getSoftCosts();
   const summaryRows = [
     ['Direct Cost', fmt(direct)],
     [`Overhead (${estMu.oh}%)`, fmt(ohAmt)],
@@ -460,6 +500,8 @@ function exportEstimatePDF() {
     [`Contingency (${estMu.cont}%)`, fmt(coAmt)],
     ...(estMu.matTax > 0 ? [[`Material Sales Tax (${estMu.matTax}%)`, fmt(taxAmt)]] : []),
     ...(estMu.permit  > 0 ? [[`Permit Fees (${estMu.permit}%)`, fmt(permitAmt)]]    : []),
+    ...EST_SOFT_COST_ITEMS.filter(item => (parseFloat(sc[item.id]) || 0) > 0)
+      .map(item => [item.label, fmt(parseFloat(sc[item.id]))]),
   ].map(([l,v]) => `<tr><td>${l}</td><td class="r">${v}</td></tr>`).join('');
 
   const ratesRows = [
@@ -2564,22 +2606,11 @@ function bpClearAll() {
 }
 
 // ── BUDGET BUILDER ─────────────────────────────────────────────────
-// Construction Phases are driven live by whatever's been costed in the Estimator
-// (see bldPhaseDivisions) rather than a fixed list — see BLD_SOFT below for the
-// items that are still manually maintained. Overhead lives in the Estimator only
-// (it's a bid-price markup, not an actual bill), so there's no manual Overhead
-// section here anymore — its old manual entries (taxes, loan, insurance,
-// contingency) are folded into Soft Costs instead of being dropped.
-const BLD_SOFT = [
-  { id: 'taxes',       label: 'Taxes' },
-  { id: 'loan',        label: 'Bank Loan Interest' },
-  { id: 'insurance',   label: 'Insurance' },
-  { id: 'contingency', label: 'Contingency' },
-  { id: 'architect',   label: 'Architect / Designer' },
-  { id: 'geotech',     label: 'Geotech / Survey' },
-  { id: 'struct',      label: 'Structural Engineer' },
-  { id: 'consultant',  label: 'Project Consultant' },
-];
+// Construction Phases are driven live by whatever's been costed in the Estimator (see
+// bldPhaseDivisions) — this tab has no other manually-maintained sections anymore. Overhead
+// and Soft Costs both moved to the Estimator (see EST_SOFT_COST_ITEMS/estSoftCostsTotal
+// above): Overhead because it's a bid-price markup, not an actual bill, and Soft Costs because
+// splitting real costs that feed the bid price across two tabs was more confusing than useful.
 
 const BLD_STATUSES = ['Not Started', 'Bid Needed', 'In Progress', 'Complete'];
 const BLD_STATUS_CLASS = { 'Not Started': 'bs-ns', 'Bid Needed': 'bs-bid', 'In Progress': 'bs-ip', 'Complete': 'bs-cp' };
@@ -2600,6 +2631,23 @@ function getBudgetSheet() {
       if (!bs.soft[id]) bs.soft[id] = row;
     });
     bs.overhead = {};
+  }
+  // One-time migration: Soft Costs itself moved to the Estimator as flat dollar fields
+  // (project.softCosts) — carry over anything already entered. Contingency didn't move; it's
+  // redundant with the Estimator's Contingency % (same precedent as Overhead), so any old
+  // manual Contingency value is simply dropped here rather than carried forward.
+  if (bs.soft && Object.keys(bs.soft).length) {
+    if (!project.softCosts) project.softCosts = {};
+    Object.entries(bs.soft).forEach(([id, row]) => {
+      if (id === 'contingency') return;
+      if (project.softCosts[id] === undefined) {
+        const mat = parseFloat(row.mat) || 0;
+        const labor = parseFloat(row.labor) || 0;
+        const combined = parseFloat(row.combined) || (mat + labor);
+        if (combined > 0) project.softCosts[id] = String(combined);
+      }
+    });
+    bs.soft = {};
   }
   return bs;
 }
@@ -3145,39 +3193,13 @@ async function bldDeleteSubcontractor(id) {
 }
 
 function bldCalcTotals() {
-  const bs = getBudgetSheet();
-  let grand = 0, byOthersTotal = 0;
-  const sectionTotals = {};
-
-  let phasesTotal = 0, paidTotal = 0;
+  let grand = 0, byOthersTotal = 0, paidTotal = 0;
   bldPhaseDivisions().forEach(d => {
     const row = bldGetRow('phases', d);
     const cost = bldPhaseAmount(d);
-    if (row.byOthers) byOthersTotal += cost; else { phasesTotal += cost; grand += cost; }
+    if (row.byOthers) byOthersTotal += cost; else grand += cost;
     paidTotal += bldPhasePaidTotal(row);
   });
-  sectionTotals.phases = phasesTotal;
-
-  // Permit Fees % is set once in the Estimator and pulled in here as a reference amount,
-  // rather than needing to be typed into Soft Costs too. Overhead % stays Estimator-only —
-  // it's a bid-price component, not an actual bill anyone sends you, so there's no Overhead
-  // section here at all (see estimatorMarkupBreakdown()/bldRenderSummary() for the Estimator's
-  // full bid price, shown separately as a reference figure rather than folded in here).
-  const markup = estimatorMarkupBreakdown();
-  let softTotal = markup.permitAmt;
-  grand += markup.permitAmt;
-  // Only count rows for line items that still exist (BLD_SOFT) — if one's ever removed (like
-  // the old manual "Permits & Fees", now replaced by the Estimator reference row above), any
-  // leftover stored value for it is ignored instead of silently double-counted.
-  BLD_SOFT.map(i => i.id).forEach(id => {
-    const row = (bs.soft || {})[id];
-    if (!row) return;
-    const mat = parseFloat(row.mat) || 0;
-    const labor = parseFloat(row.labor) || 0;
-    const combined = parseFloat(row.combined) || (mat + labor);
-    if (row.byOthers) { byOthersTotal += combined; } else { softTotal += combined; grand += combined; }
-  });
-  sectionTotals.soft = softTotal;
 
   let projectStart = null, projectEnd = null;
   bldPhaseDivisions().forEach(d => {
@@ -3185,7 +3207,7 @@ function bldCalcTotals() {
     if (row.startDate) { const dt = new Date(row.startDate + 'T12:00:00'); if (!projectStart || dt < projectStart) projectStart = dt; }
     if (row.endDate)   { const dt = new Date(row.endDate   + 'T12:00:00'); if (!projectEnd   || dt > projectEnd)   projectEnd   = dt; }
   });
-  return { grand, byOthersTotal, sectionTotals, projectStart, projectEnd, paidTotal };
+  return { grand, byOthersTotal, projectStart, projectEnd, paidTotal };
 }
 
 function renderBudgetBuilder() {
@@ -3198,55 +3220,7 @@ function renderBudgetBuilder() {
 }
 
 function bldRenderTable() {
-  const bs = getBudgetSheet();
   let html = '';
-
-  const renderSection = (title, sectionKey, items, startNum, hasDuration, autoRows) => {
-    html += `<tr class="bld-section-hdr"><td colspan="8">${title}</td></tr>`;
-    (autoRows || []).forEach(a => { html += bldRenderAutoRow(a.label, a.amount); });
-    items.forEach((item, i) => {
-      const row = bldGetRow(sectionKey, item.id);
-      const num = startNum !== null ? (startNum + i) : '';
-      const combV = row.combined || '';
-      const stCls = BLD_STATUS_CLASS[row.status] || 'bs-ns';
-      const byOCls = row.byOthers ? ' by-others' : '';
-      const durCell = hasDuration
-        ? `<td class="bld-dur-cell">
-            <input type="date" class="bld-date-inp" value="${row.startDate||''}" title="Start date"
-              onchange="bldUpdateItem('${sectionKey}','${item.id}','startDate',this.value)">
-            <input type="date" class="bld-date-inp" value="${row.endDate||''}" title="End date"
-              onchange="bldUpdateItem('${sectionKey}','${item.id}','endDate',this.value)">
-           </td>`
-        : `<td class="bld-dur-cell"></td>`;
-      html += `<tr class="bld-row${byOCls}" data-section="${sectionKey}" data-id="${item.id}">
-        <td class="bld-num">${num}</td>
-        <td class="bld-label">${item.label}</td>
-        <td class="bld-cell"><input type="number" min="0" step="100" placeholder="—"
-          value="${combV}"
-          onchange="bldUpdateItem('${sectionKey}','${item.id}','combined',this.value)"
-          class="bld-inp bld-combined-inp"></td>
-        <td class="bld-status-cell">
-          <select class="bld-status-sel ${stCls}" onchange="bldSetStatus('${sectionKey}','${item.id}',this.value)">
-            ${BLD_STATUSES.map(s => `<option value="${s}"${row.status===s?' selected':''}>${s}</option>`).join('')}
-          </select>
-        </td>
-        ${durCell}
-        <td class="bld-bo-cell">
-          <label class="bld-bo-tgl" title="By Others — tracked but excluded from your total">
-            <input type="checkbox" onchange="bldToggleByOthers('${sectionKey}','${item.id}',this.checked)"${row.byOthers?' checked':''}>
-            <span class="bld-bo-chk"></span>
-          </label>
-        </td>
-        <td class="bld-note-cell">
-          <input type="text" class="bld-note-inp" placeholder="Note…"
-            value="${(row.note||'').replace(/"/g,'&quot;')}"
-            onchange="bldUpdateItem('${sectionKey}','${item.id}','note',this.value)">
-          <button class="bld-note-expand" title="View/edit full note" onclick="bldOpenNoteModal('${sectionKey}','${item.id}')">&#9974;</button>
-        </td>
-        <td class="bld-pay-cell"></td>
-      </tr>`;
-    });
-  };
 
   const phaseDivs = bldPhaseDivisions();
   html += `<tr class="bld-section-hdr"><td colspan="8">Construction Phases</td></tr>`;
@@ -3309,27 +3283,8 @@ function bldRenderTable() {
     });
   }
 
-  const markup = estimatorMarkupBreakdown();
-  renderSection('Soft Costs', 'soft', BLD_SOFT, null, false, [{ label: 'Permit Fees', amount: markup.permitAmt }]);
-
   gid('bld-tbody').innerHTML = html;
   bldRenderSummary();
-}
-
-// A read-only row for a dollar figure that comes straight from the Estimator's markup
-// (Overhead % or Permit Fees %) rather than being entered here — keeps that one number
-// tied to a single source instead of needing to be typed in twice.
-function bldRenderAutoRow(label, amount) {
-  return `<tr class="bld-row bld-auto-row" onclick="showPage('estimator')" title="Calculated from the Estimator's markup — click to change it there">
-    <td class="bld-num"></td>
-    <td class="bld-label">${esc(label)} <span class="bld-auto-tag">Estimator</span></td>
-    <td class="bld-cell bld-cost-readonly">${fmt(amount)}</td>
-    <td class="bld-status-cell"></td>
-    <td class="bld-dur-cell"></td>
-    <td class="bld-bo-cell"></td>
-    <td class="bld-note-cell" style="color:var(--muted);font-size:.72rem">Set in the Estimator</td>
-    <td class="bld-pay-cell"></td>
-  </tr>`;
 }
 
 function bldGanttPhases() {
@@ -3513,7 +3468,7 @@ function bldGanttMouseUp() {
 }
 
 function bldRenderSummary() {
-  const { grand, byOthersTotal, sectionTotals, projectStart, projectEnd, paidTotal } = bldCalcTotals();
+  const { grand, byOthersTotal, projectStart, projectEnd, paidTotal } = bldCalcTotals();
   const el = gid('bld-summary');
   if (!el) return;
 
@@ -3534,9 +3489,6 @@ function bldRenderSummary() {
 
   el.innerHTML = `
     <div class="bld-sum-block">
-      <div class="bld-sum-row"><span>Construction</span><span>${fmt(sectionTotals.phases||0)}</span></div>
-      <div class="bld-sum-row"><span>Soft Costs</span><span>${fmt(sectionTotals.soft||0)}</span></div>
-      <div class="bld-sum-divider"></div>
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(grand)}</span></div>
       ${byOthersTotal ? `<div class="bld-sum-row bld-sum-bo"><span>By Others</span><span>${fmt(byOthersTotal)}</span></div>` : ''}
       ${paidTotal > 0 ? `<div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>` : ''}
@@ -3736,8 +3688,8 @@ async function clientShowProject(id) {
   gid('client-detail-name').textContent = data.name || 'Project';
 
   const bs = data.budgetSheet || {};
-  const sections = ['phases', 'soft'];
-  const sectionLabels = { phases: 'Construction', soft: 'Soft Costs' };
+  const sections = ['phases'];
+  const sectionLabels = { phases: 'Construction' };
   let grand = 0;
   const sectionTotals = {};
 
@@ -3766,33 +3718,6 @@ async function clientShowProject(id) {
     if (!row.byOthers) { phasesTotal += cost; grand += cost; }
   });
   sectionTotals.phases = phasesTotal;
-
-  // Mirrors estimatorMarkupBreakdown()/bldCalcTotals() — this project's own Permit Fees % is
-  // shown as a builder-set reference row in Payments & Scheduling's Soft Costs, so the
-  // client's summary needs to add it in here too rather than only counting manual entries.
-  // Overhead % stays Estimator-only (a bid-price component, not an actual bill), so it's
-  // never added here at all — Overhead no longer has its own section here.
-  const estMuData = data.estMu || defaultEstMu();
-  const directCost = (data.items || []).reduce((s, i) => s + i.qty * i.unitCost, 0);
-  const ohAmtData = directCost * estMuData.oh / 100;
-  const prAmtData = (directCost + ohAmtData) * estMuData.profit / 100;
-  const coAmtData = (directCost + ohAmtData + prAmtData) * estMuData.cont / 100;
-  const taxAmtData = directCost * 0.55 * estMuData.matTax / 100;
-  const permitAmtData = (directCost + ohAmtData + prAmtData + coAmtData + taxAmtData) * estMuData.permit / 100;
-
-  let softTotal = permitAmtData;
-  grand += permitAmtData;
-  // Include any not-yet-migrated old manual Overhead entries too — the migration that folds
-  // them into Soft Costs (see getBudgetSheet()) only runs live in the builder's own browser,
-  // next time they open the project, not retroactively on already-saved data like this.
-  const softRows = { ...(bs.overhead || {}), ...(bs.soft || {}) };
-  Object.values(softRows).forEach(row => {
-    const mat = parseFloat(row.mat) || 0;
-    const labor = parseFloat(row.labor) || 0;
-    const combined = parseFloat(row.combined) || (mat + labor);
-    if (!row.byOthers) { softTotal += combined; grand += combined; }
-  });
-  sectionTotals.soft = softTotal;
 
   gid('client-summary-grid').innerHTML = `
     <div class="client-summary-card client-summary-total">
