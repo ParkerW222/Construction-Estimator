@@ -598,6 +598,18 @@ body.admin-mode #admin-app{display:block}
 .bld-sum-ref span:last-child{font-style:italic;color:var(--muted)}
 .bld-sum-ref:hover span{text-decoration:underline}
 .bld-sum-sched-lbl{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.3rem;margin-top:.1rem}
+.bld-sum-sec-lbl{font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.3rem;margin-top:.1rem}
+.bld-sum-cost-inp{width:80px;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.78rem;text-align:right;font-family:inherit;color:var(--text);background:var(--surface)}
+.bld-sum-cost-inp:focus{outline:none;border-color:var(--orange)}
+.bld-sum-cost-inp::-webkit-outer-spin-button,.bld-sum-cost-inp::-webkit-inner-spin-button,
+.bld-sum-pct-inp::-webkit-outer-spin-button,.bld-sum-pct-inp::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.bld-sum-cost-inp,.bld-sum-pct-inp{-moz-appearance:textfield}
+.bld-sum-pct-wrap{display:flex;align-items:baseline;gap:.25rem}
+.bld-sum-pct-inp{width:42px;border:1px solid var(--border);border-radius:4px;padding:.18rem .25rem;font-size:.78rem;text-align:right;font-family:inherit;color:var(--text);background:var(--surface)}
+.bld-sum-pct-inp:focus{outline:none;border-color:var(--orange)}
+.bld-sum-pct-sym{color:var(--muted);font-size:.72rem}
+.bld-sum-pct-amt{font-weight:600;color:var(--navy);font-size:.78rem;min-width:52px;text-align:right}
+.bld-sum-profit-pct{font-size:.78rem!important;font-weight:600!important;color:var(--muted)!important;margin-left:.15rem}
 /* MINI GANTT */
 .bld-seg-track{position:relative;height:10px;background:var(--bg);border-radius:5px;overflow:hidden;margin-top:.7rem}
 .bld-seg{position:absolute;top:0;height:100%;transition:width .2s,left .2s}

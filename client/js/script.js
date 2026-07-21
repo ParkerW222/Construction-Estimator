@@ -3207,6 +3207,44 @@ function bldMarkupBreakdown() {
   return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
 }
 
+function getSpecData() {
+  if (!project.specData) project.specData = {};
+  const sd = project.specData;
+  if (sd.realtorPct === undefined) sd.realtorPct = 3;
+  if (sd.titlePct === undefined) sd.titlePct = 1;
+  return sd;
+}
+
+// Spec-build math: unlike the Custom total above (built cost + your own markup), this treats
+// the job as a spec home sold at a market Sales Price — Profit is just whatever's left after
+// every real cost (land, the build itself, and selling costs) comes out of that sale price.
+function bldSpecBreakdown() {
+  const sd = getSpecData();
+  const landCost   = parseFloat(sd.landCost) || 0;
+  const salesPrice = parseFloat(sd.salesPrice) || 0;
+  const realtorPct = parseFloat(sd.realtorPct) || 0;
+  const titlePct   = parseFloat(sd.titlePct) || 0;
+  const realtorAmt = salesPrice * realtorPct / 100;
+  const titleAmt   = salesPrice * titlePct / 100;
+  const { direct, softCostsAmt } = bldMarkupBreakdown();
+  const totalBudget = direct + softCostsAmt;
+  const profit = salesPrice - landCost - realtorAmt - titleAmt - totalBudget;
+  const base = totalBudget + landCost;
+  const profitPct = base > 0 ? profit / base * 100 : 0;
+  return { landCost, salesPrice, realtorPct, realtorAmt, titlePct, titleAmt, totalBudget, profit, profitPct };
+}
+
+function updSpecField(field, val) {
+  const sd = getSpecData();
+  sd[field] = val;
+  const b = bldSpecBreakdown();
+  if (gid('bld-realtor-amt'))     gid('bld-realtor-amt').textContent     = fmt(b.realtorAmt);
+  if (gid('bld-title-amt'))       gid('bld-title-amt').textContent       = fmt(b.titleAmt);
+  if (gid('bld-spec-profit'))     gid('bld-spec-profit').textContent     = fmt(b.profit);
+  if (gid('bld-spec-profit-pct')) gid('bld-spec-profit-pct').textContent = `(${b.profitPct.toFixed(1)}%)`;
+  saveProject();
+}
+
 function bldCalcTotals() {
   let paidTotal = 0;
   bldPhaseDivisions().forEach(d => {
@@ -3499,8 +3537,12 @@ function bldRenderSummary() {
   const totalBudget = direct + softCostsAmt;
   const profitCombined = ohAmt + prAmt;
 
+  const sd = getSpecData();
+  const spec = bldSpecBreakdown();
+
   el.innerHTML = `
     <div class="bld-sum-block">
+      <div class="bld-sum-sec-lbl">Custom</div>
       <div class="bld-sum-row"><span>Direct Cost</span><span>${fmt(direct)}</span></div>
       <div class="bld-sum-row"><span>Soft Cost</span><span>${fmt(softCostsAmt)}</span></div>
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(totalBudget)}</span></div>
@@ -3508,6 +3550,35 @@ function bldRenderSummary() {
       ${paidTotal > 0 ? `<div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>` : ''}
       <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Profit + Total Budget, using each phase's real Contract Amount where set — click to view the Estimator">
         <span>Estimator Bid Price</span><span>${fmt(bid)}</span>
+      </div>
+
+      <div class="bld-sum-divider"></div>
+      <div class="bld-sum-sec-lbl">Spec</div>
+      <div class="bld-sum-row">
+        <span>Land Cost</span>
+        <input class="bld-sum-cost-inp" type="number" value="${sd.landCost || ''}" min="0" step="1000" placeholder="—" oninput="updSpecField('landCost',this.value)">
+      </div>
+      <div class="bld-sum-row">
+        <span>Sales Price</span>
+        <input class="bld-sum-cost-inp" type="number" value="${sd.salesPrice || ''}" min="0" step="1000" placeholder="—" oninput="updSpecField('salesPrice',this.value)">
+      </div>
+      <div class="bld-sum-row">
+        <span>Realtor Fee</span>
+        <span class="bld-sum-pct-wrap">
+          <input class="bld-sum-pct-inp" type="number" value="${sd.realtorPct}" min="0" step="0.25" oninput="updSpecField('realtorPct',this.value)">
+          <span class="bld-sum-pct-sym">%</span><span class="bld-sum-pct-amt" id="bld-realtor-amt">${fmt(spec.realtorAmt)}</span>
+        </span>
+      </div>
+      <div class="bld-sum-row">
+        <span>Title Insurance</span>
+        <span class="bld-sum-pct-wrap">
+          <input class="bld-sum-pct-inp" type="number" value="${sd.titlePct}" min="0" step="0.25" oninput="updSpecField('titlePct',this.value)">
+          <span class="bld-sum-pct-sym">%</span><span class="bld-sum-pct-amt" id="bld-title-amt">${fmt(spec.titleAmt)}</span>
+        </span>
+      </div>
+      <div class="bld-sum-row bld-sum-total">
+        <span>Spec Profit</span>
+        <span><span id="bld-spec-profit">${fmt(spec.profit)}</span> <span class="bld-sum-profit-pct" id="bld-spec-profit-pct">(${spec.profitPct.toFixed(1)}%)</span></span>
       </div>
       ${schedHtml}
     </div>`;
