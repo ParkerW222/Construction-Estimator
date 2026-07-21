@@ -303,11 +303,10 @@ function estDivDrop(e, targetDiv) {
   estDragItemId = null;
 }
 
-// Real fixed costs that don't scale with the size of the job (unlike Overhead/Profit/
-// Contingency, which are percentages) — moved here from Payments & Scheduling so every cost
-// that feeds into the bid price lives in one place instead of being split across two tabs.
+// Soft costs: real fixed dollar costs that don't scale with the size of the job (unlike
+// Overhead/Profit/Contingency/etc., which are all percentage-based rates) — moved here from
+// Payments & Scheduling so every cost that feeds into the bid price lives in one place.
 const EST_SOFT_COST_ITEMS = [
-  { id: 'taxes',      label: 'Taxes' },
   { id: 'loan',       label: 'Bank Loan Interest' },
   { id: 'insurance',  label: 'Insurance' },
   { id: 'architect',  label: 'Architect / Designer' },
@@ -354,7 +353,7 @@ function renderSum() {
     <hr class="sum-sep">
     <div class="sum-total"><span>Direct Cost</span><span>${fmt(direct)}</span></div>
     <hr class="sum-sep">
-    <div class="sum-head" style="margin-top:.4rem">Markup</div>
+    <div class="sum-head" style="margin-top:.4rem">Markup &amp; Fees <span class="sum-head-unit">%</span></div>
     <div class="sum-mu-row">
       <span class="sum-mu-label">Overhead %</span>
       <input class="sum-pct" type="number" value="${estMu.oh}" min="0" step="0.5" oninput="updMu('oh',this.value)">
@@ -370,8 +369,6 @@ function renderSum() {
       <input class="sum-pct" type="number" value="${estMu.cont}" min="0" step="0.5" oninput="updMu('cont',this.value)">
       <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-co-amt">${fmt(coAmt)}</span>
     </div>
-    <hr class="sum-sep" style="margin:.55rem 0">
-    <div class="sum-head" style="margin-top:.2rem;font-size:.66rem;letter-spacing:.06em">Taxes &amp; Fees</div>
     <div class="sum-mu-row">
       <span class="sum-mu-label" title="Applied to ~55% of direct cost (materials portion)">Mat. Sales Tax %</span>
       <input class="sum-pct" type="number" value="${estMu.matTax}" min="0" step="0.5" oninput="updMu('matTax',this.value)">
@@ -383,7 +380,7 @@ function renderSum() {
       <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-permit-amt">${permitAmt > 0 ? fmt(permitAmt) : '—'}</span>
     </div>
     <hr class="sum-sep" style="margin:.55rem 0">
-    <div class="sum-head" style="margin-top:.2rem;font-size:.66rem;letter-spacing:.06em">Additional Costs</div>
+    <div class="sum-head" style="margin-top:.2rem">Soft Costs <span class="sum-head-unit">$</span></div>
     ${EST_SOFT_COST_ITEMS.map(item => `
     <div class="sum-mu-row">
       <span class="sum-mu-label">${item.label}</span>
