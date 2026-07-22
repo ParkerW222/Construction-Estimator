@@ -1,7 +1,7 @@
 // ── STATE ──────────────────────────────────────────────────────────
 let project = { id: 'proj_' + Date.now(), name: 'New Project', items: [], nextId: 1 };
 let activeDiv = '03';
-function defaultEstMu() { return { oh: 10, profit: 8, cont: 5, bond: 0, ret: 0 }; }
+function defaultEstMu() { return { oh: 10, profit: 8, bond: 0, ret: 0 }; }
 let estMu = defaultEstMu();
 let currentUser = null;
 let authMode = 'login';
@@ -334,8 +334,8 @@ function estDivDrop(e, targetDiv) {
 }
 
 // Soft costs: real fixed dollar costs that don't scale with the size of the job (unlike
-// Overhead/Profit/Contingency/etc., which are all percentage-based rates) — moved here from
-// Payments & Scheduling so every cost that feeds into the bid price lives in one place.
+// Overhead/Profit, which are percentage-based rates) — moved here from Payments & Scheduling
+// so every cost that feeds into the bid price lives in one place.
 const EST_SOFT_COST_ITEMS = [
   { id: 'permit',     label: 'Permit Fees' },
   { id: 'loan',       label: 'Bank Loan Interest' },
@@ -356,9 +356,8 @@ function getSoftCosts() {
     const d = grandTotal();
     const oh = d * (parseFloat(project.estMu.oh) || 0) / 100;
     const pr = d * (parseFloat(project.estMu.profit) || 0) / 100;
-    const co = (d + oh + pr) * (parseFloat(project.estMu.cont) || 0) / 100;
     const tax = d * 0.55 * (parseFloat(project.estMu.matTax) || 0) / 100;
-    const permitAmt = (d + oh + pr + co + tax) * parseFloat(project.estMu.permit) / 100;
+    const permitAmt = (d + oh + pr + tax) * parseFloat(project.estMu.permit) / 100;
     sc.permit = String(Math.round(permitAmt));
   }
   return sc;
@@ -372,18 +371,16 @@ function estSoftCostsTotal() {
 // Shared by the Estimator's own summary panel, the exported PDF, and Payments & Scheduling's
 // "Estimator Bid Price" reference line.
 function estimatorMarkupBreakdown() {
-  const rawDirect = grandTotal();
-  const coAmt  = rawDirect * estMu.cont / 100;
-  const direct = rawDirect + coAmt; // Total Direct Cost — Contingency is the last item folded into it
+  const direct = grandTotal();
   const softCostsAmt = estSoftCostsTotal();
   const ohAmt  = (direct + softCostsAmt) * estMu.oh / 100; // Overhead is % of Direct Cost + Soft Cost combined
   const prAmt  = (direct + softCostsAmt) * estMu.profit / 100; // Profit is % of Direct Cost + Soft Cost combined
   const bid = direct + ohAmt + prAmt + softCostsAmt;
-  return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
+  return { direct, ohAmt, prAmt, softCostsAmt, bid };
 }
 
 function renderSum() {
-  const { coAmt, direct, ohAmt, prAmt, softCostsAmt, bid } = estimatorMarkupBreakdown();
+  const { direct, ohAmt, prAmt, softCostsAmt, bid } = estimatorMarkupBreakdown();
   const sc = getSoftCosts();
 
   let html = `<div class="sum-head">Soft Costs <span class="sum-head-unit">$</span></div>`;
@@ -402,12 +399,7 @@ function renderSum() {
 
   html += `
     <hr class="sum-sep">
-    <div class="sum-mu-row">
-      <span class="sum-mu-label">Contingency %</span>
-      <input class="sum-pct" type="number" value="${estMu.cont}" min="0" step="0.5" oninput="updMu('cont',this.value)">
-      <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-co-amt">${fmt(coAmt)}</span>
-    </div>
-    <div class="sum-total"><span>Total Direct Cost</span><span id="sum-direct-total">${fmt(direct)}</span></div>
+    <div class="sum-total"><span>Direct Cost</span><span id="sum-direct-total">${fmt(direct)}</span></div>
     <hr class="sum-sep">
     <div class="sum-head" style="margin-top:.4rem">Markup &amp; Fees <span class="sum-head-unit">%</span></div>
     <div class="sum-mu-row">
@@ -432,15 +424,11 @@ function renderSum() {
 
 function updMu(field, val) {
   estMu[field] = +val || 0;
-  const rawDirect = grandTotal();
-  const co     = rawDirect * estMu.cont / 100;
-  const direct = rawDirect + co;
+  const direct = grandTotal();
   const softCostsAmt = estSoftCostsTotal();
   const oh     = (direct + softCostsAmt) * estMu.oh / 100;
   const pr     = (direct + softCostsAmt) * estMu.profit / 100;
   const bid    = direct + oh + pr + softCostsAmt;
-  if (gid('sum-co-amt'))       gid('sum-co-amt').textContent       = fmt(co);
-  if (gid('sum-direct-total')) gid('sum-direct-total').textContent = fmt(direct);
   if (gid('sum-oh-amt'))       gid('sum-oh-amt').textContent       = fmt(oh);
   if (gid('sum-pr-amt'))       gid('sum-pr-amt').textContent       = fmt(pr);
   if (gid('sum-markup-total')) gid('sum-markup-total').textContent = fmt(oh + pr);
@@ -489,7 +477,7 @@ function updateField(id, field, val) {
 function refreshTotals() { renderDivNav(); renderSum(); saveProject(); }
 
 function exportEstimatePDF() {
-  const { rawDirect, ohAmt, prAmt, coAmt, direct, bid } = estimatorMarkupBreakdown();
+  const { ohAmt, prAmt, direct, bid } = estimatorMarkupBreakdown();
   const retAmt  = bid * estMu.ret / 100;
   const today   = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
 
@@ -531,9 +519,7 @@ function exportEstimatePDF() {
 
   const sc = getSoftCosts();
   const summaryRows = [
-    ['Direct Cost', fmt(rawDirect)],
-    [`Contingency (${estMu.cont}%)`, fmt(coAmt)],
-    ['Total Direct Cost', fmt(direct)],
+    ['Direct Cost', fmt(direct)],
     [`Overhead (${estMu.oh}%)`, fmt(ohAmt)],
     [`Profit (${estMu.profit}%)`, fmt(prAmt)],
     ...EST_SOFT_COST_ITEMS.filter(item => (parseFloat(sc[item.id]) || 0) > 0)
@@ -541,7 +527,6 @@ function exportEstimatePDF() {
   ].map(([l,v]) => `<tr><td>${l}</td><td class="r">${v}</td></tr>`).join('');
 
   const ratesRows = [
-    ['Contingency', estMu.cont + '%'],
     ['Overhead', estMu.oh + '%'],
     ['Profit', estMu.profit + '%'],
     ...(estMu.bond > 0 ? [['Bond / Insurance', estMu.bond + '%']] : []),
@@ -2669,9 +2654,8 @@ function getBudgetSheet() {
     bs.overhead = {};
   }
   // One-time migration: Soft Costs itself moved to the Estimator as flat dollar fields
-  // (project.softCosts) — carry over anything already entered. Contingency didn't move; it's
-  // redundant with the Estimator's Contingency % (same precedent as Overhead), so any old
-  // manual Contingency value is simply dropped here rather than carried forward.
+  // (project.softCosts) — carry over anything already entered. Any old manual Contingency
+  // value is dropped rather than carried forward, since Contingency isn't a Soft Cost.
   if (bs.soft && Object.keys(bs.soft).length) {
     if (!project.softCosts) project.softCosts = {};
     Object.entries(bs.soft).forEach(([id, row]) => {
@@ -3236,14 +3220,12 @@ async function bldDeleteSubcontractor(id) {
 // way overriding a Contract Amount here updates this tab's own summary without ever touching
 // the Estimator tab's estimate-based figures.
 function bldMarkupBreakdown() {
-  const rawDirect = bldPhaseDivisions().reduce((s, d) => s + bldPhaseAmount(d), 0);
-  const coAmt  = rawDirect * estMu.cont / 100;
-  const direct = rawDirect + coAmt;
+  const direct = bldPhaseDivisions().reduce((s, d) => s + bldPhaseAmount(d), 0);
   const softCostsAmt = estSoftCostsTotal();
   const ohAmt  = (direct + softCostsAmt) * estMu.oh / 100;
   const prAmt  = (direct + softCostsAmt) * estMu.profit / 100;
   const bid = direct + ohAmt + prAmt + softCostsAmt;
-  return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
+  return { direct, ohAmt, prAmt, softCostsAmt, bid };
 }
 
 function getSpecData() {
@@ -3593,8 +3575,8 @@ function bldRenderSummary() {
       ${bldSchedBars()}`;
   }
 
-  // Direct Cost (incl. Contingency) + Soft Cost = Total Budget (the real cost of the job, no
-  // markup). Total Profit is just the Estimator's Profit % applied to Total Budget (Overhead
+  // Direct Cost + Soft Cost = Total Budget (the real cost of the job, no markup). Total Profit
+  // is just the Estimator's Profit % applied to Total Budget (Overhead
   // is recovered cost, not counted as profit here) — Estimator Bid Price still includes
   // Overhead on top, so it's more than Total Profit + Total Budget. Uses bldMarkupBreakdown(),
   // not estimatorMarkupBreakdown() — so a Contract Amount override on a phase here updates
