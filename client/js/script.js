@@ -3773,6 +3773,148 @@ function bldRenderSummary() {
   bldRenderGantt();
 }
 
+// A full closeout-style report of everything on this tab: every phase and Soft Cost item with
+// its status/schedule/subcontractor/paid-remaining, plus the same financial summary shown in
+// the right panel — meant for handing off or filing once a project's finished, not just a
+// printout of the on-screen table.
+function bldExportPaymentsPDF() {
+  const { paidTotal, softPaidTotal, projectStart, projectEnd } = bldCalcTotals();
+  const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
+  const totalBudget = direct + softCostsAmt;
+  const totalProfit = prAmt;
+  const paymentsRemaining = direct - paidTotal;
+  const softPaymentsRemaining = softCostsAmt - softPaidTotal;
+  const profitTaken = (paidTotal + softPaidTotal) * estMu.profit / 100;
+  const profitRemaining = totalProfit - profitTaken;
+  const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  const fmtD = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const phaseRows = bldPhaseDivisions().map(d => {
+    const row = bldGetRow('phases', d);
+    const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
+    const total = bldPhaseAmount(d);
+    const paid = bldPhasePaidTotal(row);
+    const sched = (row.startDate && row.endDate)
+      ? `${fmtD(new Date(row.startDate + 'T12:00:00'))} – ${fmtD(new Date(row.endDate + 'T12:00:00'))}`
+      : '—';
+    return `<tr>
+      <td>${esc(phaseLabel(d))}</td>
+      <td>${esc(row.status)}</td>
+      <td>${sched}</td>
+      <td>${sub ? esc(sub.name) : '—'}</td>
+      <td class="r">${fmt(total)}</td>
+      <td class="r">${fmt(paid)}</td>
+      <td class="r">${fmt(total - paid)}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" style="text-align:center;color:#999">No Construction Phases yet.</td></tr>`;
+
+  const softItems = EST_SOFT_COST_ITEMS.filter(item => bldSoftCostAmount(item.id) > 0);
+  const softSection = softItems.length ? `
+    <div class="ds">
+      <div class="dh">Soft Costs</div>
+      <table><thead><tr><th>Item</th><th>Paid To</th><th class="r">Amount</th><th class="r">Paid</th><th class="r">Remaining</th></tr></thead>
+      <tbody>${softItems.map(item => {
+        const row = bldGetRow('softPay', item.id);
+        const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
+        const total = bldSoftCostAmount(item.id);
+        const paid = bldPhasePaidTotal(row);
+        return `<tr>
+          <td>${esc(item.label)}</td>
+          <td>${sub ? esc(sub.name) : '—'}</td>
+          <td class="r">${fmt(total)}</td>
+          <td class="r">${fmt(paid)}</td>
+          <td class="r">${fmt(total - paid)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+      </table>
+    </div>` : '';
+
+  const scheduleSection = (projectStart && projectEnd) ? `
+    <div class="meta">
+      <div><span>Start</span>${fmtD(projectStart)}</div>
+      <div><span>Completion</span>${fmtD(projectEnd)}</div>
+      <div><span>Total Span</span>~${Math.round((projectEnd - projectStart) / (7 * 24 * 60 * 60 * 1000))} weeks</div>
+    </div>` : '';
+
+  const summaryRows = [
+    ['Direct Cost', fmt(direct)],
+    ['Soft Cost', fmt(softCostsAmt)],
+    ['Total Budget', fmt(totalBudget)],
+    [`Overhead (${estMu.oh}%)`, fmt(ohAmt)],
+    [`Total Profit (${estMu.profit}%)`, fmt(totalProfit)],
+  ];
+  if (paidTotal > 0) summaryRows.push(['Paid to Subs', fmt(paidTotal)], ['Payments Remaining', fmt(paymentsRemaining)]);
+  if (softPaidTotal > 0) summaryRows.push(['Paid for Soft Costs', fmt(softPaidTotal)], ['Soft Costs Remaining', fmt(softPaymentsRemaining)]);
+  if (paidTotal + softPaidTotal > 0) summaryRows.push(['Profit Taken', fmt(profitTaken)], ['Profit Remaining', fmt(profitRemaining)]);
+  const summaryHtml = summaryRows.map(([l, v]) => `<tr><td>${l}</td><td class="r">${v}</td></tr>`).join('');
+
+  const sd = getSpecData();
+  const spec = bldSpecBreakdown();
+  const hasSpec = (parseFloat(sd.landCost) || 0) > 0 || (parseFloat(sd.salesPrice) || 0) > 0;
+  const specSection = hasSpec ? `
+    <div class="sb"><div class="st">Spec Build</div>
+      <table><tbody>
+        <tr><td>Land Cost</td><td class="r">${fmt(parseFloat(sd.landCost) || 0)}</td></tr>
+        <tr><td>Sales Price</td><td class="r">${fmt(parseFloat(sd.salesPrice) || 0)}</td></tr>
+        <tr><td>Realtor Fee (${sd.realtorPct}%)</td><td class="r">${fmt(spec.realtorAmt)}</td></tr>
+        <tr><td>Title Insurance (${sd.titlePct}%)</td><td class="r">${fmt(spec.titleAmt)}</td></tr>
+      </tbody>
+      <tbody><tr class="bid"><td>SPEC PROFIT</td><td class="r">${fmt(spec.profit)} (${spec.profitPct.toFixed(1)}%)</td></tr></tbody>
+      </table>
+    </div>` : '';
+
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>${project.name || 'Project'} — Payments &amp; Schedule Report</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#1a1a2e;background:#fff;padding:32px 40px}
+.header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:14px;border-bottom:2.5px solid #1e3a5f;margin-bottom:16px}
+.brand{font-size:21px;font-weight:800;color:#1e3a5f;letter-spacing:-.4px}.brand span{color:#f97316}
+.pm{text-align:right}.pn{font-size:15px;font-weight:700;color:#1e3a5f}.ps{font-size:10px;color:#777;margin-top:3px}
+.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;font-size:11px}
+.meta div span{display:block;color:#777;font-size:9px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.ds{margin-bottom:18px}.dh{background:#1e3a5f;color:#fff;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:5px 9px;border-radius:4px 4px 0 0}
+table{width:100%;border-collapse:collapse}
+thead th{background:#f0f2f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555;padding:5px 8px;border-bottom:1px solid #dde;text-align:left}
+tbody td{padding:5px 8px;border-bottom:1px solid #eee;font-size:10.5px}
+tbody tr:nth-child(even) td{background:#fafbfc}
+.r{text-align:right;font-variant-numeric:tabular-nums}
+.sw{display:grid;grid-template-columns:${hasSpec ? '1fr 1fr' : '1fr'};gap:18px;margin-top:6px}
+.sb .st{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#777;margin-bottom:6px}
+.sb table{border:1px solid #dde;border-radius:4px;overflow:hidden}
+.sb tbody td{padding:5px 10px;font-size:11px}.sb tbody tr:last-child td{border-bottom:none}
+.bid td{background:#1e3a5f!important;color:#fff!important;font-weight:700!important;font-size:13px!important;padding:9px 10px!important;border:none!important}
+.foot{margin-top:24px;padding-top:10px;border-top:1px solid #dde;font-size:9px;color:#bbb;display:flex;justify-content:space-between}
+@media print{body{padding:16px 24px}.ds{page-break-inside:avoid}}
+</style></head><body>
+<div class="header">
+  <div><div class="brand">Build<span>Calc</span></div><div style="font-size:10px;color:#999;margin-top:3px">Project Closeout Report</div></div>
+  <div class="pm"><div class="pn">${esc(project.name || 'New Project')}</div><div class="ps">${today}</div></div>
+</div>
+${scheduleSection}
+<div class="ds">
+  <div class="dh">Construction Phases</div>
+  <table><thead><tr><th>Phase</th><th>Status</th><th>Schedule</th><th>Subcontractor</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Remaining</th></tr></thead>
+  <tbody>${phaseRows}</tbody></table>
+</div>
+${softSection}
+<div class="sw">
+  <div class="sb"><div class="st">Financial Summary</div>
+    <table><tbody>${summaryHtml}</tbody>
+    <tbody><tr class="bid"><td>ESTIMATOR BID PRICE</td><td class="r">${fmt(bid)}</td></tr></tbody></table>
+  </div>
+  ${specSection}
+</div>
+<div class="foot"><span>BuildCalc &mdash; Construction Management Tools</span><span>${esc(project.name || 'Project')} &mdash; ${today}</span></div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Please allow pop-ups for this site to export PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
 function bldUpdateItem(section, id, field, val) {
   const row = bldGetRow(section, id);
   row[field] = val;

@@ -145,7 +145,7 @@
     <div class="tb-right">
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="bldOpenAllItemsModal()">All Items</button>
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="openManageSubs()">Subcontractors</button>
-      <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="window.print()">Export PDF</button>
+      <button class="btn btn-ghost" style="font-size:.76rem;padding:.3rem .75rem" onclick="bldExportPaymentsPDF()">Export PDF</button>
     </div>
   </div>
   <div class="bld-print-header" id="bld-print-header">
@@ -347,7 +347,7 @@
         <li>The summary panel's <strong>Custom</strong> section breaks your budget down the same way the Estimator does: <strong>Direct Cost</strong> (your Construction Phases, using each phase's real Contract Amount where you've entered one) plus <strong>Soft Cost</strong> (permits, insurance, architect, loan interest, etc.) add up to <strong>Total Budget</strong> — the real cost of the job, with no markup. <strong>Total Profit</strong> is the Estimator's Profit % applied to Total Budget, and <strong>Overhead</strong> (the Estimator's Overhead %) is shown right below it. <strong>Estimator Bid Price</strong> is the full number you'd actually quote a client — Total Budget plus Overhead plus Total Profit — updated live as Contract Amounts come in. Click it to jump to the Estimator.</li>
         <li>Once at least one payment's been logged (to a sub or a Soft Cost item), the summary panel also breaks down how much of the job is behind you: <strong>Profit Taken</strong> is the Estimator's Profit % applied to everything paid so far — <strong>Paid to Subs</strong> plus <strong>Paid for Soft Costs</strong> combined — with <strong>Profit Remaining</strong> (Total Profit minus Profit Taken) below it. <strong>Payments Remaining</strong> (Direct Cost minus Paid to Subs) sits under Paid to Subs once at least one sub payment's logged, and <strong>Soft Costs Remaining</strong> sits under Paid for Soft Costs the same way once a Soft Cost payment's logged — each tracked independently.</li>
         <li>The <strong>Spec</strong> section below that is for spec builds sold at a market price instead of a fixed client bid. Enter your <strong>Land Cost</strong> and expected <strong>Sales Price</strong> — <strong>Realtor Fee</strong> and <strong>Title Insurance</strong> default to 3% and 1% of Sales Price but can be changed. <strong>Spec Profit</strong> is Sales Price minus Land Cost, Realtor Fee, Title Insurance, and Total Budget (from the Custom section above), shown alongside its margin as a percentage of Total Budget plus Land Cost.</li>
-        <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
+        <li>Click <strong>Export PDF</strong> for a full closeout report: every Construction Phase with its status, schedule, subcontractor, and paid/remaining; every Soft Cost the same way; the full financial summary (Direct Cost, Soft Cost, Total Budget, Overhead, Total Profit, Estimator Bid Price, and whatever's been paid so far); and the Spec Build breakdown if you've used it.</li>
       </ol>
     </div>
 
