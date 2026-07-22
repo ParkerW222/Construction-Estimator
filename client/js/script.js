@@ -240,6 +240,28 @@ function renderAllItemsTable() {
   }).join('');
 }
 
+// Auto-scrolls the nearest scrollable ancestor of a drag-over target when the pointer nears
+// its top or bottom edge, so reordering a long list (item table, phase table, condition list,
+// etc.) works across an off-screen drop point without needing to drop, scroll, then re-drag.
+function dragAutoScroll(e) {
+  let el = e.currentTarget;
+  while (el && el !== document.documentElement) {
+    const cs = getComputedStyle(el);
+    if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) break;
+    el = el.parentElement;
+  }
+  if (!el || el === document.documentElement) return;
+  const rect = el.getBoundingClientRect();
+  const EDGE = 50, MAX_SPEED = 14;
+  const distTop = e.clientY - rect.top;
+  const distBottom = rect.bottom - e.clientY;
+  if (distTop >= 0 && distTop < EDGE) {
+    el.scrollTop -= MAX_SPEED * (1 - distTop / EDGE);
+  } else if (distBottom >= 0 && distBottom < EDGE) {
+    el.scrollTop += MAX_SPEED * (1 - distBottom / EDGE);
+  }
+}
+
 // ── ESTIMATOR ITEM DRAG-AND-DROP ────────────────────────────────────
 // Drop an item onto another item's row to reorder it there (same division) or move it to
 // that item's division (different division). Drop onto a division in the left sidebar to
@@ -256,6 +278,7 @@ function estItemDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   e.currentTarget.classList.add('drag-over');
+  dragAutoScroll(e);
 }
 function estItemDragLeave(e) {
   e.currentTarget.classList.remove('drag-over');
@@ -286,6 +309,7 @@ function estDivDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   e.currentTarget.classList.add('drag-over');
+  dragAutoScroll(e);
 }
 function estDivDragLeave(e) {
   e.currentTarget.classList.remove('drag-over');
@@ -1433,6 +1457,7 @@ function bpCondDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   if (+e.currentTarget.dataset.condId !== bpDragCondId) e.currentTarget.classList.add('drag-over');
+  dragAutoScroll(e);
 }
 
 function bpCondDragLeave(e) {
@@ -2834,6 +2859,7 @@ function bldPhaseDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   if (e.currentTarget.dataset.id !== bldDragPhaseDiv) e.currentTarget.classList.add('drag-over');
+  dragAutoScroll(e);
 }
 
 function bldPhaseDragLeave(e) {
