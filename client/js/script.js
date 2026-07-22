@@ -375,9 +375,9 @@ function estimatorMarkupBreakdown() {
   const rawDirect = grandTotal();
   const coAmt  = rawDirect * estMu.cont / 100;
   const direct = rawDirect + coAmt; // Total Direct Cost — Contingency is the last item folded into it
-  const ohAmt  = direct * estMu.oh / 100;
-  const prAmt  = direct * estMu.profit / 100;
   const softCostsAmt = estSoftCostsTotal();
+  const ohAmt  = direct * estMu.oh / 100;
+  const prAmt  = (direct + softCostsAmt) * estMu.profit / 100; // Profit is % of Direct Cost + Soft Cost combined
   const bid = direct + ohAmt + prAmt + softCostsAmt;
   return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
 }
@@ -386,7 +386,15 @@ function renderSum() {
   const { coAmt, direct, ohAmt, prAmt, softCostsAmt, bid } = estimatorMarkupBreakdown();
   const sc = getSoftCosts();
 
-  let html = `<div class="sum-head">Division Subtotals</div>`;
+  let html = `<div class="sum-head">Soft Costs <span class="sum-head-unit">$</span></div>`;
+  html += EST_SOFT_COST_ITEMS.map(item => `
+    <div class="sum-mu-row">
+      <span class="sum-mu-label">${item.label}</span>
+      <input class="sum-cost-inp" type="number" value="${sc[item.id] || ''}" min="0" step="100" placeholder="—" oninput="updSoftCost('${item.id}',this.value)">
+    </div>`).join('');
+  html += `<div class="sum-total"><span>Total Soft Costs</span><span id="sum-softcosts-total">${fmt(softCostsAmt)}</span></div>`;
+
+  html += `<hr class="sum-sep"><div class="sum-head">Division Subtotals</div>`;
   allDivCodes().forEach(d => {
     const sub = divTotal(d);
     if (sub > 0) html += `<div class="sum-row"><span class="sum-row-label">${d} ${esc(divName(d))}</span><span class="sum-row-val">${fmt(sub)}</span></div>`;
@@ -408,19 +416,11 @@ function renderSum() {
       <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-oh-amt">${fmt(ohAmt)}</span>
     </div>
     <div class="sum-mu-row">
-      <span class="sum-mu-label">Profit %</span>
+      <span class="sum-mu-label" title="Applied to Total Direct Cost plus Total Soft Costs combined">Profit %</span>
       <input class="sum-pct" type="number" value="${estMu.profit}" min="0" step="0.5" oninput="updMu('profit',this.value)">
       <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-pr-amt">${fmt(prAmt)}</span>
     </div>
     <div class="sum-total"><span>Total Markup &amp; Fees</span><span id="sum-markup-total">${fmt(ohAmt + prAmt)}</span></div>
-    <hr class="sum-sep" style="margin:.55rem 0">
-    <div class="sum-head" style="margin-top:.2rem">Soft Costs <span class="sum-head-unit">$</span></div>
-    ${EST_SOFT_COST_ITEMS.map(item => `
-    <div class="sum-mu-row">
-      <span class="sum-mu-label">${item.label}</span>
-      <input class="sum-cost-inp" type="number" value="${sc[item.id] || ''}" min="0" step="100" placeholder="—" oninput="updSoftCost('${item.id}',this.value)">
-    </div>`).join('')}
-    <div class="sum-total"><span>Total Soft Costs</span><span id="sum-softcosts-total">${fmt(softCostsAmt)}</span></div>
     <div class="bid-box">
       <div class="bid-box-lbl">Bid Price</div>
       <div class="bid-box-val" id="sum-bid">${fmt(bid)}</div>
@@ -435,9 +435,10 @@ function updMu(field, val) {
   const rawDirect = grandTotal();
   const co     = rawDirect * estMu.cont / 100;
   const direct = rawDirect + co;
+  const softCostsAmt = estSoftCostsTotal();
   const oh     = direct * estMu.oh / 100;
-  const pr     = direct * estMu.profit / 100;
-  const bid    = direct + oh + pr + estSoftCostsTotal();
+  const pr     = (direct + softCostsAmt) * estMu.profit / 100;
+  const bid    = direct + oh + pr + softCostsAmt;
   if (gid('sum-co-amt'))       gid('sum-co-amt').textContent       = fmt(co);
   if (gid('sum-direct-total')) gid('sum-direct-total').textContent = fmt(direct);
   if (gid('sum-oh-amt'))       gid('sum-oh-amt').textContent       = fmt(oh);
@@ -452,7 +453,10 @@ function updSoftCost(id, val) {
   getSoftCosts()[id] = val;
   const b = estimatorMarkupBreakdown();
   if (gid('sum-softcosts-total')) gid('sum-softcosts-total').textContent = fmt(b.softCostsAmt);
-  if (gid('sum-bid')) gid('sum-bid').textContent = fmt(b.bid);
+  // Profit is % of Direct Cost + Soft Cost combined, so a Soft Cost change also moves Profit.
+  if (gid('sum-pr-amt'))          gid('sum-pr-amt').textContent          = fmt(b.prAmt);
+  if (gid('sum-markup-total'))    gid('sum-markup-total').textContent    = fmt(b.ohAmt + b.prAmt);
+  if (gid('sum-bid'))             gid('sum-bid').textContent             = fmt(b.bid);
   gid('top-total').textContent = fmt(b.bid);
   saveProject();
 }
@@ -3234,9 +3238,9 @@ function bldMarkupBreakdown() {
   const rawDirect = bldPhaseDivisions().reduce((s, d) => s + bldPhaseAmount(d), 0);
   const coAmt  = rawDirect * estMu.cont / 100;
   const direct = rawDirect + coAmt;
-  const ohAmt  = direct * estMu.oh / 100;
-  const prAmt  = direct * estMu.profit / 100;
   const softCostsAmt = estSoftCostsTotal();
+  const ohAmt  = direct * estMu.oh / 100;
+  const prAmt  = (direct + softCostsAmt) * estMu.profit / 100;
   const bid = direct + ohAmt + prAmt + softCostsAmt;
   return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
 }
