@@ -376,7 +376,7 @@ function estimatorMarkupBreakdown() {
   const coAmt  = rawDirect * estMu.cont / 100;
   const direct = rawDirect + coAmt; // Total Direct Cost — Contingency is the last item folded into it
   const softCostsAmt = estSoftCostsTotal();
-  const ohAmt  = direct * estMu.oh / 100;
+  const ohAmt  = (direct + softCostsAmt) * estMu.oh / 100; // Overhead is % of Direct Cost + Soft Cost combined
   const prAmt  = (direct + softCostsAmt) * estMu.profit / 100; // Profit is % of Direct Cost + Soft Cost combined
   const bid = direct + ohAmt + prAmt + softCostsAmt;
   return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
@@ -411,7 +411,7 @@ function renderSum() {
     <hr class="sum-sep">
     <div class="sum-head" style="margin-top:.4rem">Markup &amp; Fees <span class="sum-head-unit">%</span></div>
     <div class="sum-mu-row">
-      <span class="sum-mu-label">Overhead %</span>
+      <span class="sum-mu-label" title="Applied to Total Direct Cost plus Total Soft Costs combined">Overhead %</span>
       <input class="sum-pct" type="number" value="${estMu.oh}" min="0" step="0.5" oninput="updMu('oh',this.value)">
       <span class="sum-pct-sym">%</span><span class="sum-pct-amt" id="sum-oh-amt">${fmt(ohAmt)}</span>
     </div>
@@ -436,7 +436,7 @@ function updMu(field, val) {
   const co     = rawDirect * estMu.cont / 100;
   const direct = rawDirect + co;
   const softCostsAmt = estSoftCostsTotal();
-  const oh     = direct * estMu.oh / 100;
+  const oh     = (direct + softCostsAmt) * estMu.oh / 100;
   const pr     = (direct + softCostsAmt) * estMu.profit / 100;
   const bid    = direct + oh + pr + softCostsAmt;
   if (gid('sum-co-amt'))       gid('sum-co-amt').textContent       = fmt(co);
@@ -453,7 +453,8 @@ function updSoftCost(id, val) {
   getSoftCosts()[id] = val;
   const b = estimatorMarkupBreakdown();
   if (gid('sum-softcosts-total')) gid('sum-softcosts-total').textContent = fmt(b.softCostsAmt);
-  // Profit is % of Direct Cost + Soft Cost combined, so a Soft Cost change also moves Profit.
+  // Overhead and Profit are both % of Direct Cost + Soft Cost combined, so a Soft Cost change moves both.
+  if (gid('sum-oh-amt'))          gid('sum-oh-amt').textContent          = fmt(b.ohAmt);
   if (gid('sum-pr-amt'))          gid('sum-pr-amt').textContent          = fmt(b.prAmt);
   if (gid('sum-markup-total'))    gid('sum-markup-total').textContent    = fmt(b.ohAmt + b.prAmt);
   if (gid('sum-bid'))             gid('sum-bid').textContent             = fmt(b.bid);
@@ -3239,7 +3240,7 @@ function bldMarkupBreakdown() {
   const coAmt  = rawDirect * estMu.cont / 100;
   const direct = rawDirect + coAmt;
   const softCostsAmt = estSoftCostsTotal();
-  const ohAmt  = direct * estMu.oh / 100;
+  const ohAmt  = (direct + softCostsAmt) * estMu.oh / 100;
   const prAmt  = (direct + softCostsAmt) * estMu.profit / 100;
   const bid = direct + ohAmt + prAmt + softCostsAmt;
   return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
