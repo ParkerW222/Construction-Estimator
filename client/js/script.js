@@ -3710,9 +3710,10 @@ function bldRenderSummary() {
   // every subcontractor is paid in full.
   const paymentsRemaining = direct - paidTotal;
   const softPaymentsRemaining = softCostsAmt - softPaidTotal;
-  // Profit Taken is the profit portion of what's actually been paid to subs so far, using the
-  // Estimator's Profit % applied directly to that payment.
-  const profitTaken = paidTotal * estMu.profit / 100;
+  // Total Profit is Profit % of Direct Cost + Soft Cost combined, so Profit Taken has to use
+  // that same combined base — the profit portion of everything actually paid so far, whether
+  // to subs (Direct Cost) or against Soft Cost items.
+  const profitTaken = (paidTotal + softPaidTotal) * estMu.profit / 100;
   const profitRemaining = totalProfit - profitTaken;
 
   const sd = getSpecData();
@@ -3726,9 +3727,10 @@ function bldRenderSummary() {
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(totalBudget)}</span></div>
       <div class="bld-sum-row"><span>Total Profit</span><span>${fmt(totalProfit)}</span></div>
       <div class="bld-sum-row"><span>Overhead</span><span>${fmt(ohAmt)}</span></div>
-      ${paidTotal > 0 ? `
+      ${(paidTotal + softPaidTotal) > 0 ? `
       <div class="bld-sum-row"><span>Profit Taken</span><span>${fmt(profitTaken)}</span></div>
-      <div class="bld-sum-row"><span>Profit Remaining</span><span>${fmt(profitRemaining)}</span></div>
+      <div class="bld-sum-row"><span>Profit Remaining</span><span>${fmt(profitRemaining)}</span></div>` : ''}
+      ${paidTotal > 0 ? `
       <div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>
       <div class="bld-sum-row"><span>Payments Remaining</span><span>${fmt(paymentsRemaining)}</span></div>` : ''}
       ${softPaidTotal > 0 ? `
