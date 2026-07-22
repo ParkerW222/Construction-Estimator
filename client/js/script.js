@@ -3564,12 +3564,17 @@ function bldRenderSummary() {
   }
 
   // Direct Cost (incl. Contingency) + Soft Cost = Total Budget (the real cost of the job, no
-  // markup), and Profit (Overhead + Profit combined) on top of Total Budget is the bid/sales
-  // price. Uses bldMarkupBreakdown(), not estimatorMarkupBreakdown() — so a Contract Amount
-  // override on a phase here updates this summary live without touching the Estimator tab.
+  // markup), and Total Profit (Overhead + Profit combined) on top of Total Budget is the
+  // bid/sales price. Uses bldMarkupBreakdown(), not estimatorMarkupBreakdown() — so a Contract
+  // Amount override on a phase here updates this summary live without touching the Estimator.
   const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
   const totalBudget = direct + softCostsAmt;
-  const profitCombined = ohAmt + prAmt;
+  const totalProfit = ohAmt + prAmt;
+  const paymentsRemaining = totalBudget - paidTotal;
+  // Profit Taken backs the profit portion out of what's actually been paid to subs so far,
+  // using the Estimator's Profit % as the markup rate embedded in that payment.
+  const profitTaken = paidTotal / (1 + estMu.profit / 100);
+  const profitRemaining = totalProfit - profitTaken;
 
   const sd = getSpecData();
   const spec = bldSpecBreakdown();
@@ -3580,8 +3585,12 @@ function bldRenderSummary() {
       <div class="bld-sum-row"><span>Direct Cost</span><span>${fmt(direct)}</span></div>
       <div class="bld-sum-row"><span>Soft Cost</span><span>${fmt(softCostsAmt)}</span></div>
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(totalBudget)}</span></div>
-      <div class="bld-sum-row"><span>Profit</span><span>${fmt(profitCombined)}</span></div>
-      ${paidTotal > 0 ? `<div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>` : ''}
+      <div class="bld-sum-row"><span>Total Profit</span><span>${fmt(totalProfit)}</span></div>
+      ${paidTotal > 0 ? `
+      <div class="bld-sum-row"><span>Profit Taken</span><span>${fmt(profitTaken)}</span></div>
+      <div class="bld-sum-row"><span>Profit Remaining</span><span>${fmt(profitRemaining)}</span></div>
+      <div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>
+      <div class="bld-sum-row"><span>Payments Remaining</span><span>${fmt(paymentsRemaining)}</span></div>` : ''}
       <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Profit + Total Budget, using each phase's real Contract Amount where set — click to view the Estimator">
         <span>Estimator Bid Price</span><span>${fmt(bid)}</span>
       </div>
