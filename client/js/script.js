@@ -240,27 +240,33 @@ function renderAllItemsTable() {
   }).join('');
 }
 
-// Auto-scrolls the nearest scrollable ancestor of a drag-over target when the pointer nears
-// its top or bottom edge, so reordering a long list (item table, phase table, condition list,
-// etc.) works across an off-screen drop point without needing to drop, scroll, then re-drag.
-function dragAutoScroll(e) {
-  let el = e.currentTarget;
-  while (el && el !== document.documentElement) {
-    const cs = getComputedStyle(el);
-    if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && el.scrollHeight > el.clientHeight) break;
-    el = el.parentElement;
+// Auto-scrolls the relevant list's scroll container while a list-reorder drag is in progress.
+// Per-row dragover handlers alone aren't enough: HTML5 drag events only fire on whatever
+// element is literally under the pointer, so drifting into a gap, a header, or just past the
+// list's own edge (into the toolbar above it, say) stops every per-row handler from firing at
+// all — which is exactly why scrolling only worked while held in one exact spot. Checking on
+// every page-level dragover instead means position is all that matters, not which element (if
+// any) is directly underneath the pointer.
+let dragAutoScrollTargets = null; // array of CSS selectors for this drag's candidate containers
+
+function dragAutoScrollStart(selectors) { dragAutoScrollTargets = selectors; }
+function dragAutoScrollStop() { dragAutoScrollTargets = null; }
+
+document.addEventListener('dragover', e => {
+  if (!dragAutoScrollTargets) return;
+  const EDGE = 60, MAX_SPEED = 16, X_PAD = 40;
+  for (const sel of dragAutoScrollTargets) {
+    const el = document.querySelector(sel);
+    if (!el || el.scrollHeight <= el.clientHeight) continue;
+    const rect = el.getBoundingClientRect();
+    if (e.clientX < rect.left - X_PAD || e.clientX > rect.right + X_PAD) continue;
+    const distTop = e.clientY - rect.top;
+    const distBottom = rect.bottom - e.clientY;
+    const eased = d => 1 - Math.min(Math.max(d, 0), EDGE) / EDGE;
+    if (distTop < EDGE) { el.scrollTop -= MAX_SPEED * eased(distTop); return; }
+    if (distBottom < EDGE) { el.scrollTop += MAX_SPEED * eased(distBottom); return; }
   }
-  if (!el || el === document.documentElement) return;
-  const rect = el.getBoundingClientRect();
-  const EDGE = 50, MAX_SPEED = 14;
-  const distTop = e.clientY - rect.top;
-  const distBottom = rect.bottom - e.clientY;
-  if (distTop >= 0 && distTop < EDGE) {
-    el.scrollTop -= MAX_SPEED * (1 - distTop / EDGE);
-  } else if (distBottom >= 0 && distBottom < EDGE) {
-    el.scrollTop += MAX_SPEED * (1 - distBottom / EDGE);
-  }
-}
+});
 
 // ── ESTIMATOR ITEM DRAG-AND-DROP ────────────────────────────────────
 // Drop an item onto another item's row to reorder it there (same division) or move it to
@@ -272,13 +278,13 @@ function estItemDragStart(e, id) {
   estDragItemId = id;
   e.dataTransfer.effectAllowed = 'move';
   e.currentTarget.classList.add('dragging');
+  dragAutoScrollStart(['.items-wrap', '.div-nav']);
 }
 function estItemDragOver(e) {
   if (estDragItemId == null) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   e.currentTarget.classList.add('drag-over');
-  dragAutoScroll(e);
 }
 function estItemDragLeave(e) {
   e.currentTarget.classList.remove('drag-over');
@@ -302,6 +308,7 @@ function estItemDragEnd(e) {
   e.currentTarget.classList.remove('dragging');
   document.querySelectorAll('.items tbody tr.drag-over').forEach(el => el.classList.remove('drag-over'));
   estDragItemId = null;
+  dragAutoScrollStop();
 }
 
 function estDivDragOver(e) {
@@ -309,7 +316,6 @@ function estDivDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   e.currentTarget.classList.add('drag-over');
-  dragAutoScroll(e);
 }
 function estDivDragLeave(e) {
   e.currentTarget.classList.remove('drag-over');
@@ -1451,13 +1457,13 @@ function bpCondDragStart(e, id) {
   bpDragCondId = id;
   e.dataTransfer.effectAllowed = 'move';
   e.currentTarget.classList.add('dragging');
+  dragAutoScrollStart(['.bp-cond-list']);
 }
 
 function bpCondDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   if (+e.currentTarget.dataset.condId !== bpDragCondId) e.currentTarget.classList.add('drag-over');
-  dragAutoScroll(e);
 }
 
 function bpCondDragLeave(e) {
@@ -1483,6 +1489,7 @@ function bpCondDragEnd(e) {
   e.currentTarget.classList.remove('dragging');
   document.querySelectorAll('.bp-cond-item.drag-over').forEach(el => el.classList.remove('drag-over'));
   bpDragCondId = null;
+  dragAutoScrollStop();
 }
 
 function bpUpdateActiveIndicator() {
@@ -2853,13 +2860,13 @@ function bldPhaseDragStart(e, d) {
   bldDragPhaseDiv = d;
   e.dataTransfer.effectAllowed = 'move';
   e.currentTarget.classList.add('dragging');
+  dragAutoScrollStart(['.bld-table-wrap']);
 }
 
 function bldPhaseDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   if (e.currentTarget.dataset.id !== bldDragPhaseDiv) e.currentTarget.classList.add('drag-over');
-  dragAutoScroll(e);
 }
 
 function bldPhaseDragLeave(e) {
@@ -2886,6 +2893,7 @@ function bldPhaseDragEnd(e) {
   e.currentTarget.classList.remove('dragging');
   document.querySelectorAll('.bld-row.drag-over').forEach(el => el.classList.remove('drag-over'));
   bldDragPhaseDiv = null;
+  dragAutoScrollStop();
 }
 
 function bldGetRow(section, id) {
