@@ -3488,18 +3488,38 @@ function bldGanttBarMouseDown(e, div, mode) {
   const bar = e.currentTarget.classList.contains('bld-gantt-bar') ? e.currentTarget : e.currentTarget.closest('.bld-gantt-bar');
   const trk = bar.closest('.bld-gantt-trk');
   const row = bldGetRow('phases', div);
+  const tip = document.createElement('div');
+  tip.className = 'bld-gantt-drag-tip';
+  document.body.appendChild(tip);
   bldDrag = {
-    div, mode, bar,
+    div, mode, bar, tip,
     startClientX: e.clientX,
     origStart: new Date(row.startDate + 'T12:00:00').getTime(),
     origEnd: new Date(row.endDate + 'T12:00:00').getTime(),
     trackWidth: trk.getBoundingClientRect().width,
     previewStart: null, previewEnd: null,
   };
+  bldUpdateDragTip(bldDrag.origStart, bldDrag.origEnd);
   bar.classList.add('dragging');
   document.body.style.userSelect = 'none';
   document.addEventListener('mousemove', bldGanttMouseMove);
   document.addEventListener('mouseup', bldGanttMouseUp);
+}
+
+function bldFmtTipDate(ms) {
+  return new Date(ms).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+// Live tooltip that tracks the bar while dragging, so it's obvious exactly what day you're
+// dragging to without needing every single day drawn on the grid.
+function bldUpdateDragTip(startMs, endMs) {
+  if (!bldDrag || !bldDrag.tip) return;
+  const rect = bldDrag.bar.getBoundingClientRect();
+  bldDrag.tip.style.left = (rect.left + rect.width / 2) + 'px';
+  bldDrag.tip.style.top = rect.top + 'px';
+  const startLabel = bldFmtTipDate(startMs);
+  const endLabel = bldFmtTipDate(endMs);
+  bldDrag.tip.textContent = startLabel === endLabel ? startLabel : `${startLabel} – ${endLabel}`;
 }
 
 function bldGanttMouseMove(e) {
@@ -3524,13 +3544,15 @@ function bldGanttMouseMove(e) {
   const width = Math.max((newEnd - newStart) / bldGanttSpan * 100, 1);
   bldDrag.bar.style.left = left + '%';
   bldDrag.bar.style.width = width + '%';
+  bldUpdateDragTip(newStart, newEnd);
 }
 
 function bldGanttMouseUp() {
   if (!bldDrag) return;
-  const { div, previewStart, previewEnd, bar } = bldDrag;
+  const { div, previewStart, previewEnd, bar, tip } = bldDrag;
   document.body.style.userSelect = '';
   if (bar) bar.classList.remove('dragging');
+  if (tip) tip.remove();
   document.removeEventListener('mousemove', bldGanttMouseMove);
   document.removeEventListener('mouseup', bldGanttMouseUp);
   bldDrag = null;

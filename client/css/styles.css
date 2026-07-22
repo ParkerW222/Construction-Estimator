@@ -641,6 +641,8 @@ body.admin-mode #admin-app{display:block}
 .bld-gantt-handle{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}
 .bld-gantt-handle-l{left:0}
 .bld-gantt-handle-r{right:0}
+.bld-gantt-drag-tip{position:fixed;transform:translate(-50%,calc(-100% - 8px));background:var(--navy-d);color:#fff;font-size:.72rem;font-weight:700;padding:.3rem .6rem;border-radius:5px;white-space:nowrap;pointer-events:none;z-index:9999;box-shadow:0 3px 10px rgba(0,0,0,.3)}
+.bld-gantt-drag-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--navy-d)}
 .bld-cost-readonly{padding:.35rem .45rem;text-align:right;font-weight:600;color:var(--navy);font-size:.82rem;cursor:pointer}
 .bld-cost-est{display:block;font-weight:500;color:var(--muted);font-size:.68rem}
 .bld-label-click{cursor:pointer}
