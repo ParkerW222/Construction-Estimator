@@ -3593,12 +3593,14 @@ function bldRenderSummary() {
   }
 
   // Direct Cost (incl. Contingency) + Soft Cost = Total Budget (the real cost of the job, no
-  // markup), and Total Profit (Overhead + Profit combined) on top of Total Budget is the
-  // bid/sales price. Uses bldMarkupBreakdown(), not estimatorMarkupBreakdown() — so a Contract
-  // Amount override on a phase here updates this summary live without touching the Estimator.
-  const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
+  // markup). Total Profit is just the Estimator's Profit % applied to Total Budget (Overhead
+  // is recovered cost, not counted as profit here) — Estimator Bid Price still includes
+  // Overhead on top, so it's more than Total Profit + Total Budget. Uses bldMarkupBreakdown(),
+  // not estimatorMarkupBreakdown() — so a Contract Amount override on a phase here updates
+  // this summary live without touching the Estimator.
+  const { direct, softCostsAmt, prAmt, bid } = bldMarkupBreakdown();
   const totalBudget = direct + softCostsAmt;
-  const totalProfit = ohAmt + prAmt;
+  const totalProfit = prAmt;
   const paymentsRemaining = totalBudget - paidTotal;
   // Profit Taken is the profit portion of what's actually been paid to subs so far, using the
   // Estimator's Profit % applied directly to that payment.
@@ -3620,7 +3622,7 @@ function bldRenderSummary() {
       <div class="bld-sum-row"><span>Profit Remaining</span><span>${fmt(profitRemaining)}</span></div>
       <div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>
       <div class="bld-sum-row"><span>Payments Remaining</span><span>${fmt(paymentsRemaining)}</span></div>` : ''}
-      <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Profit + Total Budget, using each phase's real Contract Amount where set — click to view the Estimator">
+      <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Total Budget + Overhead + Total Profit, using each phase's real Contract Amount where set — click to view the Estimator">
         <span>Estimator Bid Price</span><span>${fmt(bid)}</span>
       </div>
 
