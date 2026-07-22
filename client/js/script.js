@@ -3371,7 +3371,7 @@ function bldGanttPhases() {
     if (!row.startDate || !row.endDate) return null;
     const s = new Date(row.startDate + 'T12:00:00');
     const e = new Date(row.endDate   + 'T12:00:00');
-    if (e <= s) return null;
+    if (e < s) return null;
     return { div: d, label: phaseLabel(d), status: row.status, s, e };
   }).filter(Boolean);
 }
@@ -3383,10 +3383,9 @@ function bldSchedBars() {
   const min = Math.min(...phases.map(p => p.s));
   const max = Math.max(...phases.map(p => p.e));
   const span = max - min;
-  if (span <= 0) return '';
   const bars = phases.map(p => {
-    const left  = (p.s - min) / span * 100;
-    const width = Math.max((p.e - p.s) / span * 100, 1);
+    const left  = span > 0 ? (p.s - min) / span * 100 : 0;
+    const width = span > 0 ? Math.max((p.e - p.s) / span * 100, 1) : 100;
     return `<div class="bld-seg" style="left:${left}%;width:${width}%;background:${COLOR[p.status]||'#cbd5e1'}" title="${esc(p.label)}"></div>`;
   }).join('');
   return `<div class="bld-seg-track">${bars}</div>`;
@@ -3405,8 +3404,7 @@ function bldRenderGantt() {
 
   const minT = Math.min(...phases.map(p => p.s.getTime()));
   const maxT = Math.max(...phases.map(p => p.e.getTime()));
-  const span = maxT - minT;
-  if (span <= 0) { el.classList.remove('has-data', 'open'); return; }
+  const span = Math.max(maxT - minT, BLD_DAY_MS);
 
   const fmtShort = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const fmtMo    = d => d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
@@ -3419,6 +3417,7 @@ function bldRenderGantt() {
     ticks.push({ pct, label: fmtMo(tickDate) });
     tickDate.setMonth(tickDate.getMonth() + 1);
   }
+  if (!ticks.length) ticks.push({ pct: 0, label: fmtMo(new Date(minT)) });
 
   const tickHtml = `
     <div class="bld-gantt-tick-row">
@@ -3541,8 +3540,12 @@ function bldGanttMouseUp() {
     row.startDate = bldFmtISODate(new Date(previewStart));
     row.endDate = bldFmtISODate(new Date(previewEnd));
     saveProject();
+    // Full re-render, not just bldRenderSummary() — the table's own Start/End date <input>
+    // fields live outside the summary panel and were otherwise left showing stale values.
+    bldRenderTable();
+  } else {
+    bldRenderSummary();
   }
-  bldRenderSummary();
 }
 
 function bldRenderSummary() {
