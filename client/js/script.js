@@ -3599,7 +3599,7 @@ function bldRenderSummary() {
   // Overhead on top, so it's more than Total Profit + Total Budget. Uses bldMarkupBreakdown(),
   // not estimatorMarkupBreakdown() — so a Contract Amount override on a phase here updates
   // this summary live without touching the Estimator.
-  const { direct, softCostsAmt, prAmt, bid } = bldMarkupBreakdown();
+  const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
   const totalBudget = direct + softCostsAmt;
   const totalProfit = prAmt;
   const paymentsRemaining = totalBudget - paidTotal;
@@ -3618,6 +3618,7 @@ function bldRenderSummary() {
       <div class="bld-sum-row"><span>Soft Cost</span><span>${fmt(softCostsAmt)}</span></div>
       <div class="bld-sum-row bld-sum-total"><span>Total Budget</span><span>${fmt(totalBudget)}</span></div>
       <div class="bld-sum-row"><span>Total Profit</span><span>${fmt(totalProfit)}</span></div>
+      <div class="bld-sum-row"><span>Overhead</span><span>${fmt(ohAmt)}</span></div>
       ${paidTotal > 0 ? `
       <div class="bld-sum-row"><span>Profit Taken</span><span>${fmt(profitTaken)}</span></div>
       <div class="bld-sum-row"><span>Profit Remaining</span><span>${fmt(profitRemaining)}</span></div>
