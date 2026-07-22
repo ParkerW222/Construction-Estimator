@@ -2965,11 +2965,58 @@ function bldGoToPhaseInEstimator() {
   setDiv(items.length ? items[0].div : 'ALL');
 }
 
+// Lets a modal's box be dragged around by its header, so it can be moved out of the way to see
+// what's behind it instead of staying pinned to the center of the screen. Only sets up the drag
+// listeners once per modal; bldResetModalPosition() puts it back in the centered default spot.
+function bldMakeModalDraggable(overlaySelector, handleSelector) {
+  const overlay = document.querySelector(overlaySelector);
+  const box = overlay ? overlay.querySelector('.modal-box') : null;
+  const handle = overlay ? overlay.querySelector(handleSelector) : null;
+  if (!box || !handle) return;
+  handle.style.cursor = 'move';
+  let drag = null;
+  handle.addEventListener('mousedown', e => {
+    if (e.target.closest('.modal-close')) return;
+    e.preventDefault();
+    const rect = box.getBoundingClientRect();
+    box.style.position = 'fixed';
+    box.style.margin = '0';
+    box.style.left = rect.left + 'px';
+    box.style.top = rect.top + 'px';
+    drag = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top };
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  function onMove(e) {
+    if (!drag) return;
+    box.style.left = (drag.origLeft + e.clientX - drag.startX) + 'px';
+    box.style.top  = (drag.origTop  + e.clientY - drag.startY) + 'px';
+  }
+  function onUp() {
+    drag = null;
+    document.body.style.userSelect = '';
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+}
+
+function bldResetModalPosition(overlaySelector) {
+  const box = document.querySelector(`${overlaySelector} .modal-box`);
+  if (!box) return;
+  box.style.position = '';
+  box.style.left = '';
+  box.style.top = '';
+  box.style.margin = '';
+}
+
 // ── SUBCONTRACTOR PAYMENTS MODAL ──────────────────────────────────────
 let bldPaymentsTargetDiv = null;
+bldMakeModalDraggable('#payments-modal', '.modal-head');
 
 function bldOpenPaymentsModal(d) {
   bldPaymentsTargetDiv = d;
+  bldResetModalPosition('#payments-modal');
   gid('payments-modal-title').textContent = `Payments — ${phaseLabel(d)}`;
   bldRenderPaymentsModal();
   gid('pay-add-date').value = new Date().toISOString().slice(0, 10);
