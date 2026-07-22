@@ -355,7 +355,7 @@ function getSoftCosts() {
   if (sc.permit === undefined && project.estMu && parseFloat(project.estMu.permit) > 0) {
     const d = grandTotal();
     const oh = d * (parseFloat(project.estMu.oh) || 0) / 100;
-    const pr = (d + oh) * (parseFloat(project.estMu.profit) || 0) / 100;
+    const pr = d * (parseFloat(project.estMu.profit) || 0) / 100;
     const co = (d + oh + pr) * (parseFloat(project.estMu.cont) || 0) / 100;
     const tax = d * 0.55 * (parseFloat(project.estMu.matTax) || 0) / 100;
     const permitAmt = (d + oh + pr + co + tax) * parseFloat(project.estMu.permit) / 100;
@@ -376,7 +376,7 @@ function estimatorMarkupBreakdown() {
   const coAmt  = rawDirect * estMu.cont / 100;
   const direct = rawDirect + coAmt; // Total Direct Cost — Contingency is the last item folded into it
   const ohAmt  = direct * estMu.oh / 100;
-  const prAmt  = (direct + ohAmt) * estMu.profit / 100;
+  const prAmt  = direct * estMu.profit / 100;
   const softCostsAmt = estSoftCostsTotal();
   const bid = direct + ohAmt + prAmt + softCostsAmt;
   return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
@@ -436,7 +436,7 @@ function updMu(field, val) {
   const co     = rawDirect * estMu.cont / 100;
   const direct = rawDirect + co;
   const oh     = direct * estMu.oh / 100;
-  const pr     = (direct + oh) * estMu.profit / 100;
+  const pr     = direct * estMu.profit / 100;
   const bid    = direct + oh + pr + estSoftCostsTotal();
   if (gid('sum-co-amt'))       gid('sum-co-amt').textContent       = fmt(co);
   if (gid('sum-direct-total')) gid('sum-direct-total').textContent = fmt(direct);
@@ -3235,7 +3235,7 @@ function bldMarkupBreakdown() {
   const coAmt  = rawDirect * estMu.cont / 100;
   const direct = rawDirect + coAmt;
   const ohAmt  = direct * estMu.oh / 100;
-  const prAmt  = (direct + ohAmt) * estMu.profit / 100;
+  const prAmt  = direct * estMu.profit / 100;
   const softCostsAmt = estSoftCostsTotal();
   const bid = direct + ohAmt + prAmt + softCostsAmt;
   return { rawDirect, coAmt, direct, ohAmt, prAmt, softCostsAmt, bid };
