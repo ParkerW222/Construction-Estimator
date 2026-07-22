@@ -3496,7 +3496,7 @@ function bldRenderGantt() {
     </div>
     <div class="bld-gantt-area">
       ${tickHtml}
-      ${rowsHtml}
+      <div class="bld-gantt-rows-wrap">${rowsHtml}</div>
     </div>`;
   if (wasOpen) el.classList.add('open');
 }
