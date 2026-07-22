@@ -342,9 +342,10 @@
         <li>On that timeline, <strong>drag the middle of a phase's bar</strong> to reschedule it (both dates shift together, duration preserved), or <strong>drag either edge</strong> to resize just that end. A small tooltip follows the bar showing exactly what date(s) you're on. Snaps to whole days and saves automatically.</li>
         <li>The <strong>Notes</strong> field is one line, so long notes can get cut off — click the small <strong>expand icon</strong> next to it to read or edit the full note in a larger box.</li>
         <li>Click a phase's <strong>Payments</strong> button to assign a subcontractor and log payments against it — see phase total, paid, and remaining balance, plus full payment history. This tracks who's owed what; it doesn't move real money. If a subcontractor's actual quote differs from the Estimator's number, enter it as the <strong>Contract Amount</strong> — that becomes the number used for payments, progress, and the summary panel on this tab, while the original Estimator estimate stays untouched and visible for comparison. Use <strong>Print Receipt</strong> for a printable payment record, or <strong>Copy Share Link</strong> to give the subcontractor a no-login link where they can check their own balance and payment history.</li>
+        <li>Any <strong>Soft Cost</strong> you've entered on the Estimator (permit fees, insurance, architect, etc.) gets its own row here too, in a separate section below Construction Phases, once it's above $0. Click its <strong>Payments</strong> button to log real payments against it the same way as a phase — there's no Status, Schedule, or Contract Amount for these (the amount always comes straight from the Estimator), just payment tracking and an optional note.</li>
         <li>Click <strong>Subcontractors</strong> in the top bar to manage your subcontractor list — it's shared across every project, so add one once and reuse it anywhere.</li>
         <li>The summary panel's <strong>Custom</strong> section breaks your budget down the same way the Estimator does: <strong>Direct Cost</strong> (your Construction Phases, using each phase's real Contract Amount where you've entered one) plus <strong>Soft Cost</strong> (permits, insurance, architect, loan interest, etc.) add up to <strong>Total Budget</strong> — the real cost of the job, with no markup. <strong>Total Profit</strong> is the Estimator's Profit % applied to Total Budget, and <strong>Overhead</strong> (the Estimator's Overhead %) is shown right below it. <strong>Estimator Bid Price</strong> is the full number you'd actually quote a client — Total Budget plus Overhead plus Total Profit — updated live as Contract Amounts come in. Click it to jump to the Estimator.</li>
-        <li>Once at least one payment's been logged, the summary panel also breaks down how much of the job is behind you: <strong>Profit Taken</strong> is <strong>Paid to Subs</strong> times the Estimator's Profit %, with <strong>Profit Remaining</strong> (Total Profit minus Profit Taken) below it — and <strong>Payments Remaining</strong> (Direct Cost minus Paid to Subs — Soft Costs aren't tracked as payments, so they're left out) sits under Paid to Subs the same way.</li>
+        <li>Once at least one payment's been logged, the summary panel also breaks down how much of the job is behind you: <strong>Profit Taken</strong> is <strong>Paid to Subs</strong> times the Estimator's Profit %, with <strong>Profit Remaining</strong> (Total Profit minus Profit Taken) below it, and <strong>Payments Remaining</strong> (Direct Cost minus Paid to Subs) under Paid to Subs the same way. Once a Soft Cost payment's been logged, <strong>Paid for Soft Costs</strong> and <strong>Soft Costs Remaining</strong> appear the same way, tracked separately from subcontractor payments.</li>
         <li>The <strong>Spec</strong> section below that is for spec builds sold at a market price instead of a fixed client bid. Enter your <strong>Land Cost</strong> and expected <strong>Sales Price</strong> — <strong>Realtor Fee</strong> and <strong>Title Insurance</strong> default to 3% and 1% of Sales Price but can be changed. <strong>Spec Profit</strong> is Sales Price minus Land Cost, Realtor Fee, Title Insurance, and Total Budget (from the Custom section above), shown alongside its margin as a percentage of Total Budget plus Land Cost.</li>
         <li>Click <strong>Export PDF</strong> to print or save a clean budget sheet.</li>
       </ol>
@@ -512,11 +513,13 @@
       <button class="btn btn-ghost" style="font-size:.76rem;padding:.4rem .6rem" onclick="openManageSubs()">Manage</button>
     </div>
 
-    <label class="fl">Contract Amount</label>
-    <input type="number" id="pay-contract-amount" min="0" step="0.01" placeholder="Uses the Estimator total unless set"
-      style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.42rem .65rem;font-size:.85rem;margin-bottom:.2rem"
-      onchange="bldUpdateContractAmount(this.value)">
-    <div id="pay-contract-note" style="font-size:.72rem;color:var(--muted);margin-bottom:.75rem"></div>
+    <div id="pay-contract-row">
+      <label class="fl">Contract Amount</label>
+      <input type="number" id="pay-contract-amount" min="0" step="0.01" placeholder="Uses the Estimator total unless set"
+        style="width:100%;border:1.5px solid var(--border);border-radius:6px;padding:.42rem .65rem;font-size:.85rem;margin-bottom:.2rem"
+        onchange="bldUpdateContractAmount(this.value)">
+      <div id="pay-contract-note" style="font-size:.72rem;color:var(--muted);margin-bottom:.75rem"></div>
+    </div>
 
     <div class="pay-summary" id="payments-summary"></div>
 

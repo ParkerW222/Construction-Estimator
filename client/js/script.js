@@ -2642,9 +2642,14 @@ function getBudgetSheet() {
       phases: {},
       overhead: {},
       soft: {},
+      softPay: {},
     };
   }
   const bs = project.budgetSheet;
+  // bs.soft is permanently reserved for the one-time legacy migration below, which wipes it
+  // clean on every call once it's non-empty — so Soft Cost payment tracking lives in its own
+  // bs.softPay bucket instead, never touched by that migration.
+  if (!bs.softPay) bs.softPay = {};
   // One-time migration: the manual Overhead section was folded into Soft Costs — move any
   // already-entered rows over instead of leaving them stranded and invisible.
   if (bs.overhead && Object.keys(bs.overhead).length) {
@@ -2890,9 +2895,11 @@ function bldGetRow(section, id) {
   if (!bs[section][id]) {
     bs[section][id] = section === 'phases'
       ? { startDate: '', endDate: '', status: 'Not Started', note: '', subcontractorId: null, payments: [], contractAmount: '' }
+      : section === 'softPay'
+      ? { note: '', subcontractorId: null, payments: [] }
       : { combined: '', startDate: '', endDate: '', status: 'Not Started', note: '' };
   }
-  if (section === 'phases' && !bs[section][id].payments) bs[section][id].payments = [];
+  if ((section === 'phases' || section === 'softPay') && !bs[section][id].payments) bs[section][id].payments = [];
   return bs[section][id];
 }
 
@@ -2906,6 +2913,15 @@ function bldPhasePaidTotal(row) {
 function bldPhaseAmount(phaseId) {
   const contract = parseFloat(bldGetRow('phases', phaseId).contractAmount);
   return contract > 0 ? contract : phaseTotal(phaseId);
+}
+
+function bldSoftCostLabel(id) {
+  const item = EST_SOFT_COST_ITEMS.find(i => i.id === id);
+  return item ? item.label : id;
+}
+
+function bldSoftCostAmount(id) {
+  return parseFloat(getSoftCosts()[id]) || 0;
 }
 
 // ── PHASE DETAIL MODAL ─────────────────────────────────────────────────
@@ -3010,14 +3026,21 @@ function bldResetModalPosition(overlaySelector) {
   box.style.margin = '';
 }
 
-// ── SUBCONTRACTOR PAYMENTS MODAL ──────────────────────────────────────
+// ── SUBCONTRACTOR / SOFT COST PAYMENTS MODAL ──────────────────────────
+// Shared by Construction Phases (subcontractor payments) and Soft Cost items (permit fees,
+// insurance, etc.) — bldPaymentsTargetSection picks which bldGetRow() bucket applies.
 let bldPaymentsTargetDiv = null;
+let bldPaymentsTargetSection = 'phases';
 bldMakeModalDraggable('#payments-modal', '.modal-head');
 
-function bldOpenPaymentsModal(d) {
+function bldOpenPaymentsModal(d, section = 'phases') {
   bldPaymentsTargetDiv = d;
+  bldPaymentsTargetSection = section;
   bldResetModalPosition('#payments-modal');
-  gid('payments-modal-title').textContent = `Payments — ${phaseLabel(d)}`;
+  const label = section === 'softPay' ? bldSoftCostLabel(d) : phaseLabel(d);
+  gid('payments-modal-title').textContent = `Payments — ${label}`;
+  gid('pay-contract-row').style.display = section === 'phases' ? '' : 'none';
+  gid('pay-share-link-btn').style.display = section === 'phases' ? '' : 'none';
   bldRenderPaymentsModal();
   gid('pay-add-date').value = new Date().toISOString().slice(0, 10);
   gid('pay-add-amount').value = '';
@@ -3032,8 +3055,10 @@ function closePaymentsModal() {
 
 function bldRenderPaymentsModal() {
   const d = bldPaymentsTargetDiv;
+  const section = bldPaymentsTargetSection;
   if (!d) return;
-  const row = bldGetRow('phases', d);
+  const row = bldGetRow(section, d);
+  const isPhase = section === 'phases';
 
   const selEl = gid('payments-sub-sel');
   selEl.innerHTML = '<option value="">— No subcontractor assigned —</option>' +
@@ -3045,17 +3070,19 @@ function bldRenderPaymentsModal() {
   const shareBtn = gid('pay-share-link-btn');
   if (shareBtn) shareBtn.disabled = !row.subcontractorId;
 
-  const estTotal = phaseTotal(d);
-  gid('pay-contract-amount').value = row.contractAmount || '';
-  gid('pay-contract-note').textContent = parseFloat(row.contractAmount) > 0
-    ? `Estimator estimate for this phase: ${fmt(estTotal)}`
-    : `Currently using the Estimator total (${fmt(estTotal)}) — enter an amount above once you have a real quote.`;
+  if (isPhase) {
+    const estTotal = phaseTotal(d);
+    gid('pay-contract-amount').value = row.contractAmount || '';
+    gid('pay-contract-note').textContent = parseFloat(row.contractAmount) > 0
+      ? `Estimator estimate for this phase: ${fmt(estTotal)}`
+      : `Currently using the Estimator total (${fmt(estTotal)}) — enter an amount above once you have a real quote.`;
+  }
 
-  const total = bldPhaseAmount(d);
+  const total = isPhase ? bldPhaseAmount(d) : bldSoftCostAmount(d);
   const paid = bldPhasePaidTotal(row);
   const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
   gid('payments-summary').innerHTML = `
-    <div class="pay-sum-row"><span>Phase Total</span><span>${fmt(total)}</span></div>
+    <div class="pay-sum-row"><span>${isPhase ? 'Phase Total' : 'Soft Cost Amount'}</span><span>${fmt(total)}</span></div>
     <div class="pay-sum-row"><span>Paid</span><span>${fmt(paid)}</span></div>
     <div class="pay-sum-row pay-sum-remaining"><span>Remaining</span><span>${fmt(total - paid)}</span></div>
     <div class="pay-progress-track"><div class="pay-progress-fill" style="width:${pct}%"></div></div>
@@ -3075,7 +3102,7 @@ function bldRenderPaymentsModal() {
 }
 
 function bldAssignSubcontractor(subId) {
-  const row = bldGetRow('phases', bldPaymentsTargetDiv);
+  const row = bldGetRow(bldPaymentsTargetSection, bldPaymentsTargetDiv);
   row.subcontractorId = subId || null;
   const shareBtn = gid('pay-share-link-btn');
   if (shareBtn) shareBtn.disabled = !row.subcontractorId;
@@ -3096,7 +3123,7 @@ function bldAddPayment() {
   if (!amount || amount <= 0) { alert('Enter a payment amount greater than 0.'); return; }
   const date = gid('pay-add-date').value || new Date().toISOString().slice(0, 10);
   const note = gid('pay-add-note').value.trim();
-  const row = bldGetRow('phases', bldPaymentsTargetDiv);
+  const row = bldGetRow(bldPaymentsTargetSection, bldPaymentsTargetDiv);
   row.payments.push({ id: 'pay_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), amount, date, note });
   bldRenderPaymentsModal();
   bldRenderTable();
@@ -3106,7 +3133,7 @@ function bldAddPayment() {
 }
 
 function bldDeletePayment(paymentId) {
-  const row = bldGetRow('phases', bldPaymentsTargetDiv);
+  const row = bldGetRow(bldPaymentsTargetSection, bldPaymentsTargetDiv);
   row.payments = (row.payments || []).filter(p => p.id !== paymentId);
   bldRenderPaymentsModal();
   bldRenderTable();
@@ -3115,10 +3142,13 @@ function bldDeletePayment(paymentId) {
 
 function bldPrintPaymentReceipt() {
   const d = bldPaymentsTargetDiv;
+  const section = bldPaymentsTargetSection;
   if (!d) return;
-  const row = bldGetRow('phases', d);
+  const isPhase = section === 'phases';
+  const row = bldGetRow(section, d);
   const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
-  const total = bldPhaseAmount(d);
+  const label = isPhase ? phaseLabel(d) : bldSoftCostLabel(d);
+  const total = isPhase ? bldPhaseAmount(d) : bldSoftCostAmount(d);
   const paid = bldPhasePaidTotal(row);
   const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   const payments = [...(row.payments || [])].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -3154,11 +3184,11 @@ tbody td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10.5px}
 </div>
 <div class="meta">
   <div><span>Subcontractor</span>${esc(sub ? sub.name : 'Not assigned')}${sub && sub.trade ? ` — ${esc(sub.trade)}` : ''}</div>
-  <div><span>Phase</span>${esc(phaseLabel(d))}</div>
+  <div><span>${isPhase ? 'Phase' : 'Soft Cost'}</span>${esc(label)}</div>
 </div>
 <table><thead><tr><th>Date</th><th>Note</th><th class="r">Amount</th></tr></thead><tbody>${rows}</tbody></table>
 <div class="sw">
-  <div class="row"><span>Phase Total</span><span>${fmt(total)}</span></div>
+  <div class="row"><span>${isPhase ? 'Phase Total' : 'Soft Cost Amount'}</span><span>${fmt(total)}</span></div>
   <div class="row"><span>Paid to Date</span><span>${fmt(paid)}</span></div>
   <div class="row"><span>REMAINING</span><span>${fmt(total - paid)}</span></div>
 </div>
@@ -3320,13 +3350,21 @@ function bldCalcTotals() {
     paidTotal += bldPhasePaidTotal(row);
   });
 
+  // Reads bs.softPay directly (not via bldGetRow) so merely computing a total doesn't create
+  // an empty row entry for every Soft Cost item that's never actually had a payment logged.
+  let softPaidTotal = 0;
+  const bsSoftPay = getBudgetSheet().softPay || {};
+  EST_SOFT_COST_ITEMS.forEach(item => {
+    if (bsSoftPay[item.id]) softPaidTotal += bldPhasePaidTotal(bsSoftPay[item.id]);
+  });
+
   let projectStart = null, projectEnd = null;
   bldPhaseDivisions().forEach(d => {
     const row = bldGetRow('phases', d);
     if (row.startDate) { const dt = new Date(row.startDate + 'T12:00:00'); if (!projectStart || dt < projectStart) projectStart = dt; }
     if (row.endDate)   { const dt = new Date(row.endDate   + 'T12:00:00'); if (!projectEnd   || dt > projectEnd)   projectEnd   = dt; }
   });
-  return { projectStart, projectEnd, paidTotal };
+  return { projectStart, projectEnd, paidTotal, softPaidTotal };
 }
 
 function renderBudgetBuilder() {
@@ -3387,6 +3425,41 @@ function bldRenderTable() {
         </td>
         <td class="bld-pay-cell">
           <button class="bld-pay-btn" onclick="bldOpenPaymentsModal('${d}')">
+            <span class="bld-pay-sub">${payLabel}</span>
+            ${payAmt ? `<span class="bld-pay-amt">${payAmt}</span>` : ''}
+          </button>
+        </td>
+      </tr>`;
+    });
+  }
+
+  // Soft Costs only ever get a row here once they've actually been entered on the Estimator —
+  // they're not schedulable (no Status/Schedule concept), just a fixed amount you can log real
+  // payments against, the same way subcontractors get paid against a phase.
+  const softItems = EST_SOFT_COST_ITEMS.filter(item => bldSoftCostAmount(item.id) > 0);
+  if (softItems.length) {
+    html += `<tr class="bld-section-hdr"><td colspan="7">Soft Costs</td></tr>`;
+    softItems.forEach(item => {
+      const row = bldGetRow('softPay', item.id);
+      const total = bldSoftCostAmount(item.id);
+      const paid = bldPhasePaidTotal(row);
+      const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
+      const payLabel = sub ? esc(sub.name) : (row.subcontractorId ? '(deleted subcontractor)' : '+ Assign');
+      const payAmt = (paid > 0 || sub) ? `${fmt(paid)} / ${fmt(total)}` : '';
+      html += `<tr class="bld-row" data-section="softPay" data-id="${item.id}">
+        <td class="bld-num">—</td>
+        <td class="bld-label">${esc(item.label)}</td>
+        <td class="bld-cell bld-cost-readonly" title="Set in the Estimator's Soft Costs section">${fmt(total)}</td>
+        <td class="bld-status-cell" style="color:var(--muted);text-align:center">—</td>
+        <td class="bld-dur-cell" style="color:var(--muted);text-align:center">—</td>
+        <td class="bld-note-cell">
+          <input type="text" class="bld-note-inp" placeholder="Note…"
+            value="${(row.note||'').replace(/"/g,'&quot;')}"
+            onchange="bldUpdateItem('softPay','${item.id}','note',this.value)">
+          <button class="bld-note-expand" title="View/edit full note" onclick="bldOpenNoteModal('softPay','${item.id}')">&#9974;</button>
+        </td>
+        <td class="bld-pay-cell">
+          <button class="bld-pay-btn" onclick="bldOpenPaymentsModal('${item.id}','softPay')">
             <span class="bld-pay-sub">${payLabel}</span>
             ${payAmt ? `<span class="bld-pay-amt">${payAmt}</span>` : ''}
           </button>
@@ -3605,7 +3678,7 @@ function bldGanttMouseUp() {
 }
 
 function bldRenderSummary() {
-  const { projectStart, projectEnd, paidTotal } = bldCalcTotals();
+  const { projectStart, projectEnd, paidTotal, softPaidTotal } = bldCalcTotals();
   const el = gid('bld-summary');
   if (!el) return;
 
@@ -3636,6 +3709,7 @@ function bldRenderSummary() {
   // against Direct Cost alone, not the full Total Budget, or it never reaches zero even once
   // every subcontractor is paid in full.
   const paymentsRemaining = direct - paidTotal;
+  const softPaymentsRemaining = softCostsAmt - softPaidTotal;
   // Profit Taken is the profit portion of what's actually been paid to subs so far, using the
   // Estimator's Profit % applied directly to that payment.
   const profitTaken = paidTotal * estMu.profit / 100;
@@ -3657,6 +3731,9 @@ function bldRenderSummary() {
       <div class="bld-sum-row"><span>Profit Remaining</span><span>${fmt(profitRemaining)}</span></div>
       <div class="bld-sum-row bld-sum-paid"><span>Paid to Subs</span><span>${fmt(paidTotal)}</span></div>
       <div class="bld-sum-row"><span>Payments Remaining</span><span>${fmt(paymentsRemaining)}</span></div>` : ''}
+      ${softPaidTotal > 0 ? `
+      <div class="bld-sum-row bld-sum-paid"><span>Paid for Soft Costs</span><span>${fmt(softPaidTotal)}</span></div>
+      <div class="bld-sum-row"><span>Soft Costs Remaining</span><span>${fmt(softPaymentsRemaining)}</span></div>` : ''}
       <div class="bld-sum-row bld-sum-ref" onclick="showPage('estimator')" title="Total Budget + Overhead + Total Profit, using each phase's real Contract Amount where set — click to view the Estimator">
         <span>Estimator Bid Price</span><span>${fmt(bid)}</span>
       </div>
