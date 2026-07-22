@@ -3631,7 +3631,11 @@ function bldRenderSummary() {
   const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
   const totalBudget = direct + softCostsAmt;
   const totalProfit = prAmt;
-  const paymentsRemaining = totalBudget - paidTotal;
+  // Paid to Subs only ever tracks payments against Direct Cost (Construction Phases) — there's
+  // no payment-logging mechanism for Soft Costs anywhere — so Payments Remaining has to compare
+  // against Direct Cost alone, not the full Total Budget, or it never reaches zero even once
+  // every subcontractor is paid in full.
+  const paymentsRemaining = direct - paidTotal;
   // Profit Taken is the profit portion of what's actually been paid to subs so far, using the
   // Estimator's Profit % applied directly to that payment.
   const profitTaken = paidTotal * estMu.profit / 100;
