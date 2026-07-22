@@ -3571,9 +3571,9 @@ function bldRenderSummary() {
   const totalBudget = direct + softCostsAmt;
   const totalProfit = ohAmt + prAmt;
   const paymentsRemaining = totalBudget - paidTotal;
-  // Profit Taken backs the profit portion out of what's actually been paid to subs so far,
-  // using the Estimator's Profit % as the markup rate embedded in that payment.
-  const profitTaken = paidTotal / (1 + estMu.profit / 100);
+  // Profit Taken is the profit portion of what's actually been paid to subs so far, using the
+  // Estimator's Profit % applied directly to that payment.
+  const profitTaken = paidTotal * estMu.profit / 100;
   const profitRemaining = totalProfit - profitTaken;
 
   const sd = getSpecData();
