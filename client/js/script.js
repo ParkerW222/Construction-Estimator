@@ -43,9 +43,16 @@ function showPage(p) {
 }
 
 // ── ESTIMATOR ──────────────────────────────────────────────────────
+// Rounded to the nearest whole dollar — a quantity like square footage almost never comes out
+// to a round number, so qty*unitCost routinely lands on fractional cents that never actually
+// appear anywhere in the UI (fmt() only ever shows whole dollars). Rounding right here, at the
+// one place every division/phase/project total is built from, keeps every total that depends
+// on it (Direct Cost, phase totals, what a sub actually gets paid) in whole dollars throughout,
+// instead of carrying invisible cents that can drift into a stray dollar once summed.
+function itemExt(item) { return Math.round(item.qty * item.unitCost); }
 function divItems(d) { return project.items.filter(i => i.div === d); }
 function divTotal(d) {
-  return divItems(d).reduce((sum, i) => sum + i.qty * i.unitCost, 0);
+  return divItems(d).reduce((sum, i) => sum + itemExt(i), 0);
 }
 // Object key order isn't reliable here — JS always iterates numeric-looking keys ("10", "44")
 // in ascending numeric order ahead of any key with a leading zero ("01"-"09"), regardless of
@@ -191,7 +198,7 @@ function renderTable() {
   }
 
   gid('items-tbody').innerHTML = items.map(i => {
-    const ext = i.qty * i.unitCost;
+    const ext = itemExt(i);
     const descCell = i.custom
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
@@ -226,7 +233,7 @@ function renderAllItemsTable() {
   }
 
   gid('items-tbody').innerHTML = items.map(i => {
-    const ext = i.qty * i.unitCost;
+    const ext = itemExt(i);
     const descCell = i.custom
       ? `<input type="text" value="${i.desc.replace(/"/g, '&quot;')}" style="width:100%;border:1px solid var(--border);border-radius:4px;padding:.18rem .35rem;font-size:.8rem" onchange="updateField(${i.id},'desc',this.value)">`
       : i.desc;
@@ -459,7 +466,7 @@ function updQty(id, val) {
   if (!item) return;
   item.qty = +val || 0;
   const el = gid('ext-' + id);
-  if (el) el.textContent = fmt(item.qty * item.unitCost);
+  if (el) el.textContent = fmt(itemExt(item));
   refreshTotals();
 }
 
@@ -468,7 +475,7 @@ function updCost(id, val) {
   if (!item) return;
   item.unitCost = +val || 0;
   const el = gid('ext-' + id);
-  if (el) el.textContent = fmt(item.qty * item.unitCost);
+  if (el) el.textContent = fmt(itemExt(item));
   refreshTotals();
 }
 
@@ -490,7 +497,7 @@ function exportEstimatePDF() {
     const items = divItems(d);
     if (!items.length) return;
     const rows = items.map(i => {
-      const ext = i.qty * i.unitCost;
+      const ext = itemExt(i);
       return `<tr>
         <td>${i.desc}</td><td class="c">${i.unit}</td>
         <td class="r">${fmtN(i.qty)}</td><td class="r">$${fmtN(i.unitCost)}</td>
@@ -2700,7 +2707,7 @@ function itemsForPhase(phaseId) {
   return [];
 }
 function phaseTotal(phaseId) {
-  return itemsForPhase(phaseId).reduce((s, i) => s + i.qty * i.unitCost, 0);
+  return itemsForPhase(phaseId).reduce((s, i) => s + itemExt(i), 0);
 }
 function phaseLabel(phaseId) {
   if (project.customPhases && project.customPhases[phaseId] !== undefined) {
@@ -2782,7 +2789,7 @@ function closeBldAllItemsModal() {
 
 function bldRenderAllItemsModal() {
   const items = [...project.items].sort((a, b) => a.div.localeCompare(b.div));
-  const grand = items.reduce((s, i) => s + i.qty * i.unitCost, 0);
+  const grand = items.reduce((s, i) => s + itemExt(i), 0);
   gid('bld-all-items-list').innerHTML = !items.length
     ? `<div class="empty-msg">No items yet — add some in the Estimator first.</div>`
     : `<table class="items" style="width:100%">
@@ -2801,7 +2808,7 @@ function bldRenderAllItemsModal() {
           <td>${i.unit}</td>
           <td style="text-align:right">${fmtN(i.qty)}</td>
           <td style="text-align:right">${fmt(i.unitCost)}</td>
-          <td style="text-align:right;font-weight:600">${fmt(i.qty * i.unitCost)}</td>
+          <td style="text-align:right;font-weight:600">${fmt(itemExt(i))}</td>
           <td><select class="form-sel" style="font-size:.75rem;padding:.2rem .3rem;width:100%" onchange="bldSetItemGrouping(${i.id},this.value)">${bldItemGroupingOptions(i)}</select></td>
         </tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="5" style="text-align:right;font-weight:700">Grand Total</td><td style="text-align:right;font-weight:700">${fmt(grand)}</td><td></td></tr></tfoot>
@@ -2916,9 +2923,14 @@ function bldPhasePaidTotal(row) {
 // The Estimator total is a takeoff-based estimate — once a subcontractor gives a real number,
 // that contracted amount (not the estimate) is what should drive payments/progress tracking.
 // Leaving it blank keeps the phase fully Estimator-driven, same as before this existed.
+// Rounded to the nearest whole dollar — every total anywhere in the UI (fmt()) only ever shows
+// whole dollars, so a phase's cost never actually appears with cents for a sub to be paid
+// against. Without this, a payment made for the exact amount shown (e.g. $42,422) would still
+// show a few cents "remaining" against the unrounded total (e.g. $42,421.80), and those little
+// per-phase roundings accumulate into a stray dollar or two across a whole project.
 function bldPhaseAmount(phaseId) {
   const contract = parseFloat(bldGetRow('phases', phaseId).contractAmount);
-  return contract > 0 ? contract : phaseTotal(phaseId);
+  return Math.round(contract > 0 ? contract : phaseTotal(phaseId));
 }
 
 function bldSoftCostLabel(id) {
@@ -2959,7 +2971,7 @@ function bldOpenPhaseDetail(d) {
           <td>${i.unit}</td>
           <td style="text-align:right">${fmtN(i.qty)}</td>
           <td style="text-align:right">${fmt(i.unitCost)}</td>
-          <td style="text-align:right;font-weight:600">${fmt(i.qty * i.unitCost)}</td>
+          <td style="text-align:right;font-weight:600">${fmt(itemExt(i))}</td>
           <td><select class="form-sel" style="font-size:.75rem;padding:.2rem .3rem;width:100%" onchange="bldSetItemGrouping(${i.id},this.value)">${bldItemGroupingOptions(i)}</select></td>
         </tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700">Total</td><td style="text-align:right;font-weight:700">${fmt(phaseTotal(d))}</td><td></td></tr></tfoot>
@@ -4132,9 +4144,9 @@ async function clientShowProject(id) {
   let phasesTotal = 0;
   phaseDivisions.forEach(d => {
     const row = (bs.phases || {})[d] || {};
-    const estCost = itemsForPhaseData(d).reduce((s, i) => s + i.qty * i.unitCost, 0);
+    const estCost = itemsForPhaseData(d).reduce((s, i) => s + itemExt(i), 0);
     const contractAmt = parseFloat(row.contractAmount);
-    const cost = contractAmt > 0 ? contractAmt : estCost;
+    const cost = Math.round(contractAmt > 0 ? contractAmt : estCost);
     phasesTotal += cost; grand += cost;
   });
   sectionTotals.phases = phasesTotal;
