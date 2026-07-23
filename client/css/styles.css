@@ -497,7 +497,7 @@ body.admin-mode #admin-app{display:block}
 #bld-start-date{border:1px solid var(--border);border-radius:6px;padding:.28rem .55rem;font-size:.81rem;color:var(--text);background:var(--surface);font-family:inherit;cursor:pointer}
 #bld-start-date:focus{outline:none;border-color:var(--orange);box-shadow:var(--focus-ring)}
 
-.bld-body{flex:1;display:flex;gap:0;overflow:hidden;min-height:0}
+.bld-body{flex:1;display:flex;gap:0;overflow:hidden;min-height:160px}
 .bld-table-wrap{flex:1;overflow:auto;min-width:0}
 .bld-summary{width:240px;flex-shrink:0;border-left:1px solid var(--border);background:var(--surface);overflow-y:auto;padding:1.1rem 1rem}
 
@@ -629,7 +629,7 @@ body.admin-mode #admin-app{display:block}
 .bld-gantt-leg-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0}
 .bld-gantt-area{display:none;padding:.5rem 1rem .85rem}
 .bld-gantt-panel.open .bld-gantt-area{display:block}
-.bld-gantt-rows-wrap{max-height:32vh;overflow-y:auto}
+.bld-gantt-rows-wrap{max-height:50vh;overflow-y:auto}
 .bld-gantt-tick-row{display:grid;grid-template-columns:160px 1fr;margin-bottom:4px}
 .bld-gantt-tick-track{position:relative;height:18px}
 .bld-gantt-tick{position:absolute;transform:translateX(-50%);font-size:.62rem;color:var(--muted);white-space:nowrap;top:0}
