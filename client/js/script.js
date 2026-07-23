@@ -3454,6 +3454,18 @@ function bldRenderTable() {
         </td>
       </tr>`;
     });
+
+    const totalEst = phaseDivs.reduce((s, d) => s + phaseTotal(d), 0);
+    const totalActual = phaseDivs.reduce((s, d) => s + bldPhaseAmount(d), 0);
+    const variance = round2(totalActual - totalEst);
+    const varCls = variance > 0 ? 'bld-variance-over' : (variance < 0 ? 'bld-variance-under' : 'bld-variance-even');
+    const varTxt = variance === 0 ? 'On budget' : `${variance > 0 ? '+' : '-'}${fmt(Math.abs(variance))} ${variance > 0 ? 'over' : 'under'}`;
+    html += `<tr class="bld-subtotal-row">
+      <td></td>
+      <td class="bld-subtotal-label">Bid Variance <span class="bld-cost-est">Contract amounts vs. Estimator totals</span></td>
+      <td class="bld-cost-readonly ${varCls}" title="Sum of contract amounts (${fmt(totalActual)}) vs. sum of estimated totals (${fmt(totalEst)}) for these phases">${varTxt}</td>
+      <td colspan="4"></td>
+    </tr>`;
   }
 
   // Soft Costs only ever get a row here once they've actually been entered on the Estimator —
