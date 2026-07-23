@@ -19,6 +19,10 @@ function fmt(n) {
   return '$' + Math.round(n).toLocaleString();
 }
 function fmtN(n) { return Math.round(n).toLocaleString(); }
+// Rounds to the nearest cent — used at each markup/summary aggregation step so floating-point
+// drift from chained percentage math doesn't compound across many terms into a stray whole
+// dollar by the time a "should be exactly zero once paid off" value gets displayed.
+function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
 // ── HELP MODAL ─────────────────────────────────────────────────────
 function showHelp() { gid('help-modal').style.display = 'flex'; }
@@ -371,11 +375,11 @@ function estSoftCostsTotal() {
 // Shared by the Estimator's own summary panel, the exported PDF, and Payments & Scheduling's
 // "Estimator Bid Price" reference line.
 function estimatorMarkupBreakdown() {
-  const direct = grandTotal();
-  const softCostsAmt = estSoftCostsTotal();
-  const ohAmt  = (direct + softCostsAmt) * estMu.oh / 100; // Overhead is % of Direct Cost + Soft Cost combined
-  const prAmt  = (direct + softCostsAmt) * estMu.profit / 100; // Profit is % of Direct Cost + Soft Cost combined
-  const bid = direct + ohAmt + prAmt + softCostsAmt;
+  const direct = round2(grandTotal());
+  const softCostsAmt = round2(estSoftCostsTotal());
+  const ohAmt  = round2((direct + softCostsAmt) * estMu.oh / 100); // Overhead is % of Direct Cost + Soft Cost combined
+  const prAmt  = round2((direct + softCostsAmt) * estMu.profit / 100); // Profit is % of Direct Cost + Soft Cost combined
+  const bid = round2(direct + ohAmt + prAmt + softCostsAmt);
   return { direct, ohAmt, prAmt, softCostsAmt, bid };
 }
 
@@ -554,8 +558,11 @@ tfoot td{background:#f0f2f6;border-top:1.5px solid #ccc;padding:5px 8px;font-siz
 .bid td{background:#1e3a5f!important;color:#fff!important;font-weight:700!important;font-size:13px!important;padding:9px 10px!important;border:none!important}
 .ret td{color:#999;font-size:10px;font-style:italic}
 .foot{margin-top:24px;padding-top:10px;border-top:1px solid #dde;font-size:9px;color:#bbb;display:flex;justify-content:space-between}
-@media print{body{padding:16px 24px}.ds{page-break-inside:avoid}}
+.print-btn{position:fixed;top:16px;right:16px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.2);font-family:inherit}
+.print-btn:hover{background:#274a73}
+@media print{body{padding:16px 24px}.ds{page-break-inside:avoid}.print-btn{display:none}}
 </style></head><body>
+<button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
 <div class="header">
   <div><div class="brand">Build<span>Calc</span></div><div style="font-size:10px;color:#999;margin-top:3px">Construction Cost Estimate</div></div>
   <div class="pm"><div class="pn">${project.name||'New Project'}</div><div class="ps">${today}</div></div>
@@ -573,7 +580,6 @@ ${divSections}${coSection}
   </div>
 </div>
 <div class="foot"><span>BuildCalc &mdash; Construction Management Tools</span><span>${project.name||'Project'} &mdash; ${today}</span></div>
-<script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
   const w = window.open('', '_blank');
@@ -3177,7 +3183,11 @@ tbody td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10.5px}
 .sw .row{display:flex;justify-content:space-between;padding:6px 10px;font-size:11px;border-bottom:1px solid #eee}
 .sw .row:last-child{border-bottom:none;background:#1e3a5f;color:#fff;font-weight:700}
 .foot{margin-top:24px;padding-top:10px;border-top:1px solid #dde;font-size:9px;color:#bbb;display:flex;justify-content:space-between}
+.print-btn{position:fixed;top:16px;right:16px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.2);font-family:inherit}
+.print-btn:hover{background:#274a73}
+@media print{.print-btn{display:none}}
 </style></head><body>
+<button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
 <div class="header">
   <div><div class="brand">Build<span>Calc</span></div><div style="font-size:10px;color:#999;margin-top:3px">Subcontractor Payment Record</div></div>
   <div class="pm"><div class="pn">${esc(project.name || 'Project')}</div><div class="ps">${today}</div></div>
@@ -3193,7 +3203,6 @@ tbody td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10.5px}
   <div class="row"><span>REMAINING</span><span>${fmt(total - paid)}</span></div>
 </div>
 <div class="foot"><span>BuildCalc &mdash; Payments &amp; Scheduling</span><span>This is a payment tracking record, not a financial transaction receipt.</span></div>
-<script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
   const w = window.open('', '_blank');
@@ -3297,11 +3306,11 @@ async function bldDeleteSubcontractor(id) {
 // way overriding a Contract Amount here updates this tab's own summary without ever touching
 // the Estimator tab's estimate-based figures.
 function bldMarkupBreakdown() {
-  const direct = bldPhaseDivisions().reduce((s, d) => s + bldPhaseAmount(d), 0);
-  const softCostsAmt = estSoftCostsTotal();
-  const ohAmt  = (direct + softCostsAmt) * estMu.oh / 100;
-  const prAmt  = (direct + softCostsAmt) * estMu.profit / 100;
-  const bid = direct + ohAmt + prAmt + softCostsAmt;
+  const direct = round2(bldPhaseDivisions().reduce((s, d) => s + bldPhaseAmount(d), 0));
+  const softCostsAmt = round2(estSoftCostsTotal());
+  const ohAmt  = round2((direct + softCostsAmt) * estMu.oh / 100);
+  const prAmt  = round2((direct + softCostsAmt) * estMu.profit / 100);
+  const bid = round2(direct + ohAmt + prAmt + softCostsAmt);
   return { direct, ohAmt, prAmt, softCostsAmt, bid };
 }
 
@@ -3349,6 +3358,7 @@ function bldCalcTotals() {
     const row = bldGetRow('phases', d);
     paidTotal += bldPhasePaidTotal(row);
   });
+  paidTotal = round2(paidTotal);
 
   // Reads bs.softPay directly (not via bldGetRow) so merely computing a total doesn't create
   // an empty row entry for every Soft Cost item that's never actually had a payment logged.
@@ -3357,6 +3367,7 @@ function bldCalcTotals() {
   EST_SOFT_COST_ITEMS.forEach(item => {
     if (bsSoftPay[item.id]) softPaidTotal += bldPhasePaidTotal(bsSoftPay[item.id]);
   });
+  softPaidTotal = round2(softPaidTotal);
 
   let projectStart = null, projectEnd = null;
   bldPhaseDivisions().forEach(d => {
@@ -3702,19 +3713,20 @@ function bldRenderSummary() {
   // not estimatorMarkupBreakdown() — so a Contract Amount override on a phase here updates
   // this summary live without touching the Estimator.
   const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
-  const totalBudget = direct + softCostsAmt;
+  const totalBudget = round2(direct + softCostsAmt);
   const totalProfit = prAmt;
   // Paid to Subs only ever tracks payments against Direct Cost (Construction Phases) — there's
   // no payment-logging mechanism for Soft Costs anywhere — so Payments Remaining has to compare
   // against Direct Cost alone, not the full Total Budget, or it never reaches zero even once
-  // every subcontractor is paid in full.
-  const paymentsRemaining = direct - paidTotal;
-  const softPaymentsRemaining = softCostsAmt - softPaidTotal;
+  // every subcontractor is paid in full. Rounded to the cent so floating-point drift from
+  // chained percentage math doesn't show up as a stray dollar once everything's paid off.
+  const paymentsRemaining = round2(direct - paidTotal);
+  const softPaymentsRemaining = round2(softCostsAmt - softPaidTotal);
   // Total Profit is Profit % of Direct Cost + Soft Cost combined, so Profit Taken has to use
   // that same combined base — the profit portion of everything actually paid so far, whether
   // to subs (Direct Cost) or against Soft Cost items.
-  const profitTaken = (paidTotal + softPaidTotal) * estMu.profit / 100;
-  const profitRemaining = totalProfit - profitTaken;
+  const profitTaken = round2((paidTotal + softPaidTotal) * estMu.profit / 100);
+  const profitRemaining = round2(totalProfit - profitTaken);
 
   const sd = getSpecData();
   const spec = bldSpecBreakdown();
@@ -3782,10 +3794,10 @@ function bldExportPaymentsPDF() {
   const { direct, softCostsAmt, ohAmt, prAmt, bid } = bldMarkupBreakdown();
   const totalBudget = direct + softCostsAmt;
   const totalProfit = prAmt;
-  const paymentsRemaining = direct - paidTotal;
-  const softPaymentsRemaining = softCostsAmt - softPaidTotal;
-  const profitTaken = (paidTotal + softPaidTotal) * estMu.profit / 100;
-  const profitRemaining = totalProfit - profitTaken;
+  const paymentsRemaining = round2(direct - paidTotal);
+  const softPaymentsRemaining = round2(softCostsAmt - softPaidTotal);
+  const profitTaken = round2((paidTotal + softPaidTotal) * estMu.profit / 100);
+  const profitRemaining = round2(totalProfit - profitTaken);
   const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   const fmtD = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -3885,8 +3897,11 @@ tbody tr:nth-child(even) td{background:#fafbfc}
 .sb tbody td{padding:5px 10px;font-size:11px}.sb tbody tr:last-child td{border-bottom:none}
 .bid td{background:#1e3a5f!important;color:#fff!important;font-weight:700!important;font-size:13px!important;padding:9px 10px!important;border:none!important}
 .foot{margin-top:24px;padding-top:10px;border-top:1px solid #dde;font-size:9px;color:#bbb;display:flex;justify-content:space-between}
-@media print{body{padding:16px 24px}.ds{page-break-inside:avoid}}
+.print-btn{position:fixed;top:16px;right:16px;background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.2);font-family:inherit}
+.print-btn:hover{background:#274a73}
+@media print{body{padding:16px 24px}.ds{page-break-inside:avoid}.print-btn{display:none}}
 </style></head><body>
+<button class="print-btn" onclick="window.print()">Print / Save as PDF</button>
 <div class="header">
   <div><div class="brand">Build<span>Calc</span></div><div style="font-size:10px;color:#999;margin-top:3px">Project Closeout Report</div></div>
   <div class="pm"><div class="pn">${esc(project.name || 'New Project')}</div><div class="ps">${today}</div></div>
@@ -3906,7 +3921,6 @@ ${softSection}
   ${specSection}
 </div>
 <div class="foot"><span>BuildCalc &mdash; Construction Management Tools</span><span>${esc(project.name || 'Project')} &mdash; ${today}</span></div>
-<script>window.onload=()=>window.print();<\/script>
 </body></html>`;
 
   const w = window.open('', '_blank');
