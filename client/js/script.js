@@ -3813,7 +3813,7 @@ function bldExportPaymentsPDF() {
   const today = new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
   const fmtD = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  const phaseRows = bldPhaseDivisions().map(d => {
+  const phaseData = bldPhaseDivisions().map(d => {
     const row = bldGetRow('phases', d);
     const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
     const total = bldPhaseAmount(d);
@@ -3821,7 +3821,10 @@ function bldExportPaymentsPDF() {
     const sched = (row.startDate && row.endDate)
       ? `${fmtD(new Date(row.startDate + 'T12:00:00'))} – ${fmtD(new Date(row.endDate + 'T12:00:00'))}`
       : '—';
-    return `<tr>
+    return { d, row, sub, total, paid, sched };
+  });
+
+  const phaseRows = phaseData.map(({ d, row, sub, total, paid, sched }) => `<tr>
       <td>${esc(phaseLabel(d))}</td>
       <td>${esc(row.status)}</td>
       <td>${sched}</td>
@@ -3829,27 +3832,40 @@ function bldExportPaymentsPDF() {
       <td class="r">${fmt(total)}</td>
       <td class="r">${fmt(paid)}</td>
       <td class="r">${fmt(total - paid)}</td>
-    </tr>`;
-  }).join('') || `<tr><td colspan="7" style="text-align:center;color:#999">No Construction Phases yet.</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:#999">No Construction Phases yet.</td></tr>`;
+
+  const phaseSubtotalRow = phaseData.length ? `<tr class="subtotal">
+      <td colspan="4">Subtotal</td>
+      <td class="r">${fmt(phaseData.reduce((s, p) => s + p.total, 0))}</td>
+      <td class="r">${fmt(phaseData.reduce((s, p) => s + p.paid, 0))}</td>
+      <td class="r">${fmt(phaseData.reduce((s, p) => s + (p.total - p.paid), 0))}</td>
+    </tr>` : '';
 
   const softItems = EST_SOFT_COST_ITEMS.filter(item => bldSoftCostAmount(item.id) > 0);
-  const softSection = softItems.length ? `
+  const softData = softItems.map(item => {
+    const row = bldGetRow('softPay', item.id);
+    const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
+    const total = bldSoftCostAmount(item.id);
+    const paid = bldPhasePaidTotal(row);
+    return { item, sub, total, paid };
+  });
+  const softSection = softData.length ? `
     <div class="ds">
       <div class="dh">Soft Costs</div>
       <table><thead><tr><th>Item</th><th>Paid To</th><th class="r">Amount</th><th class="r">Paid</th><th class="r">Remaining</th></tr></thead>
-      <tbody>${softItems.map(item => {
-        const row = bldGetRow('softPay', item.id);
-        const sub = row.subcontractorId ? bldGetSubcontractor(row.subcontractorId) : null;
-        const total = bldSoftCostAmount(item.id);
-        const paid = bldPhasePaidTotal(row);
-        return `<tr>
+      <tbody>${softData.map(({ item, sub, total, paid }) => `<tr>
           <td>${esc(item.label)}</td>
           <td>${sub ? esc(sub.name) : '—'}</td>
           <td class="r">${fmt(total)}</td>
           <td class="r">${fmt(paid)}</td>
           <td class="r">${fmt(total - paid)}</td>
-        </tr>`;
-      }).join('')}</tbody>
+        </tr>`).join('')}</tbody>
+      <tfoot><tr class="subtotal">
+        <td colspan="2">Subtotal</td>
+        <td class="r">${fmt(softData.reduce((s, p) => s + p.total, 0))}</td>
+        <td class="r">${fmt(softData.reduce((s, p) => s + p.paid, 0))}</td>
+        <td class="r">${fmt(softData.reduce((s, p) => s + (p.total - p.paid), 0))}</td>
+      </tr></tfoot>
       </table>
     </div>` : '';
 
@@ -3902,6 +3918,7 @@ table{width:100%;border-collapse:collapse}
 thead th{background:#f0f2f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555;padding:5px 8px;border-bottom:1px solid #dde;text-align:left}
 tbody td{padding:5px 8px;border-bottom:1px solid #eee;font-size:10.5px}
 tbody tr:nth-child(even) td{background:#fafbfc}
+.subtotal td{font-weight:700;border-top:2px solid #1e3a5f;background:#f0f2f6!important}
 .r{text-align:right;font-variant-numeric:tabular-nums}
 .sw{display:grid;grid-template-columns:${hasSpec ? '1fr 1fr' : '1fr'};gap:18px;margin-top:6px}
 .sb .st{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#777;margin-bottom:6px}
@@ -3922,7 +3939,8 @@ ${scheduleSection}
 <div class="ds">
   <div class="dh">Construction Phases</div>
   <table><thead><tr><th>Phase</th><th>Status</th><th>Schedule</th><th>Subcontractor</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Remaining</th></tr></thead>
-  <tbody>${phaseRows}</tbody></table>
+  <tbody>${phaseRows}</tbody>
+  <tfoot>${phaseSubtotalRow}</tfoot></table>
 </div>
 ${softSection}
 <div class="sw">
